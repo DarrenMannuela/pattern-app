@@ -85,3 +85,4 @@ SVGnest) that packs the true silhouette instead of its box — a
 meaningfully bigger algorithm, worth tackling once the rest of the
 pipeline (pattern drafting from measurements, etc.) is in place.
 # pattern-app
+# pattern-app
