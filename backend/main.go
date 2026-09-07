@@ -37,6 +37,7 @@ func main() {
 		store.PieceByID(w, r, id)
 	}))
 	mux.HandleFunc("/api/pack", cors(store.Pack))
+	mux.HandleFunc("/api/draft", cors(handlers.Draft))
 
 	addr := ":8080"
 	log.Printf("pattern-app backend listening on %s", addr)

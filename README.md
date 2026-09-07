@@ -13,8 +13,10 @@ Go backend + React (Vite) frontend, talking over a small JSON API.
 pattern-app/
   backend/            Go API server (stdlib net/http only, no external deps)
     main.go           routes + CORS
-    handlers/         in-memory piece store, CRUD + /api/pack handler
-    nesting/          the shelf-packing algorithm itself
+    handlers/         in-memory piece store, CRUD + /api/pack + /api/draft handlers
+    draft/            parametric bodice drafting (measurements -> curved SVG paths)
+    nesting/          irregular-shape nester: SVG path parsing, polygon
+                      rasterization, and grid-based bottom-left packing
   frontend/           React app (Vite)
     src/
       api.js          fetch client for the backend
@@ -56,14 +58,26 @@ at it with an env var before `npm run dev`:
 VITE_API_URL=http://localhost:9000 npm run dev
 ```
 
+## Two tabs
+
+- **Draft Pieces** — enter body measurements (or leave them blank for
+  a default size) and generate a bodice front + back as real curved
+  outlines (neckline, shoulder, armhole, side seam, waist dart), using
+  classic proportional pattern-drafting formulas. Each piece can be
+  sent straight to the cutting layout.
+- **Cutting Layout** — the Phase 1 nester: add pieces (by hand, or via
+  "Send to cutting layout" from the Draft tab), set fabric width and
+  seam allowance, and generate the most efficient rectangular layout.
+
 ## API
 
-| Method | Path              | Description                          |
-|--------|-------------------|---------------------------------------|
-| GET    | `/api/pieces`     | List all pattern pieces               |
-| POST   | `/api/pieces`     | Add a piece                           |
-| DELETE | `/api/pieces/:id` | Remove a piece                        |
-| POST   | `/api/pack`       | Run the nesting algorithm, get layout |
+| Method | Path              | Description                                |
+|--------|-------------------|---------------------------------------------|
+| GET    | `/api/pieces`     | List all pattern pieces                     |
+| POST   | `/api/pieces`     | Add a piece                                 |
+| DELETE | `/api/pieces/:id` | Remove a piece                              |
+| POST   | `/api/pack`       | Run the nesting algorithm, get layout       |
+| POST   | `/api/draft`      | Draft a bodice front/back from measurements |
 
 `POST /api/pack` body:
 
@@ -74,15 +88,30 @@ VITE_API_URL=http://localhost:9000 npm run dev
 Returns placed pieces (x/y/w/h/color/grain) plus `totalHeight`
 (fabric length used), `efficiency` (%), and `wasteArea`.
 
-## Known limitation — and the natural next step
+`POST /api/draft` body (any field can be omitted — defaults fill in):
 
-The nester currently packs each piece's **bounding box**, not its
-actual cut shape. That's a fine approximation for planning yardage on
-straight-edged pieces, but real pattern pieces have curves (necklines,
-armholes, darts) that a rectangle wastes space around. The natural
-upgrade is a no-fit-polygon nester (the approach used by tools like
-SVGnest) that packs the true silhouette instead of its box — a
-meaningfully bigger algorithm, worth tackling once the rest of the
-pipeline (pattern drafting from measurements, etc.) is in place.
-# pattern-app
-# pattern-app
+```json
+{ "bust": 90, "waist": 72, "backWaistLength": 40, "shoulder": 12.5, "neck": 36, "ease": 6 }
+```
+
+Returns `[front, back]`, each with a `pathData` SVG path string, a
+bounding `width`/`height`, and `notes` on the simplifications made.
+
+## Known limitations — and the natural next steps
+
+- **Nesting now uses each piece's real curved outline** (a grid/raster
+  collision check, not a true no-fit-polygon/Minkowski-sum algorithm).
+  It correctly avoids overlaps between concave shapes and finds
+  90°/180° rotations that fit, but it isn't as tight as a proper NFP
+  nester — there's visible gap between pieces where a curve could in
+  principle tuck closer into its neighbor's curve. `resolution`
+  (grid cm/cell, default 1.0) trades packing tightness for speed if
+  you want to tune it via the `/api/pack` request body.
+- **The draft formulas are simplified approximations**, the kind
+  taught as quick "sloper" shortcuts (e.g. armhole depth ≈ bust/4 +
+  2.5cm) — not a professionally fitted block. Real patternmaking
+  refines this with a muslin/toile fitting. Treat the output as a
+  solid starting shape.
+- **Only a basic bodice is drafted.** Sleeves, skirts, and other
+  garment types would each need their own drafting formulas in
+  `backend/draft/`.

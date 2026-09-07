@@ -9,19 +9,35 @@ import (
 	"patternapp/backend/nesting"
 )
 
+// StoredPiece is a pattern piece as kept in the store and sent over
+// the API. PathData is optional: pieces added by hand (just a
+// width/height) leave it blank and get a synthesized rectangle outline
+// at pack time; pieces sent from the drafting engine carry their real
+// curved outline here.
+type StoredPiece struct {
+	ID          string  `json:"id"`
+	Name        string  `json:"name"`
+	Width       float64 `json:"width"`
+	Height      float64 `json:"height"`
+	Qty         int     `json:"qty"`
+	Color       string  `json:"color"`
+	GrainLocked bool    `json:"grainLocked"`
+	PathData    string  `json:"pathData,omitempty"`
+}
+
 // Store is a simple thread-safe in-memory piece list. Swap this out
 // for a real database-backed implementation later without touching
 // the HTTP layer.
 type Store struct {
 	mu     sync.Mutex
 	nextID int
-	pieces map[string]nesting.Piece
+	pieces map[string]StoredPiece
 }
 
 func NewStore() *Store {
-	s := &Store{pieces: make(map[string]nesting.Piece)}
+	s := &Store{pieces: make(map[string]StoredPiece)}
 	// Seed with a small starter set so the app isn't empty on first run.
-	for _, p := range []nesting.Piece{
+	for _, p := range []StoredPiece{
 		{Name: "Bodice front", Width: 34, Height: 42, Qty: 2, Color: "#3B7A82", GrainLocked: true},
 		{Name: "Bodice back", Width: 32, Height: 42, Qty: 2, Color: "#B5453D", GrainLocked: true},
 		{Name: "Sleeve", Width: 28, Height: 34, Qty: 2, Color: "#C79A3E", GrainLocked: false},
@@ -31,15 +47,15 @@ func NewStore() *Store {
 	return s
 }
 
-func (s *Store) add(p nesting.Piece) nesting.Piece {
+func (s *Store) add(p StoredPiece) StoredPiece {
 	s.nextID++
 	p.ID = strconv.Itoa(s.nextID)
 	s.pieces[p.ID] = p
 	return p
 }
 
-func (s *Store) list() []nesting.Piece {
-	out := make([]nesting.Piece, 0, len(s.pieces))
+func (s *Store) list() []StoredPiece {
+	out := make([]StoredPiece, 0, len(s.pieces))
 	for _, p := range s.pieces {
 		out = append(out, p)
 	}
@@ -61,7 +77,7 @@ func (s *Store) Pieces(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, s.list())
 
 	case http.MethodPost:
-		var p nesting.Piece
+		var p StoredPiece
 		if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
 			http.Error(w, "invalid piece payload", http.StatusBadRequest)
 			return
@@ -96,13 +112,32 @@ func (s *Store) PieceByID(w http.ResponseWriter, r *http.Request, id string) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// packRequest is the body for POST /api/pack. FabricWidth and
-// SeamAllowance are required; if Pieces is omitted, the server's
-// current stored piece list is used instead.
+// packRequest is the body for POST /api/pack. FabricWidth is
+// required; if Pieces is omitted, the server's current stored piece
+// list is used instead. Resolution (cm/grid-cell) is optional.
 type packRequest struct {
-	FabricWidth   float64         `json:"fabricWidth"`
-	SeamAllowance float64         `json:"seamAllowance"`
-	Pieces        []nesting.Piece `json:"pieces,omitempty"`
+	FabricWidth   float64       `json:"fabricWidth"`
+	SeamAllowance float64       `json:"seamAllowance"`
+	Resolution    float64       `json:"resolution,omitempty"`
+	Pieces        []StoredPiece `json:"pieces,omitempty"`
+}
+
+// toNestPieces converts stored pieces into the nester's input type,
+// synthesizing a rectangle outline for any piece that doesn't already
+// carry real drafted geometry.
+func toNestPieces(pieces []StoredPiece) []nesting.NestPiece {
+	out := make([]nesting.NestPiece, len(pieces))
+	for i, p := range pieces {
+		path := p.PathData
+		if path == "" {
+			path = nesting.RectPath(p.Width, p.Height)
+		}
+		out[i] = nesting.NestPiece{
+			Name: p.Name, Color: p.Color, GrainLocked: p.GrainLocked,
+			PathData: path, Width: p.Width, Height: p.Height, Qty: p.Qty,
+		}
+	}
+	return out
 }
 
 // Pack handles POST /api/pack.
@@ -128,6 +163,6 @@ func (s *Store) Pack(w http.ResponseWriter, r *http.Request) {
 		s.mu.Unlock()
 	}
 
-	result := nesting.Pack(pieces, req.FabricWidth, req.SeamAllowance)
+	result := nesting.PackPolygons(toNestPieces(pieces), req.FabricWidth, req.SeamAllowance, req.Resolution)
 	writeJSON(w, http.StatusOK, result)
 }

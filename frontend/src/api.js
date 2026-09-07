@@ -30,4 +30,10 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ fabricWidth, seamAllowance }),
     }),
+
+  draft: (measurements) =>
+    request("/api/draft", {
+      method: "POST",
+      body: JSON.stringify(measurements),
+    }),
 };

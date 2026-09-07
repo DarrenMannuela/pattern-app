@@ -7,14 +7,14 @@ export default function LayoutCanvas({ result }) {
       <div className="canvas-wrap">
         <p className="empty">
           Add pattern pieces on the left, then generate a layout. The
-          fabric roll will render here with each piece placed for minimum
-          waste.
+          fabric roll will render here with each piece's actual cut
+          outline placed for minimum waste.
         </p>
       </div>
     );
   }
 
-  const { fabricWidth, totalHeight, placed } = result;
+  const { fabricWidth, totalHeight, placed, unplaced } = result;
   const scale = Math.min(MAX_RENDER_WIDTH / fabricWidth, 3.2);
   const w = fabricWidth * scale + MARGIN;
   const h = totalHeight * scale + MARGIN;
@@ -30,6 +30,12 @@ export default function LayoutCanvas({ result }) {
 
   return (
     <div className="canvas-wrap">
+      {unplaced && unplaced.length > 0 && (
+        <p className="warning">
+          Couldn't fit on this fabric width: {unplaced.join(", ")}. Try a
+          wider fabric or a smaller piece.
+        </p>
+      )}
       <svg width={w} height={h} className="layout-svg">
         <rect x={0} y={0} width={w} height={h} fill="#D8CBA8" />
 
@@ -66,43 +72,45 @@ export default function LayoutCanvas({ result }) {
           />
         ))}
 
-        {placed.map((p, i) => {
-          const x = MARGIN + p.x * scale;
-          const y = MARGIN + p.y * scale;
-          const pw = p.w * scale;
-          const ph = p.h * scale;
-          return (
-            <g key={i}>
-              <rect
-                x={x}
-                y={y}
-                width={pw}
-                height={ph}
+        {/* fabric origin group: piece coordinates are in cm, so scale
+            once here and let every piece use its own cm-space transform */}
+        <g transform={`translate(${MARGIN},${MARGIN}) scale(${scale})`}>
+          {placed.map((p, i) => (
+            <g
+              key={i}
+              transform={`translate(${p.tx},${p.ty}) rotate(${p.rotation})`}
+            >
+              <path
+                d={p.pathData}
                 fill={p.color + "CC"}
                 stroke="#23272A"
-                strokeWidth="1.3"
+                strokeWidth={0.35 / scale}
               />
-              {p.grainLocked && ph > 24 && (
-                <g stroke="#23272A" strokeWidth="1.2" fill="none">
+              {p.grainLocked && p.origHeight > 24 && (
+                <g
+                  stroke="#23272A"
+                  strokeWidth={0.3 / scale}
+                  fill="none"
+                >
                   <line
-                    x1={x + pw / 2}
-                    y1={y + 8}
-                    x2={x + pw / 2}
-                    y2={y + ph - 8}
+                    x1={p.origWidth / 2}
+                    y1={8}
+                    x2={p.origWidth / 2}
+                    y2={p.origHeight - 8}
                   />
                   <polyline
-                    points={`${x + pw / 2 - 4},${y + 14} ${x + pw / 2},${y + 8} ${x + pw / 2 + 4},${y + 14}`}
+                    points={`${p.origWidth / 2 - 1.2},${14} ${p.origWidth / 2},${8} ${p.origWidth / 2 + 1.2},${14}`}
                   />
                   <polyline
-                    points={`${x + pw / 2 - 4},${y + ph - 14} ${x + pw / 2},${y + ph - 8} ${x + pw / 2 + 4},${y + ph - 14}`}
+                    points={`${p.origWidth / 2 - 1.2},${p.origHeight - 14} ${p.origWidth / 2},${p.origHeight - 8} ${p.origWidth / 2 + 1.2},${p.origHeight - 14}`}
                   />
                 </g>
               )}
-              {pw > 34 && ph > 16 && (
+              {p.origWidth > 12 && p.origHeight > 8 && (
                 <text
-                  x={x + 5}
-                  y={y + 14}
-                  fontSize="10"
+                  x={2}
+                  y={6}
+                  fontSize={3.2}
                   fontWeight="600"
                   fontFamily="Space Grotesk, sans-serif"
                   fill="#23272A"
@@ -111,8 +119,8 @@ export default function LayoutCanvas({ result }) {
                 </text>
               )}
             </g>
-          );
-        })}
+          ))}
+        </g>
       </svg>
     </div>
   );
