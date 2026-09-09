@@ -38,6 +38,7 @@ func main() {
 	}))
 	mux.HandleFunc("/api/pack", cors(store.Pack))
 	mux.HandleFunc("/api/draft", cors(handlers.Draft))
+	mux.HandleFunc("/api/grade", cors(handlers.Grade))
 
 	addr := ":8080"
 	log.Printf("pattern-app backend listening on %s", addr)
