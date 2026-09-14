@@ -1,6 +1,8 @@
 import { useState } from "react";
 import TopNav from "./components/TopNav";
 import DraftView from "./components/DraftView";
+import GradingView from "./components/GradingView";
+import ChildGradingView from "./components/ChildGradingView";
 import LayoutView from "./components/LayoutView";
 
 export default function App() {
@@ -9,7 +11,10 @@ export default function App() {
   return (
     <div className="app-shell">
       <TopNav tab={tab} setTab={setTab} />
-      {tab === "draft" ? <DraftView /> : <LayoutView />}
+      {tab === "draft" && <DraftView />}
+      {tab === "grading" && <GradingView />}
+      {tab === "child-grading" && <ChildGradingView />}
+      {tab === "layout" && <LayoutView />}
     </div>
   );
 }

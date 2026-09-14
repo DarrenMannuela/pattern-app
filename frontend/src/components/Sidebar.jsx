@@ -159,10 +159,12 @@ export default function Sidebar({
       {error && <p className="error">{error}</p>}
 
       <p className="note">
-        This is a rectangular shelf-packing nester — a solid MVP for
-        planning yardage. True irregular pattern curves (necklines,
-        armholes) would use no-fit-polygon nesting for even tighter
-        packing, the way tools like SVGnest do.
+        This nester packs each piece's real cut outline (not just its
+        box) using a grid-based collision check, and tries 90°/180°
+        rotations to fit. It's not a true no-fit-polygon nester like
+        SVGnest, so there's some avoidable gap between curved pieces —
+        but it's genuinely reading each piece's shape, not just a
+        width and height.
       </p>
     </aside>
   );

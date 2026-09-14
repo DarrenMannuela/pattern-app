@@ -36,4 +36,16 @@ export const api = {
       method: "POST",
       body: JSON.stringify(measurements),
     }),
+
+  grade: (payload) =>
+    request("/api/grade", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  gradeChild: (payload) =>
+    request("/api/grade-child", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
 };

@@ -13,6 +13,15 @@ const FIELDS = [
 const MARGIN = 24;
 const PX_PER_CM = 6;
 
+const DART_POSITIONS = [
+  { key: "waist", label: "Waist (default)" },
+  { key: "side", label: "Side seam" },
+  { key: "french", label: "French (lower side)" },
+  { key: "shoulder", label: "Shoulder" },
+  { key: "armhole", label: "Armhole" },
+  { key: "neckline", label: "Neckline" },
+];
+
 function PiecePreview({ piece }) {
   const w = piece.width * PX_PER_CM + MARGIN * 2;
   const h = piece.height * PX_PER_CM + MARGIN * 2;
@@ -56,6 +65,7 @@ function PiecePreview({ piece }) {
 
 export default function DraftView() {
   const [values, setValues] = useState({});
+  const [dartPosition, setDartPosition] = useState("waist");
   const [pieces, setPieces] = useState(null);
   const [drafting, setDrafting] = useState(false);
   const [error, setError] = useState(null);
@@ -69,7 +79,7 @@ export default function DraftView() {
     setDrafting(true);
     setError(null);
     try {
-      const measurements = {};
+      const measurements = { dartPosition };
       for (const f of FIELDS) {
         if (values[f.key] !== undefined && values[f.key] !== "") {
           measurements[f.key] = Number(values[f.key]);
@@ -94,6 +104,7 @@ export default function DraftView() {
         qty: 2, // a half-front/half-back piece is cut twice (or on the fold)
         color: idx === 0 ? "#3B7A82" : "#B5453D",
         grainLocked: true,
+        pathData: piece.pathData,
       });
       setSentIds((prev) => ({ ...prev, [idx]: true }));
     } catch (e) {
@@ -122,6 +133,28 @@ export default function DraftView() {
             />
           </div>
         ))}
+
+        <div className="divider" />
+
+        <div className="field">
+          <label>Front dart position</label>
+          <select
+            value={dartPosition}
+            onChange={(e) => setDartPosition(e.target.value)}
+            className="select"
+          >
+            {DART_POSITIONS.map((d) => (
+              <option key={d.key} value={d.key}>
+                {d.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <p className="note" style={{ marginTop: -6 }}>
+          The bust dart is a fixed wedge of "extra fabric" that pivots
+          around the bust point — moving it here rotates that same
+          wedge to a different edge instead of changing its size.
+        </p>
 
         <button
           className="btn-generate"

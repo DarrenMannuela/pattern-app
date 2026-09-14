@@ -129,6 +129,22 @@ input:focus {
   border-color: var(--teal);
 }
 
+.select {
+  width: 100%;
+  background: var(--ink-2);
+  border: 1px solid #454c51;
+  color: var(--text-light);
+  padding: 8px 10px;
+  border-radius: 4px;
+  font-size: 13.5px;
+  font-family: "Space Grotesk", sans-serif;
+}
+
+.select:focus {
+  outline: none;
+  border-color: var(--teal);
+}
+
 .check {
   display: flex;
   align-items: center;
@@ -379,6 +395,13 @@ main {
 
 .draft-card .btn-add {
   margin-top: 14px;
+}
+
+.grade-piece-label {
+  font-size: 10px;
+  color: #9aa0a5;
+  margin-top: 4px;
+  text-align: center;
 }
 
 .draft-card .btn-add:disabled {
