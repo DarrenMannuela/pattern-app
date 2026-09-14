@@ -31,6 +31,9 @@ type GradeRule struct {
 	Shoulder        float64 `json:"shoulder"`
 	Neck            float64 `json:"neck"`
 	BackWaistLength float64 `json:"backWaistLength"`
+	SleeveLength    float64 `json:"sleeveLength"`
+	UpperArm        float64 `json:"upperArm"`
+	Wrist           float64 `json:"wrist"`
 }
 
 // DefaultAdultGradeRule is a standard adult uniform/ready-to-wear
@@ -44,6 +47,9 @@ var DefaultAdultGradeRule = GradeRule{
 	Shoulder:        1,
 	Neck:            1,
 	BackWaistLength: 1.5,
+	SleeveLength:    1.0,
+	UpperArm:        1.5,
+	Wrist:           0.5,
 }
 
 func sizeIndex(sizes []string, label string) int {
@@ -81,6 +87,9 @@ func GradeMeasurements(base draft.Measurements, sizeOrder []string, baseSize str
 		m.Shoulder += steps * rule.Shoulder
 		m.Neck += steps * rule.Neck
 		m.BackWaistLength += steps * rule.BackWaistLength
+		m.SleeveLength += steps * rule.SleeveLength
+		m.UpperArm += steps * rule.UpperArm
+		m.Wrist += steps * rule.Wrist
 		out[sz] = m
 	}
 	return out, nil

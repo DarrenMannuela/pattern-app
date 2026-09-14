@@ -30,6 +30,9 @@ var DefaultChildGradeRule = GradeRule{
 	Shoulder:        0.4,
 	Neck:            0.5,
 	BackWaistLength: 1.3,
+	SleeveLength:    1.5,
+	UpperArm:        0.8,
+	Wrist:           0.3,
 }
 
 // DefaultChildBase anchors the child grade rule at age 8 — roughly
@@ -38,6 +41,7 @@ var DefaultChildGradeRule = GradeRule{
 var DefaultChildBase = draft.Measurements{
 	Bust: 60, Waist: 56, BackWaistLength: 28.7,
 	Shoulder: 9.8, Neck: 29, Ease: 10,
+	SleeveLength: 38, UpperArm: 21, Wrist: 13,
 }
 
 // GradeChildMeasurements grades base (any zero field filled from
@@ -70,6 +74,15 @@ func fillChildDefaults(m draft.Measurements) draft.Measurements {
 	}
 	if m.Ease == 0 {
 		m.Ease = DefaultChildBase.Ease
+	}
+	if m.SleeveLength == 0 {
+		m.SleeveLength = DefaultChildBase.SleeveLength
+	}
+	if m.UpperArm == 0 {
+		m.UpperArm = DefaultChildBase.UpperArm
+	}
+	if m.Wrist == 0 {
+		m.Wrist = DefaultChildBase.Wrist
 	}
 	return m
 }

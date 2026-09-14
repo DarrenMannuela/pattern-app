@@ -23,9 +23,10 @@ func DraftChildBodice(m Measurements) []Piece {
 	scye := m.Bust/4 + 2.0 // shallower than the adult's +2.5 — kids' armholes are proportionally smaller
 	neckW := m.Neck / 5
 
-	front := draftChildFront(qChest, scye, neckW, m.Shoulder, m.BackWaistLength)
-	back := draftChildBack(qChest, scye, neckW, m.Shoulder, m.BackWaistLength)
-	return []Piece{front, back}
+	front, frontArmhole, _ := draftRelaxedFront(qChest, scye, neckW, m.Shoulder, m.BackWaistLength, "Child bodice front")
+	back, backArmhole, _ := draftRelaxedBack(qChest, scye, neckW, m.Shoulder, m.BackWaistLength, "Child bodice back")
+	sleeve := draftSleeve(frontArmhole+backArmhole, m.SleeveLength, m.UpperArm, m.Wrist, m.Ease, "Child sleeve")
+	return []Piece{front, back, sleeve}
 }
 
 // childDefaults fills zero fields with plausible measurements for a
@@ -52,10 +53,24 @@ func childDefaults(m Measurements) Measurements {
 	if m.Ease == 0 {
 		m.Ease = 10
 	}
+	if m.SleeveLength == 0 {
+		m.SleeveLength = 38
+	}
+	if m.UpperArm == 0 {
+		m.UpperArm = 21
+	}
+	if m.Wrist == 0 {
+		m.Wrist = 13
+	}
 	return m
 }
 
-func draftChildFront(qChest, scye, neckW, shoulderLen, backWaistLen float64) Piece {
+// draftRelaxedFront drafts a dartless front torso — shared by the
+// child bodice and the adult PE/relaxed-fit shirt, since both want
+// the same comfort-first construction (no bust dart, gentle A-line
+// hem) just at different scales. name becomes the returned Piece's
+// Name so each caller's pieces stay distinguishable.
+func draftRelaxedFront(qChest, scye, neckW, shoulderLen, backWaistLen float64, name string) (Piece, float64, float64) {
 	height := backWaistLen // no bust-curve allowance needed — the front and back run the same length
 	neckDrop := neckW + 1.0
 	shoulderDrop := 1.5 // less slope than the adult's 2.0 — a child's shoulder line sits squarer
@@ -86,17 +101,23 @@ func draftChildFront(qChest, scye, neckW, shoulderLen, backWaistLen float64) Pie
 		lineTo(cfTop).
 		close()
 
+	armholeLen := cubicLength(shoulderTip, ac1, ac2, underarm)
+	neckLen := cubicLength(cfTop, nc1, nc2, neckPoint)
+
 	return Piece{
-		Name:     "Child bodice front",
-		PathData: pb.String(),
-		Width:    round1(width),
-		Height:   round1(height),
-		FoldEdge: "left",
-		Notes:    "Half front, center front (left edge) on fold. Dartless (no bust curve to shape for) with a gentle A-line hem flare. Waist measurement not used by this block.",
-	}
+		Name:        name,
+		PathData:    pb.String(),
+		Width:       round1(width),
+		Height:      round1(height),
+		FoldEdge:    "left",
+		Notes:       "Half front, center front (left edge) on fold. Dartless (no bust curve to shape for) with a gentle A-line hem flare. Waist measurement not used by this block.",
+		ShoulderTip: &Point{X: shoulderTip.x, Y: shoulderTip.y},
+	}, armholeLen, neckLen
 }
 
-func draftChildBack(qChest, scye, neckW, shoulderLen, backWaistLen float64) Piece {
+// draftRelaxedBack is draftRelaxedFront's back-piece counterpart —
+// see that function's doc comment.
+func draftRelaxedBack(qChest, scye, neckW, shoulderLen, backWaistLen float64, name string) (Piece, float64, float64) {
 	height := backWaistLen
 	neckDrop := neckW * 0.3 // shallower still than the front, same relationship as the adult block
 	shoulderDrop := 1.0
@@ -128,14 +149,18 @@ func draftChildBack(qChest, scye, neckW, shoulderLen, backWaistLen float64) Piec
 		lineTo(cbTop).
 		close()
 
+	armholeLen := cubicLength(shoulderTip, ac1, ac2, underarm)
+	neckLen := cubicLength(cbTop, nc1, nc2, neckPoint)
+
 	return Piece{
-		Name:     "Child bodice back",
-		PathData: pb.String(),
-		Width:    round1(width),
-		Height:   round1(height),
-		FoldEdge: "left",
-		Notes:    "Half back, center back (left edge) on fold. Dartless, matching A-line hem flare to the front.",
-	}
+		Name:        name,
+		PathData:    pb.String(),
+		Width:       round1(width),
+		Height:      round1(height),
+		FoldEdge:    "left",
+		Notes:       "Half back, center back (left edge) on fold. Dartless, matching A-line hem flare to the front.",
+		ShoulderTip: &Point{X: shoulderTip.x, Y: shoulderTip.y},
+	}, armholeLen, neckLen
 }
 
 func max2(vals ...float64) float64 {
