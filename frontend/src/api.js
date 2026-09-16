@@ -48,4 +48,26 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
+
+  listOrders: () => request("/api/orders"),
+
+  createOrder: (order) =>
+    request("/api/orders", { method: "POST", body: JSON.stringify(order) }),
+
+  getOrder: (id) => request(`/api/orders/${id}`),
+
+  updateOrder: (id, order) =>
+    request(`/api/orders/${id}`, { method: "PUT", body: JSON.stringify(order) }),
+
+  deleteOrder: (id) => request(`/api/orders/${id}`, { method: "DELETE" }),
+
+  createMockup: (id, payload) =>
+    request(`/api/orders/${id}/mockups`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  getMockup: (id, version) => request(`/api/orders/${id}/mockups/${version}`),
+
+  fabrics: () => request("/api/fabrics"),
 };

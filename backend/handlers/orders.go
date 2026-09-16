@@ -94,10 +94,14 @@ func (a *OrdersAPI) ByID(w http.ResponseWriter, r *http.Request) {
 // and Collar only matter for orders.GarmentUniformShirt — the two
 // preset shirt types ignore them and force their own combination.
 type mockupRequest struct {
-	Note         string `json:"note"`
-	DartPosition string `json:"dartPosition"`
-	Style        string `json:"style"`
-	Collar       bool   `json:"collar"`
+	Note         string            `json:"note"`
+	DartPosition string            `json:"dartPosition"`
+	Style        string            `json:"style"`
+	Collar       bool              `json:"collar"`
+	CollarStyle  string            `json:"collarStyle"`
+	ChestPocket  bool              `json:"chestPocket"`
+	BackPocket   bool              `json:"backPocket"`
+	Embroidery   *draft.Embroidery `json:"embroidery"`
 }
 
 // CreateMockup handles POST /api/orders/{id}/mockups.
@@ -115,7 +119,17 @@ func (a *OrdersAPI) CreateMockup(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	opts := draft.ShirtOptions{DartPosition: req.DartPosition, Style: req.Style, Collar: req.Collar}
+	opts := draft.ShirtOptions{
+		DartPosition: req.DartPosition,
+		Style:        req.Style,
+		Collar:       req.Collar,
+		CollarStyle:  req.CollarStyle,
+		AddOns: draft.AddOns{
+			ChestPocket: req.ChestPocket,
+			BackPocket:  req.BackPocket,
+			Embroidery:  req.Embroidery,
+		},
+	}
 	updated, pieces, err, ok := a.store.AddMockup(id, req.Note, opts)
 	if !ok {
 		http.NotFound(w, r)

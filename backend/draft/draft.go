@@ -111,6 +111,7 @@ type Piece struct {
 	Notes       string  `json:"notes"`
 	ShoulderTip *Point  `json:"shoulderTip,omitempty"` // front/back only: where a sleeve crown attaches
 	Crown       *Point  `json:"crown,omitempty"`       // sleeve only: the point that attaches to a shoulder tip
+	Anchor      *Point  `json:"anchor,omitempty"`      // add-on pieces (pocket): where this attaches on its parent piece
 }
 
 type point struct{ x, y float64 }

@@ -112,17 +112,19 @@ func GeneratePieces(garmentType string, sizes []OrderSize, opts draft.ShirtOptio
 		// opts used as given — this type has no preset.
 	case GarmentPants:
 		return draftEach(sizes, func(m draft.Measurements) []draft.Piece {
-			return draft.DraftTrousers(m, "Pants")
+			return draft.DraftTrousers(m, "Pants", opts.AddOns)
 		}), nil
 	case GarmentShorts:
 		return draftEach(sizes, func(m draft.Measurements) []draft.Piece {
 			if m.Inseam == 0 {
 				m.Inseam = defaultShortsInseam
 			}
-			return draft.DraftTrousers(m, "Shorts")
+			return draft.DraftTrousers(m, "Shorts", opts.AddOns)
 		}), nil
 	case GarmentSkirt:
-		return draftEach(sizes, draft.DraftSkirt), nil
+		return draftEach(sizes, func(m draft.Measurements) []draft.Piece {
+			return draft.DraftSkirt(m, opts.AddOns)
+		}), nil
 	default:
 		return nil, ErrUnsupportedGarment
 	}

@@ -94,13 +94,24 @@ func draftWaistband(frontQWaist, backQWaist float64) Piece {
 // trouser block. Passing a short m.Inseam (and this package's default
 // Rise) drafts shorts instead — same construction, shorter leg — so
 // callers pick the style by measurement, not a separate code path.
-func DraftTrousers(m Measurements, name string) []Piece {
+func DraftTrousers(m Measurements, name string, addOns AddOns) []Piece {
 	m = m.withDefaults()
 	front := draftTrouserPanel(m, 0.15, 1.0, name+" front")
 	back := draftTrouserPanel(m, 0.28, 1.03, name+" back")
 	qWaist := m.Waist/4 + m.Ease/4
 	waistband := draftWaistband(qWaist, qWaist)
-	return []Piece{front, back, waistband}
+	pieces := []Piece{front, back, waistband}
+
+	if addOns.BackPocket {
+		// Upper portion of the back leg panel, biased toward the
+		// outseam side — the standard back-pocket position.
+		anchorX := back.Width * 0.55
+		anchorY := back.Height * 0.1
+		pocket := draftPatchPocket(back.Width*0.32, back.Width*0.32, anchorX, anchorY, "Back pocket")
+		pieces = append(pieces, pocket)
+	}
+
+	return pieces
 }
 
 // draftSkirtPanel drafts a dartless A-line skirt panel — front or
@@ -142,11 +153,22 @@ func draftSkirtPanel(m Measurements, hipFactor float64, name string) Piece {
 
 // DraftSkirt returns [front, back, waistband] for a basic dartless
 // A-line skirt block.
-func DraftSkirt(m Measurements) []Piece {
+func DraftSkirt(m Measurements, addOns AddOns) []Piece {
 	m = m.withDefaults()
 	front := draftSkirtPanel(m, 1.0, "Skirt front")
 	back := draftSkirtPanel(m, 1.05, "Skirt back")
 	qWaist := m.Waist/4 + m.Ease/4
 	waistband := draftWaistband(qWaist, qWaist)
-	return []Piece{front, back, waistband}
+	pieces := []Piece{front, back, waistband}
+
+	if addOns.BackPocket {
+		// Back is a half piece on the fold, so this mirrors to a
+		// pocket on each side — the usual two-pocket skirt back.
+		anchorX := back.Width * 0.55
+		anchorY := back.Height * 0.15
+		pocket := draftPatchPocket(back.Width*0.3, back.Width*0.3, anchorX, anchorY, "Back pocket")
+		pieces = append(pieces, pocket)
+	}
+
+	return pieces
 }

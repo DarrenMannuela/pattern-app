@@ -1,13 +1,22 @@
 :root {
   --ink: #23272a;
   --ink-2: #2e3438;
+  --ink-3: #181b1d;
   --kraft: #d8cba8;
   --kraft-line: #b9a97e;
   --chalk: #faf7f0;
   --teal: #3b7a82;
   --teal-dim: #2c5e64;
+  --teal-glow: rgba(59, 122, 130, 0.35);
   --red: #b5453d;
   --text-light: #ede8da;
+  --border: #3a4045;
+  --border-soft: #33393d;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.28);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.38);
+  --radius: 8px;
+  --radius-sm: 5px;
 }
 
 * {
@@ -19,6 +28,44 @@ body {
   font-family: "Space Grotesk", sans-serif;
   background: var(--ink);
   color: var(--text-light);
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: var(--teal-dim);
+  color: var(--text-light);
+}
+
+/* thin, unobtrusive scrollbars matching the dark theme */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #454c51 transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: #454c51;
+  border-radius: 5px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: #565e64;
+}
+
+button,
+input,
+select,
+textarea,
+.order-row,
+.size-row,
+.revision-row,
+.garment-type-card {
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease,
+    box-shadow 0.15s ease, transform 0.15s ease;
 }
 
 .mono {
@@ -33,11 +80,40 @@ body {
 
 .topnav {
   display: flex;
-  gap: 4px;
-  padding: 14px 24px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 12px 24px;
   background: var(--ink);
-  border-bottom: 1px solid #3a4045;
+  border-bottom: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
   flex-shrink: 0;
+  position: relative;
+  z-index: 1;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--text-light);
+  flex-shrink: 0;
+}
+
+.brand-mark {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  background: linear-gradient(135deg, var(--teal), var(--kraft-line));
+  flex-shrink: 0;
+}
+
+.topnav-tabs {
+  display: flex;
+  gap: 4px;
 }
 
 .topnav .tab {
@@ -45,16 +121,19 @@ body {
   color: #9aa0a5;
   padding: 8px 16px;
   font-size: 13px;
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
+  position: relative;
 }
 
 .topnav .tab:hover {
   color: var(--text-light);
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .topnav .tab.active {
   background: var(--ink-2);
   color: var(--chalk);
+  box-shadow: inset 0 -2px 0 var(--teal);
 }
 
 .tab-body {
@@ -75,10 +154,10 @@ body {
 }
 
 .sidebar h1 {
-  font-size: 19px;
+  font-size: 20px;
   font-weight: 700;
-  margin: 0 0 2px;
-  letter-spacing: -0.01em;
+  margin: 0 0 4px;
+  letter-spacing: -0.015em;
 }
 
 .sidebar .sub {
@@ -127,6 +206,7 @@ input[type="text"] {
 input:focus {
   outline: none;
   border-color: var(--teal);
+  box-shadow: 0 0 0 3px var(--teal-glow);
 }
 
 .select {
@@ -143,6 +223,7 @@ input:focus {
 .select:focus {
   outline: none;
   border-color: var(--teal);
+  box-shadow: 0 0 0 3px var(--teal-glow);
 }
 
 .check {
@@ -177,10 +258,18 @@ button {
   padding: 10px;
   font-size: 13.5px;
   margin-top: 4px;
+  box-shadow: var(--shadow-sm);
 }
 
 .btn-add:hover {
   background: var(--teal-dim);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+}
+
+.btn-add:active {
+  transform: translateY(0);
+  box-shadow: var(--shadow-sm);
 }
 
 .divider {
@@ -261,10 +350,18 @@ button {
   font-size: 14px;
   margin-top: 22px;
   letter-spacing: 0.01em;
+  box-shadow: var(--shadow-sm);
 }
 
 .btn-generate:hover:not(:disabled) {
   background: #fff;
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+}
+
+.btn-generate:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: var(--shadow-sm);
 }
 
 .btn-generate:disabled {
@@ -305,9 +402,10 @@ main {
   gap: 0;
   margin-bottom: 22px;
   border: 1px solid #454c51;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   overflow: hidden;
   width: fit-content;
+  box-shadow: var(--shadow-sm);
 }
 
 .stat {
@@ -336,11 +434,12 @@ main {
 }
 
 .canvas-wrap {
-  background: #181b1d;
-  border-radius: 8px;
+  background: var(--ink-3);
+  border-radius: var(--radius);
   padding: 24px;
   display: inline-block;
   min-width: 100%;
+  box-shadow: var(--shadow-md);
 }
 
 .layout-svg {
@@ -364,10 +463,12 @@ main {
 }
 
 .draft-card {
-  background: #181b1d;
-  border-radius: 8px;
+  background: var(--ink-3);
+  border-radius: var(--radius);
   padding: 20px;
   width: fit-content;
+  box-shadow: var(--shadow-md);
+  border: 1px solid rgba(255, 255, 255, 0.03);
 }
 
 .draft-svg {
@@ -416,4 +517,313 @@ main {
   line-height: 1.5;
   margin: 10px 0 0;
   max-width: 260px;
+}
+
+.garment-preview {
+  background: var(--ink-3);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 24px;
+  box-shadow: var(--shadow-md);
+  border: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.preview-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 14px;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+}
+
+.garment-3d-mount {
+  width: 100%;
+  height: 520px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: radial-gradient(ellipse at 50% 35%, #22262a 0%, #1b1e21 70%);
+}
+
+.garment-3d-mount canvas {
+  display: block;
+}
+
+.garment-3d-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--ink-3);
+  border: 1px dashed #454c51;
+  padding: 24px;
+  text-align: center;
+}
+
+.garment-3d-fallback p {
+  color: #9aa0a5;
+  font-size: 13px;
+  max-width: 340px;
+  margin: 0;
+}
+
+/* ---------- FORM EXTRAS (orders) ---------- */
+textarea {
+  width: 100%;
+  background: var(--ink-2);
+  border: 1px solid #454c51;
+  color: var(--text-light);
+  padding: 8px 10px;
+  border-radius: 4px;
+  font-size: 13.5px;
+  font-family: "Space Grotesk", sans-serif;
+  resize: vertical;
+}
+
+textarea:focus {
+  outline: none;
+  border-color: var(--teal);
+}
+
+.link-btn {
+  background: none;
+  color: #9aa0a5;
+  font-size: 12px;
+  padding: 4px 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.link-btn:hover {
+  color: var(--text-light);
+}
+
+.link-btn-danger:hover {
+  color: var(--red);
+}
+
+.btn-inline {
+  width: auto;
+  padding: 10px 16px;
+  margin-top: 0;
+}
+
+/* ---------- ORDERS LIST ---------- */
+.order-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.order-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--ink-3);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, 0.03);
+  box-shadow: var(--shadow-sm);
+}
+
+.order-row:hover {
+  background: #202427;
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+}
+
+.order-row-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.order-row-name {
+  font-weight: 600;
+  font-size: 14.5px;
+}
+
+.order-row-garment {
+  font-size: 11.5px;
+  color: #9aa0a5;
+}
+
+.order-row-meta {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.order-row-count {
+  font-size: 11.5px;
+  color: #9aa0a5;
+}
+
+.order-status {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: #fff;
+  padding: 4px 9px;
+  border-radius: 999px;
+}
+
+.order-row-delete {
+  background: none;
+  color: #787e82;
+  font-size: 18px;
+  line-height: 1;
+  padding: 2px 6px;
+}
+
+.order-row-delete:hover {
+  color: var(--red);
+}
+
+/* ---------- SIZE CHART ---------- */
+.size-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.size-row {
+  background: var(--ink-3);
+  border-radius: var(--radius);
+  padding: 14px 18px;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.size-row-main {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.size-row-label {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+.size-row-qty {
+  flex: 0 0 90px;
+  width: 90px;
+}
+
+.size-row-measurements {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px 16px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid #33393d;
+}
+
+.size-row-measurements .field {
+  margin-bottom: 0;
+}
+
+/* ---------- REVISION HISTORY ---------- */
+.revision-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.revision-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12.5px;
+}
+
+.revision-row:hover {
+  background: var(--ink-3);
+}
+
+.revision-note {
+  flex: 1;
+  color: #c7ccce;
+}
+
+.revision-date {
+  color: #787e82;
+  font-size: 11px;
+}
+
+/* ---------- GARMENT TYPE PICKER ---------- */
+.garment-type-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.garment-type-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  background: var(--ink-2);
+  border: 1px solid #454c51;
+  border-radius: var(--radius-sm);
+  padding: 12px 8px 10px;
+  color: #9aa0a5;
+  text-align: center;
+}
+
+.garment-type-card:hover {
+  border-color: #5a6167;
+  color: var(--text-light);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+.garment-type-card.active {
+  border-color: var(--teal);
+  background: var(--teal-dim);
+  color: var(--text-light);
+  box-shadow: 0 0 0 3px var(--teal-glow);
+}
+
+.garment-type-label {
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.garment-type-hint {
+  font-size: 9.5px;
+  color: #787e82;
+  line-height: 1.3;
+}
+
+.garment-type-card.active .garment-type-hint {
+  color: #c7ccce;
+}
+
+/* ---------- ADD-ONS ---------- */
+.addons-box {
+  background: var(--ink-3);
+  border: 1px solid rgba(255, 255, 255, 0.03);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  margin-bottom: 14px;
+  max-width: 420px;
+  box-shadow: var(--shadow-sm);
+}
+
+.addons-embroidery {
+  margin-top: 4px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-soft);
 }
