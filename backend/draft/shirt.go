@@ -14,14 +14,10 @@ type ShirtOptions struct {
 	// DartPosition only matters when Style == "fitted"; see
 	// DartPositions. Ignored for "relaxed".
 	DartPosition string `json:"dartPosition"`
-	// Collar adds a collar and a center-front button placket — the
-	// school-shirt pieces a pullover-style PE shirt doesn't have.
+	// Collar adds a one-piece convertible collar and a center-front
+	// button placket — the school-shirt pieces a pullover-style PE
+	// shirt doesn't have.
 	Collar bool `json:"collar"`
-	// CollarStyle picks which collar shape Collar drafts: "standing" for
-	// a narrow band (mandarin) collar with no fold-over point, common on
-	// koko/PDH-style seragam; anything else (including "") drafts the
-	// default turn-down convertible collar.
-	CollarStyle string `json:"collarStyle"`
 	// AddOns are extras independent of style/collar — a chest pocket,
 	// an embroidery placement.
 	AddOns AddOns `json:"addOns"`
@@ -55,12 +51,7 @@ func DraftShirt(m Measurements, opts ShirtOptions) []Piece {
 	pieces := []Piece{front, back, sleeve}
 
 	if opts.Collar {
-		var collar Piece
-		if opts.CollarStyle == "standing" {
-			collar = draftStandingCollar(frontNeck + backNeck)
-		} else {
-			collar = draftCollar(frontNeck + backNeck)
-		}
+		collar := draftCollar(frontNeck + backNeck)
 		placket := draftPlacket(front.Height)
 		pieces = append(pieces, collar, placket)
 	}
@@ -115,44 +106,6 @@ func draftCollar(neckLen float64) Piece {
 		Height:   round1(width),
 		FoldEdge: "left",
 		Notes:    "Half collar, center back (left edge) on fold. Cut twice (outer collar + under-collar/interfacing) per shirt. Basic one-piece convertible collar — not a separate stand-and-fall two-piece collar.",
-	}
-}
-
-// draftStandingCollar drafts a half (center-back-on-fold) narrow band
-// collar — no fold-over point, just a straight band that follows the
-// neckline up to a modest height, the mandarin/koko-style collar
-// common on batik-kombinasi and PDH seragam. Half the height of the
-// convertible collar and with no point past the center-front edge,
-// since a band collar just meets itself (or a hook) at center front
-// instead of overlapping into a point.
-func draftStandingCollar(neckLen float64) Piece {
-	height := 4.0 // band height, cm — narrower than the convertible collar's width
-
-	cbBottom := point{0, 0}
-	cbTop := point{0, round1(height)}
-	cfNeck := point{round1(neckLen), round1(height * 0.15)} // neck edge rises slightly toward center front, matching the body's own neckline curve
-	cfOuter := point{round1(neckLen), round1(height*0.15 + height)}
-
-	nc1 := point{round1(neckLen * 0.35), round1(-height * 0.05)}
-	nc2 := point{round1(neckLen * 0.75), round1(height * 0.05)}
-	oc1 := point{round1(neckLen * 0.75), round1(height * 1.05)}
-	oc2 := point{round1(neckLen * 0.3), round1(height * 1.02)}
-
-	pb := &pathBuilder{}
-	pb.moveTo(cbBottom).
-		curveTo(nc1, nc2, cfNeck).
-		lineTo(cfOuter).
-		curveTo(oc1, oc2, cbTop).
-		lineTo(cbBottom).
-		close()
-
-	return Piece{
-		Name:     "Standing collar",
-		PathData: pb.String(),
-		Width:    round1(neckLen),
-		Height:   round1(height * 1.15),
-		FoldEdge: "left",
-		Notes:    "Half band (mandarin) collar, center back (left edge) on fold. Cut twice (outer band + under-band/interfacing) per shirt. Meets at center front with a hook-and-eye or a single button, not a turn-down point.",
 	}
 }
 

@@ -156,7 +156,6 @@ export default function OrderDetailView({ orderId, onBack }) {
   const [dartPosition, setDartPosition] = useState("waist");
   const [shirtStyle, setShirtStyle] = useState("fitted"); // uniform_shirt only
   const [collarEnabled, setCollarEnabled] = useState(false); // uniform_shirt only
-  const [collarStyle, setCollarStyle] = useState("convertible");
   const [chestPocket, setChestPocket] = useState(false);
   const [backPocket, setBackPocket] = useState(false);
   const [embroideryEnabled, setEmbroideryEnabled] = useState(false);
@@ -271,9 +270,6 @@ export default function OrderDetailView({ orderId, onBack }) {
         payload.style = shirtStyle;
         payload.collar = collarEnabled;
       }
-      if (showCollarStyle) {
-        payload.collarStyle = collarStyle;
-      }
       if (["school_shirt", "pe_shirt", "uniform_shirt"].includes(order.garmentType)) {
         payload.chestPocket = chestPocket;
       }
@@ -373,8 +369,6 @@ export default function OrderDetailView({ orderId, onBack }) {
     order.garmentType === "school_shirt" ||
     (order.garmentType === "uniform_shirt" && shirtStyle === "fitted");
   const isShirtType = ["school_shirt", "pe_shirt", "uniform_shirt"].includes(order.garmentType);
-  const showCollarStyle =
-    order.garmentType === "school_shirt" || (order.garmentType === "uniform_shirt" && collarEnabled);
   const showChestPocket = isShirtType;
   const showBackPocket = ["pants", "shorts", "skirt"].includes(order.garmentType);
   const showAddOns = showChestPocket || showBackPocket;
@@ -536,15 +530,6 @@ export default function OrderDetailView({ orderId, onBack }) {
                   Include collar + button placket
                 </label>
               </div>
-            </div>
-          )}
-          {showCollarStyle && (
-            <div className="field" style={{ maxWidth: 280 }}>
-              <label>Collar style</label>
-              <select className="select" value={collarStyle} onChange={(e) => setCollarStyle(e.target.value)}>
-                <option value="convertible">Convertible (turn-down point)</option>
-                <option value="standing">Standing band (mandarin/koko)</option>
-              </select>
             </div>
           )}
           {showDartPosition && (

@@ -98,7 +98,6 @@ type mockupRequest struct {
 	DartPosition string            `json:"dartPosition"`
 	Style        string            `json:"style"`
 	Collar       bool              `json:"collar"`
-	CollarStyle  string            `json:"collarStyle"`
 	ChestPocket  bool              `json:"chestPocket"`
 	BackPocket   bool              `json:"backPocket"`
 	Embroidery   *draft.Embroidery `json:"embroidery"`
@@ -123,7 +122,6 @@ func (a *OrdersAPI) CreateMockup(w http.ResponseWriter, r *http.Request) {
 		DartPosition: req.DartPosition,
 		Style:        req.Style,
 		Collar:       req.Collar,
-		CollarStyle:  req.CollarStyle,
 		AddOns: draft.AddOns{
 			ChestPocket: req.ChestPocket,
 			BackPocket:  req.BackPocket,
