@@ -140,7 +140,7 @@ func TestServicePicksAReader(t *testing.T) {
 	}
 
 	// A key takes priority.
-	t.Setenv("ANTHROPIC_API_KEY", "sk-test")
+	t.Setenv("ANTHROPIC_API_KEY", "test-key")
 	if st := svc.Status(ctx); st.Provider != "anthropic" {
 		t.Errorf("a key should pick the Claude API, got %+v", st)
 	}
