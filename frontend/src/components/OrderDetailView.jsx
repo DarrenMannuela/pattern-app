@@ -1,17 +1,15 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
-import Garment3DPreview from "./Garment3DPreview";
+import PatternMaker from "./PatternMaker.jsx";
+import CustomDesigner, { customPayload } from "./CustomDesigner.jsx";
+import GarmentFlatPreview from "./GarmentFlatPreview";
 import ErrorBoundary from "./ErrorBoundary";
 import GarmentTypePicker from "./GarmentTypePicker";
+import { sleeveAlignment } from "../lib/garmentFlat.js";
 
 const STATUS_OPTIONS = ["consultation", "mockup", "revision", "approved"];
 
-const EMBROIDERY_PLACEMENTS = [
-  { key: "left_chest", label: "Left chest" },
-  { key: "right_chest", label: "Right chest" },
-  { key: "back", label: "Back" },
-  { key: "sleeve", label: "Sleeve" },
-];
+const DEFAULT_MERCH = { item: "tote_bag", size: "medium", width: 0, height: 0, shape: "", strap: "", pocket: "none", bottom: "flat", brim: "short", closure: "zip" };
 
 const DART_POSITIONS = [
   { key: "waist", label: "Waist (default)" },
@@ -25,7 +23,8 @@ const DART_POSITIONS = [
 const SHIRT_FIELDS = [
   { key: "bust", label: "Bust/chest (cm)" },
   { key: "waist", label: "Waist (cm)" },
-  { key: "backWaistLength", label: "Nape to waist (cm)" },
+  { key: "backWaistLength", label: "Back length, nape to waist (cm)" },
+  { key: "shirtLength", label: "Shirt length, nape to hem (cm, 0 = auto)" },
   { key: "shoulder", label: "Shoulder seam (cm)" },
   { key: "neck", label: "Neck circumference (cm)" },
   { key: "ease", label: "Wearing ease (cm)" },
@@ -59,6 +58,9 @@ function measurementFieldsFor(garmentType) {
       return PANTS_FIELDS;
     case "skirt":
       return SKIRT_FIELDS;
+    case "custom":
+    case "other":
+      return []; // sized by the drawing / the item's own dimensions, not body measurements
     default:
       return SHIRT_FIELDS;
   }
@@ -69,30 +71,46 @@ const PX_PER_CM = 6;
 const FOCUS_PX_PER_CM = 8;
 
 function PiecePreview({ piece, pxPerCm = PX_PER_CM }) {
-  const w = piece.width * pxPerCm + MARGIN * 2;
-  const h = piece.height * pxPerCm + MARGIN * 2;
+  // A finished piece has a cutting line (sewing line + allowances) and a
+  // grainline; the sewing line is drawn inside it at CutOffset. Pieces
+  // without them (older data) fall back to just the outline.
+  const cw = piece.cutWidth || piece.width;
+  const ch = piece.cutHeight || piece.height;
+  const off = piece.cutOffset || { x: 0, y: 0 };
+  const w = cw * pxPerCm + MARGIN * 2;
+  const h = ch * pxPerCm + MARGIN * 2;
+  const g = piece.grainline;
   return (
     <div className="draft-piece">
       <svg viewBox={`0 0 ${w} ${h}`} width={w} height={h} className="draft-svg">
         <g transform={`translate(${MARGIN},${MARGIN}) scale(${pxPerCm})`}>
-          <path d={piece.pathData} fill="#3B7A82CC" stroke="#23272A" strokeWidth={0.4} />
-          {piece.foldEdge === "left" && (
-            <line
-              x1={0}
-              y1={-1}
-              x2={0}
-              y2={piece.height + 1}
-              stroke="#8A7B54"
-              strokeWidth={0.3}
-              strokeDasharray="1.2,1"
-            />
+          {piece.cutPathData && (
+            <path d={piece.cutPathData} fill="none" stroke="#8A7B54" strokeWidth={0.25} strokeDasharray="1.2,0.8" />
           )}
+          <g transform={`translate(${off.x},${off.y})`}>
+            <path d={piece.pathData} fill="#3B7A82CC" stroke="#23272A" strokeWidth={0.4} />
+            {piece.foldEdge === "left" && (
+              <line x1={0} y1={-1} x2={0} y2={piece.height + 1} stroke="#8A7B54" strokeWidth={0.3} strokeDasharray="1.2,1" />
+            )}
+            {g && (
+              <g stroke="#23272A" strokeWidth={0.3} fill="#23272A">
+                <line x1={g[0]} y1={g[1]} x2={g[2]} y2={g[3]} />
+                {[[g[0], g[1], g[2], g[3]], [g[2], g[3], g[0], g[1]]].map(([x, y, tx, ty], i) => {
+                  const a = Math.atan2(ty - y, tx - x);
+                  const l = 1.6;
+                  const p1 = [x + Math.cos(a) * l + Math.cos(a + 2.6) * 0.9, y + Math.sin(a) * l + Math.sin(a + 2.6) * 0.9];
+                  const p2 = [x + Math.cos(a) * l + Math.cos(a - 2.6) * 0.9, y + Math.sin(a) * l + Math.sin(a - 2.6) * 0.9];
+                  return <polygon key={i} points={`${x},${y} ${p1.join(",")} ${p2.join(",")}`} stroke="none" />;
+                })}
+              </g>
+            )}
+          </g>
         </g>
       </svg>
       <div className="draft-piece-label">
         <span className="draft-piece-name">{piece.name}</span>
         <span className="draft-piece-dims mono">
-          {piece.width}×{piece.height} cm
+          {piece.width}×{piece.height} cm{piece.cutWidth ? ` · cut ${piece.cutWidth}×${piece.cutHeight}` : ""}
         </span>
       </div>
     </div>
@@ -123,9 +141,11 @@ function SizeRow({ size, idx, fields, onChange, onMeasurement, onRemove }) {
           value={size.quantity}
           onChange={(e) => onChange(idx, { quantity: Number(e.target.value) })}
         />
-        <button className="link-btn" onClick={() => setExpanded((v) => !v)}>
-          {expanded ? "Hide measurements" : "Edit measurements"}
-        </button>
+        {fields.length > 0 && (
+          <button className="link-btn" onClick={() => setExpanded((v) => !v)}>
+            {expanded ? "Hide measurements" : "Edit measurements"}
+          </button>
+        )}
         <button className="link-btn link-btn-danger" onClick={() => onRemove(idx)}>
           Remove
         </button>
@@ -154,15 +174,42 @@ export default function OrderDetailView({ orderId, onBack }) {
   const [saving, setSaving] = useState(false);
   const [fabrics, setFabrics] = useState([]);
   const [dartPosition, setDartPosition] = useState("waist");
-  const [shirtStyle, setShirtStyle] = useState("fitted"); // uniform_shirt only
+  // Gender/sleeveStyle apply to every shirt garment type (school/PE
+  // presets used to hardcode a fitted silhouette regardless of this —
+  // now the client's choice always passes through, see
+  // orders.GeneratePieces). Default "unisex" so a new order doesn't
+  // silently read as gendered either way until someone picks one.
+  const [gender, setGender] = useState("unisex");
+  const [sleeveStyle, setSleeveStyle] = useState("full");
   const [collarEnabled, setCollarEnabled] = useState(false); // uniform_shirt only
-  const [chestPocket, setChestPocket] = useState(false);
-  const [backPocket, setBackPocket] = useState(false);
-  const [embroideryEnabled, setEmbroideryEnabled] = useState(false);
-  const [embroideryPlacement, setEmbroideryPlacement] = useState("left_chest");
-  const [embroideryWidth, setEmbroideryWidth] = useState("8");
-  const [embroideryHeight, setEmbroideryHeight] = useState("8");
-  const [embroideryLabel, setEmbroideryLabel] = useState("");
+  const [collarStyle, setCollarStyle] = useState("convertible");
+  // Premade construction options (see draft.ShirtOptions): the pattern is
+  // assembled from these and the preview is drawn from the result.
+  const [frontStyle, setFrontStyle] = useState("placket");
+  const [backStyle, setBackStyle] = useState("yoke");
+  const [hemStyle, setHemStyle] = useState("curved");
+  const [neckline, setNeckline] = useState("round");
+  const [trim, setTrim] = useState("none");
+  const [motifs, setMotifs] = useState([]); // motif bands, "side" being the insert panel
+  const [motifPattern, setMotifPattern] = useState("solid");
+  const [colorHint, setColorHint] = useState(null); // colours read off a reference photo
+  const [legStyle, setLegStyle] = useState("straight");
+  const [shortsLength, setShortsLength] = useState("short");
+  const [frontPocket, setFrontPocket] = useState("slant");
+  const [backPocket, setBackPocket] = useState("welt");
+  const [beltLoops, setBeltLoops] = useState("loops");
+  const [fly, setFly] = useState("fly");
+  const [trouserWaist, setTrouserWaist] = useState("band");
+  const [stripe, setStripe] = useState("none");
+  const [merch, setMerch] = useState(DEFAULT_MERCH);
+  const [skirt, setSkirt] = useState({ style: "a_line", waist: "band", pocket: "none" });
+  // Pocket/embroidery/sablon accessories — added by clicking directly
+  // on the design preview, not a form. Each carries its own id
+  // (assigned here, client-side, so drag/remove can target one
+  // instance among possibly several on the same segment) and its
+  // exact clicked (then possibly dragged) position; sent to the
+  // backend as-is on generate.
+  const [accessories, setAccessories] = useState([]);
   const [mockupNote, setMockupNote] = useState("");
   const [generating, setGenerating] = useState(false);
   const [activeMockup, setActiveMockup] = useState(null); // { mockup, pieces }
@@ -177,6 +224,7 @@ export default function OrderDetailView({ orderId, onBack }) {
       .getOrder(orderId)
       .then((o) => {
         setOrder(o);
+        setColorHint(o.previewColors?.main || o.previewColors?.accent ? { ...o.previewColors } : null);
         // Jump straight to the latest revision instead of leaving the
         // mockup section blank when reopening an order that already
         // has one.
@@ -187,6 +235,8 @@ export default function OrderDetailView({ orderId, onBack }) {
             .then((res) => {
               setActiveMockup(res);
               setActiveSizeLabel(Object.keys(res.pieces)[0] || null);
+              setAccessories(res.mockup.options?.addOns?.accessories || []);
+              restoreOptions(res.mockup.options || {});
             })
             .catch(() => {});
         }
@@ -197,6 +247,34 @@ export default function OrderDetailView({ orderId, onBack }) {
       .then(setFabrics)
       .catch(() => {});
   }, [orderId]);
+
+  // Sets the maker's choices back to what a saved revision was made with, so
+  // reopening an order shows the garment that was built, not the defaults.
+  function restoreOptions(opt) {
+    setGender(opt.gender || "unisex");
+    setDartPosition(opt.dartPosition || "waist");
+    setSleeveStyle(opt.sleeveStyle || "full");
+    setCollarEnabled(!!opt.collar);
+    if (opt.collarStyle) setCollarStyle(opt.collarStyle);
+    setFrontStyle(opt.frontStyle || "placket");
+    setBackStyle(opt.backStyle || "yoke");
+    setHemStyle(opt.hemStyle || "curved");
+    setNeckline(opt.neckline || "round");
+    setTrim(opt.trim || "none");
+    setMotifs([...(opt.panel === "side" ? ["side"] : []), ...(opt.motifs || [])]);
+    setMotifPattern(opt.pattern || "solid");
+    const t = opt.trousers || {};
+    setLegStyle(t.legStyle || "straight");
+    if (t.length) setShortsLength(t.length);
+    setFrontPocket(t.frontPocket || "slant");
+    setBackPocket(t.backPocket || "welt");
+    setBeltLoops(t.beltLoops || "loops");
+    setFly(t.fly || "fly");
+    setTrouserWaist(t.waist || "band");
+    setStripe(t.stripe || "none");
+    if (opt.skirt?.style || opt.skirt?.waist) setSkirt((prev) => ({ ...prev, ...opt.skirt }));
+    if (opt.merch?.item) setMerch((prev) => ({ ...prev, ...opt.merch }));
+  }
 
   function updateField(key, value) {
     setOrder((prev) => ({ ...prev, [key]: value }));
@@ -246,7 +324,7 @@ export default function OrderDetailView({ orderId, onBack }) {
     setSaving(true);
     setError(null);
     try {
-      const updated = await api.updateOrder(orderId, order);
+      const updated = await api.updateOrder(orderId, { ...order, previewColors: { main: colorHint?.main, accent: colorHint?.accent } });
       setOrder(updated);
       return updated;
     } catch (e) {
@@ -265,24 +343,41 @@ export default function OrderDetailView({ orderId, onBack }) {
       // an unsaved size-chart change would otherwise be silently
       // ignored — save first so what's on screen is what gets drafted.
       await handleSave();
-      const payload = { note: mockupNote, dartPosition };
+      const payload = { note: mockupNote, accessories };
+      if (isShirtType) {
+        payload.gender = gender;
+        payload.sleeveStyle = sleeveStyle;
+        payload.dartPosition = dartPosition;
+        payload.frontStyle = frontStyle;
+        payload.backStyle = backStyle;
+        payload.hemStyle = hemStyle;
+        payload.neckline = neckline;
+        payload.trim = trim;
+        payload.panel = motifs.includes("side") ? "side" : "none";
+        payload.motifs = motifs.filter((m) => m !== "side");
+        payload.pattern = motifPattern;
+      }
+      if (order.garmentType === "other") {
+        payload.merch = merch;
+      }
+      if (order.garmentType === "skirt") {
+        payload.skirt = skirt;
+      }
+      if (order.garmentType === "custom") {
+        payload.custom = customPayload(order.design);
+      }
+      if (isBottomType) {
+        payload.trousers = { length: shortsLength, legStyle, frontPocket, backPocket, beltLoops, fly, waist: trouserWaist, stripe };
+      }
       if (order.garmentType === "uniform_shirt") {
-        payload.style = shirtStyle;
         payload.collar = collarEnabled;
       }
-      if (["school_shirt", "pe_shirt", "uniform_shirt"].includes(order.garmentType)) {
-        payload.chestPocket = chestPocket;
+      if (showCollarStyle) {
+        payload.collarStyle = collarStyle;
       }
-      if (["pants", "shorts", "skirt"].includes(order.garmentType)) {
-        payload.backPocket = backPocket;
-      }
-      if (embroideryEnabled) {
-        payload.embroidery = {
-          placement: embroideryPlacement,
-          width: Number(embroideryWidth) || 8,
-          height: Number(embroideryHeight) || 8,
-          label: embroideryLabel,
-        };
+      if (order.garmentType === "polo_shirt") {
+        payload.collar = true;
+        payload.collarStyle = "polo";
       }
       const res = await api.createMockup(orderId, payload);
       setOrder(res.order);
@@ -306,9 +401,57 @@ export default function OrderDetailView({ orderId, onBack }) {
       setActiveSizeLabel(Object.keys(res.pieces)[0] || null);
       setFocusIdx(0);
       setSentAll(false);
+      setAccessories(res.mockup.options?.addOns?.accessories || []);
     } catch (e) {
       setError(e.message);
     }
+  }
+
+  function addAccessory(type, segment, position, extra) {
+    const id = `acc-${Date.now()}-${Math.round(Math.random() * 1e6)}`;
+    const base = { id, type, segment, ...extra };
+    // On a sleeve an extra follows the arm unless a specific angle is given.
+    if (base.rotation === undefined && sleeveAlignment(segment, base.view)) base.rotation = sleeveAlignment(segment, base.view);
+    if (position) base.position = position;
+    if (type !== "pocket") {
+      base.width = extra?.width ?? 6;
+      base.height = extra?.height ?? 6;
+      base.label = extra?.label || "";
+    }
+    setAccessories((prev) => [...prev, base]);
+  }
+
+  // A matching extra on the other side: the left chest pocket's twin on the
+  // right, a sleeve pocket's twin on the other sleeve, or a mirrored position.
+  function mirrorAccessory(id) {
+    const SWAP = { left_chest: "right_chest", right_chest: "left_chest", left_sleeve: "right_sleeve", right_sleeve: "left_sleeve", left_leg: "right_leg", right_leg: "left_leg", left_hem: "right_hem", right_hem: "left_hem" };
+    setAccessories((prev) => {
+      const a = prev.find((x) => x.id === id);
+      if (!a) return prev;
+      const sideView = a.view === "left" || a.view === "right";
+      const copy = {
+        ...a,
+        id: `acc-${Date.now()}-${Math.round(Math.random() * 1e6)}`,
+        segment: SWAP[a.segment] || a.segment,
+        view: sideView ? (a.view === "left" ? "right" : "left") : a.view,
+        rotation: -(a.rotation || 0),
+      };
+      // Positions on a side-bound segment are distances from the center line; the rest are signed.
+      if (a.position && (!SWAP[a.segment] || sideView)) copy.position = { ...a.position, x: -a.position.x };
+      return [...prev, copy];
+    });
+  }
+
+  function updateAccessory(id, patch) {
+    setAccessories((prev) => prev.map((a) => (a.id === id ? { ...a, ...patch } : a)));
+  }
+
+  function removeAccessory(id) {
+    setAccessories((prev) => prev.filter((a) => a.id !== id));
+  }
+
+  function dragAccessory(id, fraction) {
+    setAccessories((prev) => prev.map((a) => (a.id === id ? { ...a, position: fraction } : a)));
   }
 
   function colorFor(piece) {
@@ -324,12 +467,14 @@ export default function OrderDetailView({ orderId, onBack }) {
   async function sendPiece(piece, sizeLabel, quantity) {
     await api.addPiece({
       name: `${piece.name} — ${order.customerName} ${sizeLabel}`,
-      width: piece.width,
-      height: piece.height,
-      qty: 2 * Math.max(1, Number(quantity) || 1),
+      // Nest the CUT outline (with seam/hem allowances), not the sewing
+      // line — yardage has to cover the allowances.
+      width: piece.cutWidth || piece.width,
+      height: piece.cutHeight || piece.height,
+      qty: (piece.qty || 2) * Math.max(1, Number(quantity) || 1),
       color: colorFor(piece),
       grainLocked: true,
-      pathData: piece.pathData,
+      pathData: piece.cutPathData || piece.pathData,
     });
   }
 
@@ -362,16 +507,21 @@ export default function OrderDetailView({ orderId, onBack }) {
 
   const sizeLabels = activeMockup ? Object.keys(activeMockup.pieces) : [];
   const activePieces = activeMockup && activeSizeLabel ? activeMockup.pieces[activeSizeLabel] : null;
-  const isStubGarment = order.garmentType === "other";
   const matchedFabric = fabrics.find((f) => f.name === order.fabric?.name);
   const fields = measurementFieldsFor(order.garmentType);
-  const showDartPosition =
-    order.garmentType === "school_shirt" ||
-    (order.garmentType === "uniform_shirt" && shirtStyle === "fitted");
-  const isShirtType = ["school_shirt", "pe_shirt", "uniform_shirt"].includes(order.garmentType);
-  const showChestPocket = isShirtType;
-  const showBackPocket = ["pants", "shorts", "skirt"].includes(order.garmentType);
-  const showAddOns = showChestPocket || showBackPocket;
+  const isBottomType = order.garmentType === "pants" || order.garmentType === "shorts";
+  const isMerchType = order.garmentType === "other";
+  const isSkirtType = order.garmentType === "skirt";
+  const isCustomType = order.garmentType === "custom";
+  const isShirtType = ["school_shirt", "polo_shirt", "pe_shirt", "uniform_shirt"].includes(order.garmentType);
+  const showCollarStyle =
+    order.garmentType === "school_shirt" || (order.garmentType === "uniform_shirt" && collarEnabled);
+  // Gender always passes through as given for every shirt type now
+  // (see orders.GeneratePieces) — the preview reads it from what was
+  // ACTUALLY drafted on the active mockup, not the live form control,
+  // the same way dartPosition already does below, so switching the
+  // gender selector doesn't repaint the preview until you regenerate.
+  const effectiveGender = activeMockup?.mockup.options?.gender;
 
   return (
     <div className="tab-body">
@@ -482,7 +632,14 @@ export default function OrderDetailView({ orderId, onBack }) {
             </div>
           </div>
 
-          {(!order.sizes || order.sizes.length === 0) && (
+          {(!order.sizes || order.sizes.length === 0) && (isMerchType || isCustomType) && (
+            <p className="empty" style={{ padding: "20px 0" }}>
+              No size rows — that's fine here: one set of pieces is drafted
+              for the whole order. Add a row per size or colour only if you
+              want a separate quantity for each.
+            </p>
+          )}
+          {(!order.sizes || order.sizes.length === 0) && !isMerchType && !isCustomType && (
             <p className="empty" style={{ padding: "20px 0" }}>
               No sizes yet — this customer's own sizing goes here, so add
               a row (or prefill from the standard chart as a starting
@@ -510,101 +667,62 @@ export default function OrderDetailView({ orderId, onBack }) {
         <section>
           <h2 style={{ fontSize: 15, margin: "0 0 12px" }}>Mockup</h2>
 
-          {order.garmentType === "uniform_shirt" && (
-            <div className="row2" style={{ maxWidth: 420 }}>
-              <div className="field">
-                <label>Fit style</label>
-                <select className="select" value={shirtStyle} onChange={(e) => setShirtStyle(e.target.value)}>
-                  <option value="fitted">Fitted (bust dart)</option>
-                  <option value="relaxed">Relaxed (dartless)</option>
-                </select>
-              </div>
-              <div className="field">
-                <label style={{ display: "flex", alignItems: "center", gap: 0 }}>Collar + placket</label>
-                <label className="check" style={{ marginTop: 8 }}>
-                  <input
-                    type="checkbox"
-                    checked={collarEnabled}
-                    onChange={(e) => setCollarEnabled(e.target.checked)}
-                  />
-                  Include collar + button placket
-                </label>
-              </div>
-            </div>
+          {isCustomType && (
+            <CustomDesigner
+              design={order.design}
+              image={order.designImage}
+              onDesign={(dd) => setOrder((prev) => ({ ...prev, design: dd }))}
+              onImage={(url) => setOrder((prev) => ({ ...prev, designImage: url }))}
+            />
           )}
-          {showDartPosition && (
-            <div className="field" style={{ maxWidth: 280 }}>
-              <label>Front dart position</label>
-              <select className="select" value={dartPosition} onChange={(e) => setDartPosition(e.target.value)}>
-                {DART_POSITIONS.map((d) => (
-                  <option key={d.key} value={d.key}>{d.label}</option>
-                ))}
-              </select>
-            </div>
+          {(isShirtType || isBottomType || isMerchType || isSkirtType) && (
+            <PatternMaker
+              orderId={orderId}
+              garmentType={order.garmentType}
+              sizes={order.sizes}
+              dartPositions={DART_POSITIONS}
+              accessories={accessories}
+              onAddAccessory={addAccessory}
+              onRemoveAccessory={removeAccessory}
+              onUpdateAccessory={updateAccessory}
+              onMirrorAccessory={mirrorAccessory}
+              onDragAccessory={dragAccessory}
+              colorHint={colorHint}
+              onColorHint={(c) => setColorHint((prev) => ({ ...prev, ...c }))}
+              referencePhoto={order.designImage}
+              onReferencePhoto={(url) => setOrder((prev) => ({ ...prev, designImage: url }))}
+              value={{ gender, dartPosition, sleeveStyle, collarEnabled, collarStyle, frontStyle, backStyle, hemStyle, neckline, trim, motifs, pattern: motifPattern, legStyle, shortsLength, frontPocket, backPocket, beltLoops, fly, trouserWaist, stripe, merch, skirt }}
+              onChange={(patch) => {
+                if ("gender" in patch) setGender(patch.gender);
+                if ("dartPosition" in patch) setDartPosition(patch.dartPosition);
+                if ("sleeveStyle" in patch) setSleeveStyle(patch.sleeveStyle);
+                if ("collarEnabled" in patch) setCollarEnabled(patch.collarEnabled);
+                if ("collarStyle" in patch) setCollarStyle(patch.collarStyle);
+                if ("frontStyle" in patch) setFrontStyle(patch.frontStyle);
+                if ("backStyle" in patch) setBackStyle(patch.backStyle);
+                if ("hemStyle" in patch) setHemStyle(patch.hemStyle);
+                if ("neckline" in patch) setNeckline(patch.neckline);
+                if ("trim" in patch) setTrim(patch.trim);
+                if ("motifs" in patch) setMotifs(patch.motifs);
+                if ("pattern" in patch) setMotifPattern(patch.pattern);
+                if ("legStyle" in patch) setLegStyle(patch.legStyle);
+                if ("shortsLength" in patch) setShortsLength(patch.shortsLength);
+                if ("frontPocket" in patch) setFrontPocket(patch.frontPocket);
+                if ("backPocket" in patch) setBackPocket(patch.backPocket);
+                if ("beltLoops" in patch) setBeltLoops(patch.beltLoops);
+                if ("fly" in patch) setFly(patch.fly);
+                if ("trouserWaist" in patch) setTrouserWaist(patch.trouserWaist);
+                if ("stripe" in patch) setStripe(patch.stripe);
+                if ("merch" in patch) setMerch((prev) => ({ ...prev, ...patch.merch }));
+                if ("skirt" in patch) setSkirt((prev) => ({ ...prev, ...patch.skirt }));
+              }}
+            />
           )}
-          {showAddOns && (
-            <div className="addons-box">
-              <label style={{ display: "block", fontSize: "11.5px", color: "#9aa0a5", marginBottom: 10 }}>
-                Add-ons
-              </label>
-              {showChestPocket && (
-                <label className="check">
-                  <input type="checkbox" checked={chestPocket} onChange={(e) => setChestPocket(e.target.checked)} />
-                  Chest pocket (patch)
-                </label>
-              )}
-              {showBackPocket && (
-                <label className="check">
-                  <input type="checkbox" checked={backPocket} onChange={(e) => setBackPocket(e.target.checked)} />
-                  Back pocket(s) (patch)
-                </label>
-              )}
-              <label className="check" style={{ marginBottom: embroideryEnabled ? 12 : 0 }}>
-                <input
-                  type="checkbox"
-                  checked={embroideryEnabled}
-                  onChange={(e) => setEmbroideryEnabled(e.target.checked)}
-                />
-                Embroidery / logo placement
-              </label>
-              {embroideryEnabled && (
-                <div className="addons-embroidery">
-                  <div className="row2">
-                    <div className="field">
-                      <label>Placement</label>
-                      <select
-                        className="select"
-                        value={embroideryPlacement}
-                        onChange={(e) => setEmbroideryPlacement(e.target.value)}
-                      >
-                        {EMBROIDERY_PLACEMENTS.map((p) => (
-                          <option key={p.key} value={p.key}>{p.label}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="field">
-                      <label>Label / description</label>
-                      <input
-                        type="text"
-                        placeholder="e.g. Logo SDN 01"
-                        value={embroideryLabel}
-                        onChange={(e) => setEmbroideryLabel(e.target.value)}
-                      />
-                    </div>
-                  </div>
-                  <div className="row2">
-                    <div className="field">
-                      <label>Width (cm)</label>
-                      <input type="number" value={embroideryWidth} onChange={(e) => setEmbroideryWidth(e.target.value)} />
-                    </div>
-                    <div className="field">
-                      <label>Height (cm)</label>
-                      <input type="number" value={embroideryHeight} onChange={(e) => setEmbroideryHeight(e.target.value)} />
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
+          {!isCustomType && (
+          <p className="note" style={{ marginTop: 0 }}>
+              Pockets, embroidery, and sablon are added by clicking directly on the
+              design preview below, once you've generated at least one mockup.
+            </p>
           )}
           <div className="field" style={{ maxWidth: 420 }}>
             <label>Revision note</label>
@@ -618,19 +736,10 @@ export default function OrderDetailView({ orderId, onBack }) {
           <button
             className="btn-generate btn-inline"
             onClick={handleGenerate}
-            disabled={generating || !order.sizes?.length}
+            disabled={generating || (!order.sizes?.length && !isMerchType && !isCustomType)}
           >
             {generating ? "Generating…" : "Generate mockup"}
           </button>
-
-          {isStubGarment && (
-            <p className="note" style={{ marginTop: 12 }}>
-              Pattern drafting for this garment type isn't built yet —
-              generating a mockup will tell you that directly. The
-              order, size chart, and notes above are still tracked and
-              saved normally.
-            </p>
-          )}
 
           {activeMockup && (
             <>
@@ -666,19 +775,30 @@ export default function OrderDetailView({ orderId, onBack }) {
                 </div>
               )}
 
-              {activePieces && (
+              {activePieces && !isCustomType && (
                 <ErrorBoundary
                   fallback={
                     <div className="garment-preview">
                       <p className="draft-piece-notes" style={{ maxWidth: "none" }}>
-                        The 3D preview couldn't be displayed. The cutting pieces below are unaffected.
+                        The design preview couldn't be displayed. The cutting pieces below are unaffected.
                       </p>
                     </div>
                   }
                 >
-                  <Garment3DPreview
+                  <GarmentFlatPreview
                     pieces={activePieces}
-                    embroidery={activeMockup.mockup.options?.addOns?.embroidery}
+                    accessories={accessories}
+                    gender={effectiveGender}
+                    dartPosition={activeMockup.mockup.options?.dartPosition}
+                    sleeveStyle={activeMockup.mockup.options?.sleeveStyle}
+                    collarStyle={activeMockup.mockup.options?.collarStyle}
+                    colorHint={colorHint}
+                    pattern={activeMockup.mockup.options?.pattern || "solid"}
+                    onColorChange={(c) => setColorHint((prev) => ({ ...prev, ...c }))}
+                    merchItem={order.garmentType === "other" ? activeMockup.mockup.options?.merch?.item : undefined}
+                    onAddAccessory={addAccessory}
+                    onRemoveAccessory={removeAccessory}
+                    onDragAccessory={dragAccessory}
                   />
                 </ErrorBoundary>
               )}
@@ -696,7 +816,7 @@ export default function OrderDetailView({ orderId, onBack }) {
                         onChange={(e) => setFocusIdx(Number(e.target.value))}
                       >
                         {activePieces.map((p, i) => (
-                          <option key={p.name} value={i}>{p.name}</option>
+                          <option key={i} value={i}>{p.name}</option>
                         ))}
                       </select>
                     </div>

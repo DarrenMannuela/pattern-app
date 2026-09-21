@@ -25,7 +25,14 @@ func NewOrdersAPI(path string) *OrdersAPI {
 func (a *OrdersAPI) List(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		writeJSON(w, http.StatusOK, a.store.List())
+		// The list doesn't need each order's (large) design picture.
+		list := a.store.List()
+		slim := make([]orders.Order, len(list))
+		for i, o := range list {
+			slim[i] = *o
+			slim[i].DesignImage = ""
+		}
+		writeJSON(w, http.StatusOK, slim)
 
 	case http.MethodPost:
 		var o orders.Order
@@ -90,17 +97,95 @@ func (a *OrdersAPI) ByID(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// mockupRequest is the body for POST /api/orders/{id}/mockups. Style
-// and Collar only matter for orders.GarmentUniformShirt — the two
-// preset shirt types ignore them and force their own combination.
+// mockupRequest is the body for POST /api/orders/{id}/mockups. Collar
+// only matters for orders.GarmentUniformShirt — the two preset shirt
+// types ignore it and force their own combination; Gender,
+// DartPosition, and SleeveStyle apply to every shirt type.
 type mockupRequest struct {
-	Note         string            `json:"note"`
-	DartPosition string            `json:"dartPosition"`
-	Style        string            `json:"style"`
-	Collar       bool              `json:"collar"`
-	ChestPocket  bool              `json:"chestPocket"`
-	BackPocket   bool              `json:"backPocket"`
-	Embroidery   *draft.Embroidery `json:"embroidery"`
+	Note         string               `json:"note"`
+	Gender       string               `json:"gender"`
+	DartPosition string               `json:"dartPosition"`
+	SleeveStyle  string               `json:"sleeveStyle"`
+	Collar       bool                 `json:"collar"`
+	CollarStyle  string               `json:"collarStyle"`
+	FrontStyle   string               `json:"frontStyle"`
+	BackStyle    string               `json:"backStyle"`
+	HemStyle     string               `json:"hemStyle"`
+	Neckline     string               `json:"neckline"`
+	Trim         string               `json:"trim"`
+	Panel        string               `json:"panel"`
+	Motifs       []string             `json:"motifs"`
+	Pattern      string               `json:"pattern"`
+	Trousers     draft.TrouserOptions `json:"trousers"`
+	Merch        draft.MerchOptions   `json:"merch"`
+	Skirt        draft.SkirtOptions   `json:"skirt"`
+	Custom       draft.CustomOptions  `json:"custom"`
+	Accessories  []draft.Accessory    `json:"accessories"`
+	// Sizes overrides the saved size chart for a live preview only, and
+	// GarmentType the order's garment (so the pattern maker can draw a
+	// collared shirt for a part thumbnail on any shirt order).
+	Sizes       []orders.OrderSize `json:"sizes"`
+	GarmentType string             `json:"garmentType"`
+}
+
+func (req mockupRequest) options() draft.ShirtOptions {
+	return draft.ShirtOptions{
+		Gender:       req.Gender,
+		DartPosition: req.DartPosition,
+		SleeveStyle:  req.SleeveStyle,
+		Collar:       req.Collar,
+		CollarStyle:  req.CollarStyle,
+		FrontStyle:   req.FrontStyle,
+		BackStyle:    req.BackStyle,
+		HemStyle:     req.HemStyle,
+		Neckline:     req.Neckline,
+		Trim:         req.Trim,
+		Panel:        req.Panel,
+		Motifs:       req.Motifs,
+		Pattern:      req.Pattern,
+		Trousers:     req.Trousers,
+		Merch:        req.Merch,
+		Skirt:        req.Skirt,
+		Custom:       req.Custom,
+		AddOns:       draft.AddOns{Accessories: req.Accessories},
+	}
+}
+
+// Preview handles POST /api/orders/{id}/preview — drafts the pieces for a
+// set of options without saving a revision, so the pattern maker can
+// redraw as parts are dropped on the garment. Sizes in the body (the
+// unsaved size chart) win over the saved ones.
+func (a *OrdersAPI) Preview(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	o, ok := a.store.Get(r.PathValue("id"))
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+	var req mockupRequest
+	if r.ContentLength != 0 {
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "invalid preview payload", http.StatusBadRequest)
+			return
+		}
+	}
+	sizes := o.Sizes
+	if len(req.Sizes) > 0 {
+		sizes = req.Sizes
+	}
+	garment := o.GarmentType
+	if req.GarmentType != "" {
+		garment = req.GarmentType
+	}
+	pieces, err := orders.GeneratePieces(garment, sizes, req.options())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnprocessableEntity)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"pieces": pieces})
 }
 
 // CreateMockup handles POST /api/orders/{id}/mockups.
@@ -118,16 +203,7 @@ func (a *OrdersAPI) CreateMockup(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	opts := draft.ShirtOptions{
-		DartPosition: req.DartPosition,
-		Style:        req.Style,
-		Collar:       req.Collar,
-		AddOns: draft.AddOns{
-			ChestPocket: req.ChestPocket,
-			BackPocket:  req.BackPocket,
-			Embroidery:  req.Embroidery,
-		},
-	}
+	opts := req.options()
 	updated, pieces, err, ok := a.store.AddMockup(id, req.Note, opts)
 	if !ok {
 		http.NotFound(w, r)

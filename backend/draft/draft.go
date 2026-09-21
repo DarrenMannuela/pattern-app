@@ -22,17 +22,20 @@ type Measurements struct {
 	Bust            float64 `json:"bust"`
 	Waist           float64 `json:"waist"`
 	BackWaistLength float64 `json:"backWaistLength"` // nape to waist
-	Shoulder        float64 `json:"shoulder"`        // shoulder seam length
-	Neck            float64 `json:"neck"`            // neck circumference
-	Ease            float64 `json:"ease"`            // total wearing ease added to bust/waist
-	SleeveLength    float64 `json:"sleeveLength"`    // shoulder point to wrist
-	UpperArm        float64 `json:"upperArm"`        // bicep circumference
-	Wrist           float64 `json:"wrist"`           // wrist circumference
-	Hip             float64 `json:"hip"`             // hip circumference — pants/skirt
-	Rise            float64 `json:"rise"`            // crotch depth, waist to crotch level — pants/shorts
-	Inseam          float64 `json:"inseam"`          // crotch to hem — pants/shorts (shorter for shorts)
-	HemWidth        float64 `json:"hemWidth"`        // leg opening circumference/2 — pants/shorts; 0 derives it from hip
-	SkirtLength     float64 `json:"skirtLength"`     // waist to hem — skirt only
+	// ShirtLength is nape to hem for shirts. Zero means "derive it from
+	// BackWaistLength" (shirtLengthFromBack).
+	ShirtLength  float64 `json:"shirtLength"`
+	Shoulder     float64 `json:"shoulder"`     // shoulder seam length
+	Neck         float64 `json:"neck"`         // neck circumference
+	Ease         float64 `json:"ease"`         // total wearing ease added to bust/waist
+	SleeveLength float64 `json:"sleeveLength"` // shoulder point to wrist
+	UpperArm     float64 `json:"upperArm"`     // bicep circumference
+	Wrist        float64 `json:"wrist"`        // wrist circumference
+	Hip          float64 `json:"hip"`          // hip circumference — pants/skirt
+	Rise         float64 `json:"rise"`         // crotch depth, waist to crotch level — pants/shorts
+	Inseam       float64 `json:"inseam"`       // crotch to hem — pants/shorts (shorter for shorts)
+	HemWidth     float64 `json:"hemWidth"`     // leg opening circumference/2 — pants/shorts; 0 derives it from hip
+	SkirtLength  float64 `json:"skirtLength"`  // waist to hem — skirt only
 }
 
 // Defaults returns m with any zero-valued field replaced by a
@@ -112,6 +115,27 @@ type Piece struct {
 	ShoulderTip *Point  `json:"shoulderTip,omitempty"` // front/back only: where a sleeve crown attaches
 	Crown       *Point  `json:"crown,omitempty"`       // sleeve only: the point that attaches to a shoulder tip
 	Anchor      *Point  `json:"anchor,omitempty"`      // add-on pieces (pocket): where this attaches on its parent piece
+	Segment     string  `json:"segment,omitempty"`     // add-on pieces: which named garment segment this belongs to (see draft.SegmentXxx)
+	// Landmarks exposes named construction points (e.g. a trouser
+	// panel's "waistSide"/"hipBulge"/"crotchPt"/"hemInseam"/"hemSide")
+	// so a frontend illustration can build its own simplified shape
+	// from the SAME real coordinates the pattern was actually drafted
+	// with, instead of re-guessing proportions independently. Piece-
+	// type-specific, so not every piece populates every key.
+	Landmarks map[string]Point `json:"landmarks,omitempty"`
+	// Finished-pattern fields, filled by Finish: PathData above is the
+	// SEWING line (the block); the cutting line is that outline pushed
+	// out by the seam and hem allowances, translated so its own top-left
+	// is (0,0). CutOffset is where the sewing line's origin sits inside
+	// that cut outline, so a renderer can draw both together.
+	CutPathData string      `json:"cutPathData,omitempty"`
+	CutWidth    float64     `json:"cutWidth,omitempty"`
+	CutHeight   float64     `json:"cutHeight,omitempty"`
+	CutOffset   *Point      `json:"cutOffset,omitempty"`
+	Grainline   *[4]float64 `json:"grainline,omitempty"` // x1,y1,x2,y2 in sewing-line coordinates
+	// Qty is how many copies of this piece as drawn one garment needs.
+	// A half piece on a fold counts both halves. Set by FinishAll.
+	Qty int `json:"qty,omitempty"`
 }
 
 type point struct{ x, y float64 }
@@ -186,7 +210,7 @@ func DraftBodice(m Measurements, dartPosition string) []Piece {
 
 	front, frontArmhole, _ := draftFront(qBust, qWaist, scye, neckW, m.Shoulder, m.BackWaistLength, dartPosition)
 	back, backArmhole, _ := draftBack(qBust, qWaist, scye, neckW, m.Shoulder, m.BackWaistLength)
-	sleeve := draftSleeve(frontArmhole+backArmhole, m.SleeveLength, m.UpperArm, m.Wrist, ease, "Sleeve")
+	sleeve := draftSleeve(frontArmhole+backArmhole, m.SleeveLength, m.UpperArm, m.Wrist, ease, "full", "Sleeve")
 	return []Piece{front, back, sleeve}
 }
 
@@ -268,6 +292,26 @@ func splitCubic(p0, p1, p2, p3 point, t float64) (a, d, f, e, c point) {
 	return
 }
 
+// tForY finds the parameter t where a cubic bezier's y-coordinate
+// equals targetY, via binary search — used to split a curve (like an
+// armhole) at a specific height rather than by t directly, e.g. where
+// a back yoke seam crosses the armhole curve. Assumes y is monotonic
+// along the curve from p0 to p3, which holds for every armhole curve
+// this package drafts (shoulder to underarm, y only increasing).
+func tForY(p0, c1, c2, p3 point, targetY float64) float64 {
+	lo, hi := 0.0, 1.0
+	for i := 0; i < 30; i++ {
+		mid := (lo + hi) / 2
+		_, _, f, _, _ := splitCubic(p0, c1, c2, p3, mid)
+		if f.y < targetY {
+			lo = mid
+		} else {
+			hi = mid
+		}
+	}
+	return (lo + hi) / 2
+}
+
 // cubicLength approximates the arc length of a cubic bezier by
 // sampling points along it and summing the straight-line segments
 // between them — accurate enough to size a sleeve cap to an armhole,
@@ -298,7 +342,7 @@ func draftFront(qBust, qWaist, scye, neckW, shoulderLen, backWaistLen float64, d
 	height := backWaistLen + 1.5 // front block runs slightly longer than back, for the bust curve
 	neckDrop := neckW + 1.5
 	shoulderDrop := 2.0
-	shoulderTipX := neckW + shoulderLen*0.94
+	shoulderTipX := neckW + shoulderLen*0.96
 
 	width := math.Max(qBust, shoulderTipX)
 
@@ -409,8 +453,8 @@ func draftBack(qBust, qWaist, scye, neckW, shoulderLen, backWaistLen float64) (P
 	height := backWaistLen
 	neckDrop := neckW * 0.35 // back neck sits much shallower than front
 	shoulderDrop := 1.3
-	shoulderTipX := neckW + shoulderLen*0.9
-	backScye := scye - 1 // back armhole is typically a touch shallower than front
+	shoulderTipX := neckW + shoulderLen*1.0
+	backScye := scye // the bust line is one horizontal across front and back
 
 	width := math.Max(qBust, shoulderTipX)
 
@@ -469,23 +513,75 @@ func draftBack(qBust, qWaist, scye, neckW, shoulderLen, backWaistLen float64) (P
 // the back cap (toward x=0) is drafted flatter than the front cap
 // (toward the right), matching how a real armhole is straighter
 // across the back and scoops in more sharply under the front.
-func draftSleeve(armhole, sleeveLen, upperArm, wrist, ease float64, name string) Piece {
-	capHeight := armhole / 3
+// sleeveLengthFraction scales the measured (full/wrist-length) sleeve
+// down for a shorter cut — there's no separate "half sleeve length"
+// measurement in the size chart, so a short or 3/4 sleeve is
+// approximated as a fraction of the full one, the same way a real
+// pattern maker eyeballs a short-sleeve length off a long-sleeve
+// block when no separate spec is given.
+func sleeveLengthFraction(style string) float64 {
+	switch style {
+	case "half":
+		return 0.35
+	case "three_quarter":
+		return 0.68
+	default: // "full" or unset
+		return 1.0
+	}
+}
+
+// cuffPleat is the extra sleeve-opening width gathered into a cuff.
+const cuffPleat = 4.0
+
+func draftSleeve(armhole, sleeveLen, upperArm, wrist, ease float64, style, name string) Piece {
 	sleeveEase := ease / 3 // a share of the garment's overall wearing ease, for arm movement
-	halfBicep := (upperArm + sleeveEase) / 2
-	halfWrist := (wrist + sleeveEase*0.5) / 2
+	// A shirt sleeve is cut with real room round the arm — the charts run
+	// 5-8cm over the arm on an adult (42 wide at the bicep for a chest of
+	// 104) — so the bicep ease is at least 15% of the arm, never less than
+	// the share of wearing ease. The boys' size-8 chart (26.5 wide on a
+	// 24cm arm) still comes out within its tolerance.
+	bicepEase := math.Max(sleeveEase, upperArm*0.15)
+	halfBicep := (upperArm + bicepEase) / 2
+	halfWristFull := (wrist + sleeveEase*0.5) / 2
+	if style != "half" {
+		// A cuffed sleeve opens as wide as the cuff (wrist + 3, see
+		// draftCuff) plus the pleats gathered into it, so the sleeve
+		// hangs nearly straight and narrows only a little. Cutting it
+		// to the bare wrist made the opening narrower than its own
+		// cuff.
+		halfWristFull = math.Min(halfBicep*0.9, (wrist+3+cuffPleat)/2)
+	}
 	width := halfBicep * 2
+
+	// A shorter sleeve ends higher up the arm, before it's narrowed
+	// toward the wrist, so its hem should sit closer to the bicep
+	// width than the full sleeve's wrist width — interpolate the hem
+	// by the same fraction used to shorten the length.
+	fraction := sleeveLengthFraction(style)
+	halfWrist := halfBicep - (halfBicep-halfWristFull)*fraction
+
+	// The cap is drafted the way the charts draw it: a fairly low dome
+	// (cap height about a quarter of the armhole — 8cm on the boys' 8
+	// chart, 21.5 on the 5XL polo) whose S-shaped edge is then made
+	// exactly as long as the armhole plus ease by adjusting the curve's
+	// fullness, not by making the dome taller. Truing seams this way is
+	// the step every drafting reference lists before cutting.
+	capHeight, fullness := solveSleeveCap(halfBicep, armhole)
+
+	// Guard against a length shorter than the cap itself, which would
+	// fold the wrist points back above the underarm and self-intersect.
+	length := sleeveLen * fraction
+	if length < capHeight+2 {
+		length = capHeight + 2
+	}
 
 	crown := point{round1(halfBicep), 0}
 	backUnderarm := point{0, round1(capHeight)}
 	frontUnderarm := point{round1(width), round1(capHeight)}
-	backWrist := point{round1(halfBicep - halfWrist), round1(sleeveLen)}
-	frontWrist := point{round1(halfBicep + halfWrist), round1(sleeveLen)}
+	backWrist := point{round1(halfBicep - halfWrist), round1(length)}
+	frontWrist := point{round1(halfBicep + halfWrist), round1(length)}
 
-	backC1 := point{round1(crown.x - halfBicep*0.28), round1(capHeight * 0.22)}
-	backC2 := point{round1(backUnderarm.x + halfBicep*0.15), round1(capHeight * 0.7)}
-	frontC1 := point{round1(frontUnderarm.x - halfBicep*0.22), round1(capHeight * 0.62)}
-	frontC2 := point{round1(crown.x + halfBicep*0.32), round1(capHeight * 0.16)}
+	backC1, backC2, frontC1, frontC2 := sleeveCapControls(halfBicep, capHeight, fullness)
 
 	pb := &pathBuilder{}
 	pb.moveTo(crown).
@@ -500,8 +596,80 @@ func draftSleeve(armhole, sleeveLen, upperArm, wrist, ease float64, name string)
 		Name:     name,
 		PathData: pb.String(),
 		Width:    round1(width),
-		Height:   round1(sleeveLen),
-		Notes:    "Full piece, cut once per arm (not on fold). Crown at top center; the flatter edge (left) is the back, the more scooped edge (right) is the front — match those to the bodice's back/front armhole when sewing in. Basic straight sleeve, no elbow shaping.",
+		Height:   round1(length),
+		Notes:    "Full piece, cut once per arm (not on fold). Crown at top center; the flatter edge (left) is the back, the more scooped edge (right) is the front — match those to the bodice's back/front armhole when sewing in. Cap curve is drafted to the armhole length plus 2cm of ease. Basic straight sleeve, no elbow shaping.",
 		Crown:    &Point{X: crown.x, Y: crown.y},
 	}
+}
+
+// sleeveCapEase is how much longer the cap curve is than the armhole
+// it's sewn into, cm — eased in over the top of the shoulder.
+const sleeveCapEase = 2.0
+
+// sleeveCapRatio is the cap height as a fraction of the armhole length,
+// read off the charts (0.24 boys' shirt, 0.27 polo).
+const sleeveCapRatio = 0.25
+
+// sleeveCapControls are the bezier control points of the sleeve cap:
+// back (flatter) then front (more scooped). fullness 0 is a plain
+// dome; toward 1 the curve pulls out into an S, which lengthens it
+// without raising the crown.
+func sleeveCapControls(halfBicep, capHeight, fullness float64) (backC1, backC2, frontC1, frontC2 point) {
+	f := fullness
+	width := halfBicep * 2
+	crown := point{halfBicep, 0}
+	backUnderarm := point{0, capHeight}
+	frontUnderarm := point{width, capHeight}
+	backC1 = point{round1(crown.x - halfBicep*(0.28+0.85*f)), round1(capHeight * 0.22 * (1 - f))}
+	backC2 = point{round1(backUnderarm.x + halfBicep*(0.15+0.65*f)), round1(capHeight * (0.70 + 0.30*f))}
+	frontC1 = point{round1(frontUnderarm.x - halfBicep*(0.22+0.60*f)), round1(capHeight * (0.62 + 0.38*f))}
+	frontC2 = point{round1(crown.x + halfBicep*(0.32+0.80*f)), round1(capHeight * 0.16 * (1 - f))}
+	return
+}
+
+// sleeveCapLength is the total length of both cap curves.
+func sleeveCapLength(halfBicep, capHeight, fullness float64) float64 {
+	crown := point{halfBicep, 0}
+	backUnderarm := point{0, capHeight}
+	frontUnderarm := point{halfBicep * 2, capHeight}
+	b1, b2, f1, f2 := sleeveCapControls(halfBicep, capHeight, fullness)
+	return cubicLength(crown, b1, b2, backUnderarm) + cubicLength(frontUnderarm, f1, f2, crown)
+}
+
+// solveSleeveCap returns the cap height and curve fullness that make
+// the cap run armhole + sleeveCapEase. It starts at the charts' cap
+// height and, only if even the fullest curve can't reach the length
+// (a deep armhole on a narrow sleeve), raises the dome until it can.
+func solveSleeveCap(halfBicep, armhole float64) (capHeight, fullness float64) {
+	target := armhole + sleeveCapEase
+	capHeight = armhole * sleeveCapRatio
+	for capHeight < armhole && sleeveCapLength(halfBicep, capHeight, 1) < target {
+		capHeight += 0.25
+	}
+	if sleeveCapLength(halfBicep, capHeight, 0) >= target {
+		return capHeight, 0
+	}
+	lo, hi := 0.0, 1.0
+	for i := 0; i < 40; i++ {
+		mid := (lo + hi) / 2
+		if sleeveCapLength(halfBicep, capHeight, mid) < target {
+			lo = mid
+		} else {
+			hi = mid
+		}
+	}
+	return capHeight, (lo + hi) / 2
+}
+
+// shirtLengthFactor turns the nape-to-waist back length into a shirt
+// length (nape to hem): a shirt hangs to the hip, about 1.75x the
+// waist length — 28.7 -> 50 on the boys' size-8 chart, 40 -> 70 adult.
+const shirtLengthFactor = 1.75
+
+// shirtLen is the nape-to-hem length a shirt is drafted to.
+func (m Measurements) shirtLen() float64 {
+	if m.ShirtLength > 0 {
+		return m.ShirtLength
+	}
+	return m.BackWaistLength * shirtLengthFactor
 }

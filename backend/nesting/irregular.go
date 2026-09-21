@@ -63,10 +63,10 @@ const maxSearchRows = 6000
 // fabric roll of fabricWidth, using each piece's real curved outline
 // for collision detection instead of its bounding box. resolution is
 // the grid cell size in cm (smaller = tighter packing, slower run);
-// 1.0 is a good default.
+// 0.5 is a good default.
 func PackPolygons(pieces []NestPiece, fabricWidth, seamAllowance, resolution float64) PolygonResult {
 	if resolution <= 0 {
-		resolution = 1.0
+		resolution = 0.5
 	}
 	dilateRadius := int(math.Ceil(seamAllowance / resolution))
 
@@ -85,8 +85,7 @@ func PackPolygons(pieces []NestPiece, fabricWidth, seamAllowance, resolution flo
 	// packer: placing big pieces while the fabric is still empty
 	// leaves better-shaped gaps for the smaller pieces that follow.
 	sort.Slice(instances, func(i, j int) bool {
-		return math.Max(instances[i].origW, instances[i].origH) >
-			math.Max(instances[j].origW, instances[j].origH)
+		return PolygonArea(instances[i].points) > PolygonArea(instances[j].points)
 	})
 
 	fabricCols := int(math.Ceil(fabricWidth / resolution))

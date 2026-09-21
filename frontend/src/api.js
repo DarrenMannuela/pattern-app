@@ -67,6 +67,17 @@ export const api = {
       body: JSON.stringify(payload),
     }),
 
+  previewPieces: (id, payload) =>
+    request(`/api/orders/${id}/preview`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  photoStatus: () => request("/api/analyze-photo/status"),
+
+  analyzePhoto: (image) =>
+    request("/api/analyze-photo", { method: "POST", body: JSON.stringify({ image }) }),
+
   getMockup: (id, version) => request(`/api/orders/${id}/mockups/${version}`),
 
   fabrics: () => request("/api/fabrics"),

@@ -86,15 +86,24 @@ export function pathDataToShape(d) {
 // connect any two boundary vertices, dense or not, if that's what its
 // ear-clipping order calls for. Rather than chase the exact shape
 // that still triggers one, this subdivides any triangle whose local X
-// span exceeds maxSpan (repeatedly, in case a split still leaves a
-// wide piece) — cheap insurance directly against the failure mode
+// OR Y span exceeds maxSpan (repeatedly, in case a split still leaves
+// a wide piece) — cheap insurance directly against the failure mode
 // (a wide-angle triangle tearing itself apart once bent) instead of
-// its cause.
+// its cause. The Y check matters once a bend also varies radius by
+// height (garmentScene.js's bendAroundBody): a tall, narrow triangle
+// has a small X span but can still cross a height range where the
+// body-profile radius changes a lot, and with no vertex in between to
+// carry that change, the two ends just get linearly interpolated —
+// which reads as a flat facet/crease instead of a smooth curve.
 export function subdivideWideTriangles(geometry, maxSpan, maxPasses = 4) {
   for (let pass = 0; pass < maxPasses; pass++) {
     const pos = geometry.attributes.position;
-    const idx = geometry.index;
-    if (!idx) return;
+    const idx = geometry.index; // ExtrudeGeometry has no index — a
+    // flat triangle-soup array where triangle t is vertices
+    // [3t, 3t+1, 3t+2] — so fall back to that implicit indexing
+    // instead of bailing out, or this whole function is a silent
+    // no-op on exactly the geometries (extruded pieces) it exists for.
+    const triCount = idx ? idx.count / 3 : pos.count / 3;
     const positions = Array.from(pos.array);
     let vertCount = pos.count;
     const midCache = new Map();
@@ -111,11 +120,15 @@ export function subdivideWideTriangles(geometry, maxSpan, maxPasses = 4) {
 
     const newIndices = [];
     let changed = false;
-    for (let i = 0; i < idx.count; i += 3) {
-      const a = idx.getX(i), b = idx.getX(i + 1), c = idx.getX(i + 2);
+    for (let t = 0; t < triCount; t++) {
+      const a = idx ? idx.getX(t * 3) : t * 3;
+      const b = idx ? idx.getX(t * 3 + 1) : t * 3 + 1;
+      const c = idx ? idx.getX(t * 3 + 2) : t * 3 + 2;
       const ax = positions[a * 3], bx = positions[b * 3], cx = positions[c * 3];
-      const span = Math.max(ax, bx, cx) - Math.min(ax, bx, cx);
-      if (span > maxSpan) {
+      const ay = positions[a * 3 + 1], by = positions[b * 3 + 1], cy = positions[c * 3 + 1];
+      const xSpan = Math.max(ax, bx, cx) - Math.min(ax, bx, cx);
+      const ySpan = Math.max(ay, by, cy) - Math.min(ay, by, cy);
+      if (Math.max(xSpan, ySpan) > maxSpan) {
         changed = true;
         const ab = midpoint(a, b);
         const bc = midpoint(b, c);
@@ -125,9 +138,37 @@ export function subdivideWideTriangles(geometry, maxSpan, maxPasses = 4) {
         newIndices.push(a, b, c);
       }
     }
-    if (!changed) return;
+    if (!changed) {
+      if (!idx) {
+        // still index it so the caller gets a consistent geometry either way
+        geometry.setIndex(newIndices);
+        geometry.clearGroups();
+      }
+      return;
+    }
     geometry.setIndex(newIndices);
     geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+    // ExtrudeGeometry's original 'normal'/'uv' attributes are sized
+    // for the OLD (smaller) vertex count. Left in place, they end up
+    // shorter than the new 'position' array — an invalid, mismatched
+    // BufferGeometry. The caller always calls computeVertexNormals()
+    // right after this, which only allocates a fresh, correctly-sized
+    // normal array when none exists yet; deleting the stale one here
+    // makes that happen instead of it silently reusing the undersized
+    // array (which either drops most normals or corrupts the geometry
+    // enough that the whole mesh doesn't render at all).
+    geometry.deleteAttribute("normal");
+    geometry.deleteAttribute("uv");
+    // ExtrudeGeometry defines its own draw-call groups (sides vs. caps)
+    // sized for the ORIGINAL triangle-soup layout. Rewriting the index
+    // without clearing them leaves the renderer drawing only whatever
+    // slice of the new, differently-ordered index array happens to
+    // fall inside those stale ranges — in practice, most of the mesh
+    // silently not drawing at all. A single material renders every
+    // group identically anyway (every caller here passes one material,
+    // never an array), so there's nothing lost by treating the whole
+    // index as one group.
+    geometry.clearGroups();
   }
 }
 

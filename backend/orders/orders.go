@@ -28,6 +28,8 @@ const (
 	// + fitted dart for school, none for PE) — quick to start from.
 	GarmentSchoolShirt = "school_shirt"
 	GarmentPEShirt     = "pe_shirt"
+	// GarmentPolo is a knit polo: flat collar, short placket, no yoke.
+	GarmentPolo = "polo_shirt"
 	// GarmentUniformShirt is the same shirt construction with no
 	// preset: Style and Collar in the request's ShirtOptions are used
 	// as given, so any other uniform top (company, workwear, event
@@ -38,13 +40,16 @@ const (
 	GarmentShorts       = "shorts"
 	GarmentSkirt        = "skirt"
 	GarmentOther        = "other"
+	// GarmentCustom is a design the user traced or drew themselves; its
+	// pieces come straight from the drawing (draft.DraftCustom).
+	GarmentCustom = "custom"
 )
 
 // defaultShortsInseam is used when a shorts order's size row doesn't
 // specify one — draft.Measurements' own default (75cm) is a
 // full-length trouser inseam and would draft shorts down to the
 // ankle.
-const defaultShortsInseam = 15.0
+const defaultShortsInseam = 18.0
 
 // ErrUnsupportedGarment is returned by GeneratePieces for a garment
 // type with no drafting logic yet.
@@ -79,6 +84,12 @@ type Mockup struct {
 	CreatedAt time.Time          `json:"createdAt"`
 }
 
+// PreviewColors are the fabric and trim colours the design preview is shown in.
+type PreviewColors struct {
+	Main   string `json:"main,omitempty"`
+	Accent string `json:"accent,omitempty"`
+}
+
 // Order is one customer engagement, start to finish.
 type Order struct {
 	ID           string      `json:"id"`
@@ -90,40 +101,93 @@ type Order struct {
 	Sizes        []OrderSize `json:"sizes"`
 	Status       string      `json:"status"` // "consultation" | "mockup" | "revision" | "approved"
 	Mockups      []Mockup    `json:"mockups"`
-	CreatedAt    time.Time   `json:"createdAt"`
-	UpdatedAt    time.Time   `json:"updatedAt"`
+	// DesignImage is the picture a custom design is traced over (a data
+	// URL), and Design the drawing itself — opaque to the backend, owned by
+	// the frontend editor. Only custom orders use them.
+	DesignImage string          `json:"designImage,omitempty"`
+	Design      json.RawMessage `json:"design,omitempty"`
+	// PreviewColors are the colours picked for the preview (from a reference
+	// photo, say), kept so reopening the order shows the same garment.
+	PreviewColors PreviewColors `json:"previewColors,omitempty"`
+	CreatedAt     time.Time     `json:"createdAt"`
+	UpdatedAt     time.Time     `json:"updatedAt"`
 }
 
 // GeneratePieces drafts pattern pieces for every size in sizes, using
 // garmentType to pick the right construction. For the two shirt
-// presets, opts.Style/opts.Collar are forced to what that preset
-// means; for GarmentUniformShirt they're used exactly as given, so
-// the caller builds the garment by toggling those instead of picking
-// a fixed type. opts.DartPosition always passes through as given.
+// presets, opts.Collar is forced to what that preset means (a school
+// shirt always has a collar, PE never does); for GarmentUniformShirt
+// it's used exactly as given, so the caller builds the garment by
+// toggling it instead of picking a fixed type. opts.Gender,
+// opts.DartPosition, and opts.SleeveStyle always pass through as
+// given for every shirt type — which uniform this is shouldn't decide
+// who it's cut for.
 func GeneratePieces(garmentType string, sizes []OrderSize, opts draft.ShirtOptions) (map[string][]draft.Piece, error) {
+	pieces, err := generateBlocks(garmentType, sizes, opts)
+	if err != nil {
+		return nil, err
+	}
+	// Blocks are drafted allowance-free; the patterns handed out are the
+	// finished ones, with a cutting line and a grainline.
+	for label, ps := range pieces {
+		pieces[label] = draft.FinishAll(ps)
+	}
+	return pieces, nil
+}
+
+func generateBlocks(garmentType string, sizes []OrderSize, opts draft.ShirtOptions) (map[string][]draft.Piece, error) {
 	switch garmentType {
 	case GarmentSchoolShirt:
-		opts.Style = "fitted"
 		opts.Collar = true
 	case GarmentPEShirt:
-		opts.Style = "relaxed"
 		opts.Collar = false
+	case GarmentPolo:
+		opts.Collar = true
+		opts.CollarStyle = "polo"
 	case GarmentUniformShirt:
 		// opts used as given — this type has no preset.
 	case GarmentPants:
 		return draftEach(sizes, func(m draft.Measurements) []draft.Piece {
-			return draft.DraftTrousers(m, "Pants", opts.AddOns)
+			return draft.DraftTrousers(m, "Pants", opts.AddOns, opts.Trousers)
 		}), nil
 	case GarmentShorts:
 		return draftEach(sizes, func(m draft.Measurements) []draft.Piece {
-			if m.Inseam == 0 {
+			// A size chart's inseam is a trouser length (a prefilled row says
+			// 75), so it only counts as a shorts length when it is one; the
+			// maker's length option overrides it.
+			if cm, ok := draft.ShortsInseam(opts.Trousers.Length); ok {
+				m.Inseam = cm
+			} else if m.Inseam == 0 || m.Inseam > 45 {
 				m.Inseam = defaultShortsInseam
 			}
-			return draft.DraftTrousers(m, "Shorts", opts.AddOns)
+			return draft.DraftTrousers(m, "Shorts", opts.AddOns, opts.Trousers)
+		}), nil
+	case GarmentCustom:
+		ps, err := draft.DraftCustom(opts.Custom)
+		if err != nil {
+			return nil, err
+		}
+		if len(sizes) == 0 {
+			sizes = []OrderSize{{Label: "One size", Quantity: 1}}
+		}
+		return draftEach(sizes, func(draft.Measurements) []draft.Piece {
+			return append([]draft.Piece(nil), ps...)
+		}), nil
+	case GarmentOther:
+		if opts.Merch.Item == "" {
+			return nil, ErrUnsupportedGarment
+		}
+		// Merch isn't sized by body measurements: an order with no size rows
+		// still gets its one set of pieces.
+		if len(sizes) == 0 {
+			sizes = []OrderSize{{Label: "One size", Quantity: 1}}
+		}
+		return draftEach(sizes, func(draft.Measurements) []draft.Piece {
+			return draft.DraftMerch(opts.Merch)
 		}), nil
 	case GarmentSkirt:
 		return draftEach(sizes, func(m draft.Measurements) []draft.Piece {
-			return draft.DraftSkirt(m, opts.AddOns)
+			return draft.DraftSkirt(m, opts.AddOns, opts.Skirt)
 		}), nil
 	default:
 		return nil, ErrUnsupportedGarment
@@ -246,6 +310,9 @@ func (s *Store) Update(id string, patch *Order) (*Order, error, bool) {
 	existing.DesignNotes = patch.DesignNotes
 	existing.Fabric = patch.Fabric
 	existing.Sizes = patch.Sizes
+	existing.DesignImage = patch.DesignImage
+	existing.Design = patch.Design
+	existing.PreviewColors = patch.PreviewColors
 	if patch.Status != "" {
 		existing.Status = patch.Status
 	}

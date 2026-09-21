@@ -6,7 +6,13 @@ import LayoutView from "./components/LayoutView";
 
 export default function App() {
   const [tab, setTab] = useState("orders");
-  const [openOrderId, setOpenOrderId] = useState(null);
+  // An order can be opened by link: http://localhost:5175/#order-12
+  const [openOrderId, setOpenOrderIdState] = useState(() => window.location.hash.match(/^#order-(\w+)$/)?.[1] || null);
+
+  function setOpenOrderId(id) {
+    window.history.replaceState(null, "", id ? `#order-${id}` : window.location.pathname);
+    setOpenOrderIdState(id);
+  }
 
   function handleSetTab(next) {
     setOpenOrderId(null);

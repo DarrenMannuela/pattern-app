@@ -8,6 +8,12 @@ const ICONS = {
       <path d="M17 6 L14.5 10 L18 13 L21.5 10 L19 6" />
     </g>
   ),
+  polo_shirt: (
+    <g fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinejoin="round">
+      <path d="M17 6 L11 10 L8 8 L2 12 L5 17 L8 15 L8 34 L28 34 L28 15 L31 17 L34 12 L28 8 L25 10 Z" />
+      <path d="M17 6 L14.5 10 L18 13 L21.5 10 L19 6" />
+    </g>
+  ),
   pe_shirt: (
     <g fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinejoin="round">
       <path d="M16 6 L9 9 L2 13 L6 19 L9 17 L9 34 L27 34 L27 17 L30 19 L34 13 L27 9 L20 6 Z" />
@@ -36,6 +42,13 @@ const ICONS = {
     <g fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinejoin="round">
       <path d="M11 4 L25 4 L31 32 L5 32 Z" />
       <line x1="11" y1="4" x2="25" y2="4" strokeWidth="3.2" />
+    </g>
+  ),
+  custom: (
+    <g fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinejoin="round" strokeLinecap="round">
+      <path d="M13 6 L8 9 L3 13 L6 18 L8 16 L8 33 L22 33" strokeDasharray="3,2.5" />
+      <path d="M31 8 L34 11 L20 25 L16 26 L17 22 Z" />
+      <path d="M28 11 L31 14" />
     </g>
   ),
   other: (

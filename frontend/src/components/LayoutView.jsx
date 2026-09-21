@@ -7,7 +7,7 @@ import StatBar from "./StatBar";
 export default function LayoutView() {
   const [pieces, setPieces] = useState([]);
   const [fabricWidth, setFabricWidth] = useState(150);
-  const [seamAllowance, setSeamAllowance] = useState(1);
+  const [seamAllowance, setSeamAllowance] = useState(0.25);
   const [result, setResult] = useState(null);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState(null);

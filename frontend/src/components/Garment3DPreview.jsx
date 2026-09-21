@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import { buildScene } from "../lib/garmentScene";
+import { buildScene, BODY_BUILDS } from "../lib/garmentScene";
 
 export default function Garment3DPreview({ pieces, embroidery }) {
   const mountRef = useRef(null);
@@ -9,6 +9,11 @@ export default function Garment3DPreview({ pieces, embroidery }) {
   const groupRef = useRef(null);
   const framedPiecesRef = useRef(null);
   const [color, setColor] = useState("#33475B");
+  const [build, setBuild] = useState("regular");
+  const [bodyWidth, setBodyWidth] = useState(1);
+  const [bodyHeight, setBodyHeight] = useState(1);
+  const [colorBlockOn, setColorBlockOn] = useState(false);
+  const [secondaryColor, setSecondaryColor] = useState("#c0392b");
   const [ready, setReady] = useState(false);
   const [webglError, setWebglError] = useState(null);
 
@@ -108,7 +113,13 @@ export default function Garment3DPreview({ pieces, embroidery }) {
         if (obj.material) obj.material.dispose();
       });
     }
-    const group = buildScene(pieces, color, embroidery);
+    const group = buildScene(pieces, {
+      color,
+      embroidery,
+      build,
+      bodyScale: { width: bodyWidth, height: bodyHeight },
+      colorBlock: { enabled: colorBlockOn, secondaryColor },
+    });
     scene.add(group);
     groupRef.current = group;
 
@@ -150,12 +161,14 @@ export default function Garment3DPreview({ pieces, embroidery }) {
         scene.fog.far = fitDistance * 2.3;
       }
     }
-  }, [pieces, color, embroidery, ready]);
+  }, [pieces, color, embroidery, build, bodyWidth, bodyHeight, colorBlockOn, secondaryColor, ready]);
 
   return (
     <div className="garment-preview">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
         <h2 style={{ margin: 0, fontSize: 15 }}>3D preview</h2>
+      </div>
+      <div className="preview-controls">
         <div className="field" style={{ margin: 0, display: "flex", alignItems: "center", gap: 8 }}>
           <label style={{ margin: 0 }}>Fabric color</label>
           <input
@@ -163,6 +176,53 @@ export default function Garment3DPreview({ pieces, embroidery }) {
             value={color}
             onChange={(e) => setColor(e.target.value)}
             style={{ width: 34, height: 26, padding: 0, border: "1px solid #454c51", borderRadius: 4, background: "none" }}
+          />
+        </div>
+        <label className="check" style={{ margin: 0 }}>
+          <input type="checkbox" checked={colorBlockOn} onChange={(e) => setColorBlockOn(e.target.checked)} />
+          Two-tone panel
+        </label>
+        {colorBlockOn && (
+          <div className="field" style={{ margin: 0, display: "flex", alignItems: "center", gap: 8 }}>
+            <label style={{ margin: 0 }}>Panel color</label>
+            <input
+              type="color"
+              value={secondaryColor}
+              onChange={(e) => setSecondaryColor(e.target.value)}
+              style={{ width: 34, height: 26, padding: 0, border: "1px solid #454c51", borderRadius: 4, background: "none" }}
+            />
+          </div>
+        )}
+        <div className="field" style={{ margin: 0, display: "flex", alignItems: "center", gap: 8 }}>
+          <label style={{ margin: 0 }}>Mannequin build</label>
+          <select className="select" value={build} onChange={(e) => setBuild(e.target.value)} style={{ width: "auto" }}>
+            {Object.entries(BODY_BUILDS).map(([key, b]) => (
+              <option key={key} value={key}>
+                {b.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="field" style={{ margin: 0, display: "flex", alignItems: "center", gap: 8 }}>
+          <label style={{ margin: 0 }}>Body width</label>
+          <input
+            type="range"
+            min="0.7"
+            max="1.4"
+            step="0.05"
+            value={bodyWidth}
+            onChange={(e) => setBodyWidth(Number(e.target.value))}
+          />
+        </div>
+        <div className="field" style={{ margin: 0, display: "flex", alignItems: "center", gap: 8 }}>
+          <label style={{ margin: 0 }}>Height</label>
+          <input
+            type="range"
+            min="0.8"
+            max="1.25"
+            step="0.05"
+            value={bodyHeight}
+            onChange={(e) => setBodyHeight(Number(e.target.value))}
           />
         </div>
       </div>
@@ -179,7 +239,10 @@ export default function Garment3DPreview({ pieces, embroidery }) {
       <p className="draft-piece-notes" style={{ maxWidth: "none" }}>
         Stylized preview on a dress-form mannequin, built by wrapping the drafted pieces around
         the body — not a cloth simulation, so drape, wrinkles, and fit aren't physically accurate.
-        Drag to rotate, scroll to zoom. Use the cutting pieces below for the actual pattern.
+        Drag to rotate, scroll to zoom. Mannequin build/width/height only resize the bare
+        mannequin (limbs, head, the body shown above or below the garment) — the fabric itself
+        always matches the customer's real measurements. Use the cutting pieces below for the
+        actual pattern.
       </p>
     </div>
   );

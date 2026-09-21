@@ -52,11 +52,11 @@ export default function Sidebar({
         />
       </div>
       <div className="field">
-        <label>Seam allowance, added per piece (cm)</label>
+        <label>Spacing margin around each piece (cm) — cut outlines already include seam allowance</label>
         <input
           type="number"
           min="0"
-          step="0.5"
+          step="0.25"
           value={seamAllowance}
           onChange={(e) => setSeamAllowance(Number(e.target.value))}
         />

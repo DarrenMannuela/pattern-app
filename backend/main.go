@@ -3,9 +3,11 @@ package main
 import (
 	"log"
 	"net/http"
+	"os"
 	"strings"
 
 	"patternapp/backend/handlers"
+	"patternapp/backend/vision"
 )
 
 // cors wraps a handler so the Vite dev server (a different origin)
@@ -32,9 +34,13 @@ func main() {
 	// chart -> mockup revisions).
 	mux.HandleFunc("/api/orders", cors(ordersAPI.List))
 	mux.HandleFunc("/api/orders/{id}", cors(ordersAPI.ByID))
+	mux.HandleFunc("/api/orders/{id}/preview", cors(ordersAPI.Preview))
 	mux.HandleFunc("/api/orders/{id}/mockups", cors(ordersAPI.CreateMockup))
 	mux.HandleFunc("/api/orders/{id}/mockups/{version}", cors(ordersAPI.MockupByVersion))
 	mux.HandleFunc("/api/fabrics", cors(handlers.Fabrics))
+	photos := vision.NewService()
+	mux.HandleFunc("/api/analyze-photo", cors(handlers.AnalyzePhoto(photos)))
+	mux.HandleFunc("/api/analyze-photo/status", cors(handlers.PhotoStatus(photos)))
 
 	// Cutting layout: unchanged, fed either by an order's mockup
 	// pieces or pieces added by hand.
@@ -57,6 +63,9 @@ func main() {
 	mux.HandleFunc("/api/grade-child", cors(handlers.GradeChild))
 
 	addr := ":8080"
+	if port := os.Getenv("PORT"); port != "" {
+		addr = ":" + port
+	}
 	log.Printf("pattern-app backend listening on %s", addr)
 	log.Fatal(http.ListenAndServe(addr, mux))
 }
