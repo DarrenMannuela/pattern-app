@@ -25,10 +25,12 @@ export const api = {
   removePiece: (id) =>
     request(`/api/pieces/${id}`, { method: "DELETE" }),
 
-  pack: (fabricWidth, seamAllowance) =>
+  // pieces, when given, packs exactly that list instead of everything in the
+  // store — used to nest one fabric's pieces at a time.
+  pack: (fabricWidth, seamAllowance, pieces) =>
     request("/api/pack", {
       method: "POST",
-      body: JSON.stringify({ fabricWidth, seamAllowance }),
+      body: JSON.stringify({ fabricWidth, seamAllowance, ...(pieces ? { pieces } : {}) }),
     }),
 
   draft: (measurements) =>

@@ -128,7 +128,10 @@ func insertPanelPieces(front Piece) (inner, panel, outer *Piece) {
 		return &pc
 	}
 	inner = build("Front inner (panel side)", -1, a, "Cut 1. The front's center-front side on the side that carries the insert panel; join it to the panel along the cut line.")
-	panel = build("Insert panel", a, b, "Cut 1 in the contrast (batik or printed) fabric. It sits between the two front pieces of that side, shoulder to hem; seam allowance is included.")
+	panel = build("Insert panel", a, b, "Cut 1 in the contrast (batik or printed) fabric. It sits between the two front pieces of that side, shoulder to hem.")
+	if panel != nil {
+		panel.Fabric = "contrast"
+	}
 	outer = build("Front outer (panel side)", b, w+1, "Cut 1. The armhole side of the front on the side that carries the insert panel.")
 	return
 }
@@ -140,14 +143,22 @@ func neckTrimPieces(vNeck bool, trim string, neckW, vDepth, collarEdge float64) 
 	case vNeck:
 		length := 2*math.Hypot(neckW, vDepth) + 2.4*neckW + 2
 		if trim == "contrast" {
-			out = append(out, withQty(draftRectPiece("Neck trim", length, 3.5, "", ""), 1, "Cut 1 in the contrast fabric, on the bias: a binding sewn round the V and the back neck, showing 1.5cm on the outside."))
+			out = append(out, contrastFabric(withQty(draftRectPiece("Neck trim", length, 3.5, "", ""), 1, "Cut 1 in the contrast fabric, on the bias: a binding sewn round the V and the back neck, showing 1.5cm on the outside.")))
 		} else {
 			out = append(out, withQty(draftRectPiece("Neck facing", length, 4, "", ""), 2, "Cut 2 (facing and interfacing): sewn to the neckline and turned to the inside."))
 		}
 	case trim == "contrast":
-		out = append(out, withQty(draftRectPiece("Piping strip", collarEdge, 3, "", ""), 1, "Cut 1 in the contrast fabric, on the bias: folded round piping cord and sewn along the collar's outer edge."))
+		out = append(out, contrastFabric(withQty(draftRectPiece("Piping strip", collarEdge, 3, "", ""), 1, "Cut 1 in the contrast fabric, on the bias: folded round piping cord and sewn along the collar's outer edge.")))
 	}
 	return out
+}
+
+// contrastFabric marks a piece as cut from the garment's second (contrast)
+// fabric, so the cutting layout nests and counts it separately from the main
+// fabric's pieces instead of treating everything as one length of cloth.
+func contrastFabric(p Piece) Piece {
+	p.Fabric = "contrast"
+	return p
 }
 
 // MotifPlacements are the places a motif band can go, with the pattern piece
@@ -198,24 +209,24 @@ func motifPieces(front, back, sleeve Piece, motifs []string, pattern string) []P
 		switch m {
 		case "centre":
 			length := round1(front.Height - pathStartY(front.PathData))
-			out = append(out, withQty(draftRectPiece("Motif streak", 5.5, length, "", ""), 1,
-				"Cut 1 in the "+mat+", 5cm wide when finished: a streak from the collar down the center front to the hem, laid over the placket (seam allowance included)."))
+			out = append(out, contrastFabric(withQty(draftRectPiece("Motif streak", 5, length, "", ""), 1,
+				"Cut 1 in the "+mat+", 5cm wide: a streak from the collar down the center front to the hem, laid over the placket.")))
 		case "double":
 			length := round1(front.Height - pathStartY(front.PathData))
-			out = append(out, withQty(draftRectPiece("Motif streak", 4, length, "", ""), 2,
-				"Cut 2 in the "+mat+", 3.5cm wide when finished: two streaks from the shoulder to the hem, one each side of the center front (seam allowance included)."))
+			out = append(out, contrastFabric(withQty(draftRectPiece("Motif streak", 3.5, length, "", ""), 2,
+				"Cut 2 in the "+mat+", 3.5cm wide: two streaks from the shoulder to the hem, one each side of the center front.")))
 		case "chest":
-			out = append(out, withQty(draftRectPiece("Chest band", round1(around), 8, "", ""), 2,
-				"Cut 2 (one each side) in the "+mat+", 7cm high when finished: a band across the chest, joined at the side seams."))
+			out = append(out, contrastFabric(withQty(draftRectPiece("Chest band", round1(around), 7, "", ""), 2,
+				"Cut 2 (one each side) in the "+mat+", 7cm high: a band across the chest, joined at the side seams.")))
 		case "shoulder":
-			out = append(out, withQty(draftRectPiece("Shoulder band", round1(around), 9, "", ""), 2,
-				"Cut 2 in the "+mat+", 8cm deep when finished: a band across the top of the front and the upper back, cut to the neckline and shoulder shape."))
+			out = append(out, contrastFabric(withQty(draftRectPiece("Shoulder band", round1(around), 8, "", ""), 2,
+				"Cut 2 in the "+mat+", 8cm deep: a band across the top of the front and the upper back, cut to the neckline and shoulder shape.")))
 		case "hem":
-			out = append(out, withQty(draftRectPiece("Hem band", round1(around), 9, "", ""), 2,
-				"Cut 2 in the "+mat+", 8cm high when finished: a border round the bottom of the shirt, joined at the side seams."))
+			out = append(out, contrastFabric(withQty(draftRectPiece("Hem band", round1(around), 8, "", ""), 2,
+				"Cut 2 in the "+mat+", 8cm high: a border round the bottom of the shirt, joined at the side seams.")))
 		case "arms":
-			out = append(out, withQty(draftRectPiece("Arm motif band", round1(sleeve.Width*0.85), 6, "", ""), 2,
-				"Cut 2 (one per arm) in the "+mat+", 5cm high when finished: a band round each arm, about a third of the way down."))
+			out = append(out, contrastFabric(withQty(draftRectPiece("Arm motif band", round1(sleeve.Width*0.85), 5, "", ""), 2,
+				"Cut 2 (one per arm) in the "+mat+", 5cm high: a band round each arm, about a third of the way down.")))
 		}
 	}
 	return out

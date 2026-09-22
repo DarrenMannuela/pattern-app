@@ -106,16 +106,21 @@ type Point struct {
 // Piece is a single drafted pattern piece: a real curved outline
 // (as an SVG path) rather than a bounding box.
 type Piece struct {
-	Name        string  `json:"name"`
-	PathData    string  `json:"pathData"` // SVG path 'd' attribute, local coords, origin top-left
-	Width       float64 `json:"width"`    // bounding box, for nesting/yardage estimates
-	Height      float64 `json:"height"`
-	FoldEdge    string  `json:"foldEdge"` // "left" if that edge is placed on the fabric fold
-	Notes       string  `json:"notes"`
-	ShoulderTip *Point  `json:"shoulderTip,omitempty"` // front/back only: where a sleeve crown attaches
-	Crown       *Point  `json:"crown,omitempty"`       // sleeve only: the point that attaches to a shoulder tip
-	Anchor      *Point  `json:"anchor,omitempty"`      // add-on pieces (pocket): where this attaches on its parent piece
-	Segment     string  `json:"segment,omitempty"`     // add-on pieces: which named garment segment this belongs to (see draft.SegmentXxx)
+	Name     string  `json:"name"`
+	PathData string  `json:"pathData"` // SVG path 'd' attribute, local coords, origin top-left
+	Width    float64 `json:"width"`    // bounding box, for nesting/yardage estimates
+	Height   float64 `json:"height"`
+	FoldEdge string  `json:"foldEdge"` // "left" if that edge is placed on the fabric fold
+	// Fabric is "" (the garment's main fabric) or "contrast" — a motif band,
+	// an insert panel, a V-neck/collar trim, or a side stripe, cut from a
+	// second fabric. The cutting layout nests and counts yardage per fabric,
+	// so this has to be set correctly, not left to the Notes text alone.
+	Fabric      string `json:"fabric,omitempty"`
+	Notes       string `json:"notes"`
+	ShoulderTip *Point `json:"shoulderTip,omitempty"` // front/back only: where a sleeve crown attaches
+	Crown       *Point `json:"crown,omitempty"`       // sleeve only: the point that attaches to a shoulder tip
+	Anchor      *Point `json:"anchor,omitempty"`      // add-on pieces (pocket): where this attaches on its parent piece
+	Segment     string `json:"segment,omitempty"`     // add-on pieces: which named garment segment this belongs to (see draft.SegmentXxx)
 	// Landmarks exposes named construction points (e.g. a trouser
 	// panel's "waistSide"/"hipBulge"/"crotchPt"/"hemInseam"/"hemSide")
 	// so a frontend illustration can build its own simplified shape
@@ -205,7 +210,7 @@ func DraftBodice(m Measurements, dartPosition string) []Piece {
 	ease := m.Ease
 	qBust := m.Bust/4 + ease/4   // quarter-bust, the classic drafting unit
 	qWaist := m.Waist/4 + ease/4 // quarter-waist
-	scye := m.Bust/4 + 2.5       // "scye depth" — armhole depth below the neck/shoulder line
+	scye := shirtScye(m.Bust)    // armhole depth below the neck/shoulder line — see shirtScye's own chart citation
 	neckW := m.Neck / 5
 
 	front, frontArmhole, _ := draftFront(qBust, qWaist, scye, neckW, m.Shoulder, m.BackWaistLength, dartPosition)

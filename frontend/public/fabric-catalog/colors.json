@@ -1,0 +1,5511 @@
+{
+ "maryland-tropical": [
+  {
+   "code": "001",
+   "category": null,
+   "hex": "#e1eaf3"
+  },
+  {
+   "code": "207",
+   "category": null,
+   "hex": "#eaeef2"
+  },
+  {
+   "code": "143",
+   "category": null,
+   "hex": "#e4ebf4"
+  },
+  {
+   "code": "093",
+   "category": null,
+   "hex": "#fafafc"
+  },
+  {
+   "code": "109",
+   "category": null,
+   "hex": "#fafdff"
+  },
+  {
+   "code": "002",
+   "category": null,
+   "hex": "#f7f8dd"
+  },
+  {
+   "code": "108",
+   "category": null,
+   "hex": "#e5f4f7"
+  },
+  {
+   "code": "003",
+   "category": null,
+   "hex": "#efebe1"
+  },
+  {
+   "code": "192",
+   "category": null,
+   "hex": "#9ab9d6"
+  },
+  {
+   "code": "178",
+   "category": null,
+   "hex": "#f9faea"
+  },
+  {
+   "code": "084",
+   "category": null,
+   "hex": "#b3d5dc"
+  },
+  {
+   "code": "59 - M",
+   "category": null,
+   "hex": "#dee7e3"
+  },
+  {
+   "code": "118",
+   "category": null,
+   "hex": "#b8d9ed"
+  },
+  {
+   "code": "059",
+   "category": null,
+   "hex": "#ecf4f5"
+  },
+  {
+   "code": "036",
+   "category": null,
+   "hex": "#daedf7"
+  },
+  {
+   "code": "007",
+   "category": null,
+   "hex": "#80a9d7"
+  },
+  {
+   "code": "049",
+   "category": null,
+   "hex": "#97c9ec"
+  },
+  {
+   "code": "181",
+   "category": null,
+   "hex": "#89b9e3"
+  },
+  {
+   "code": "017",
+   "category": null,
+   "hex": "#75cae4"
+  },
+  {
+   "code": "064",
+   "category": null,
+   "hex": "#7dcce8"
+  },
+  {
+   "code": "186",
+   "category": null,
+   "hex": "#c3cfe3"
+  },
+  {
+   "code": "057",
+   "category": null,
+   "hex": "#8b9ca9"
+  },
+  {
+   "code": "072",
+   "category": null,
+   "hex": "#a3c0ce"
+  },
+  {
+   "code": "096",
+   "category": null,
+   "hex": "#8e9e9f"
+  },
+  {
+   "code": "054",
+   "category": null,
+   "hex": "#c0d8d8"
+  },
+  {
+   "code": "066",
+   "category": null,
+   "hex": "#929fa8"
+  },
+  {
+   "code": "225",
+   "category": null,
+   "hex": "#8cabb5"
+  },
+  {
+   "code": "114",
+   "category": null,
+   "hex": "#b7c2b9"
+  },
+  {
+   "code": "110",
+   "category": null,
+   "hex": "#8eb3c6"
+  },
+  {
+   "code": "113",
+   "category": null,
+   "hex": "#838779"
+  },
+  {
+   "code": "079",
+   "category": null,
+   "hex": "#bee5ed"
+  },
+  {
+   "code": "103",
+   "category": null,
+   "hex": "#b1e0e7"
+  },
+  {
+   "code": "103 - K",
+   "category": null,
+   "hex": "#ceebec"
+  },
+  {
+   "code": "219",
+   "category": null,
+   "hex": "#c5dfef"
+  },
+  {
+   "code": "199",
+   "category": null,
+   "hex": "#b6e3ee"
+  },
+  {
+   "code": "102",
+   "category": null,
+   "hex": "#eff8f8"
+  },
+  {
+   "code": "63 - T",
+   "category": null,
+   "hex": "#b3e2ec"
+  },
+  {
+   "code": "215",
+   "category": null,
+   "hex": "#c5e1dd"
+  },
+  {
+   "code": "190",
+   "category": null,
+   "hex": "#a1d8e4"
+  },
+  {
+   "code": "016",
+   "category": null,
+   "hex": "#d4e6de"
+  },
+  {
+   "code": "063",
+   "category": null,
+   "hex": "#9bd6e3"
+  },
+  {
+   "code": "171",
+   "category": null,
+   "hex": "#b5d2d0"
+  },
+  {
+   "code": "070",
+   "category": null,
+   "hex": "#a3cadd"
+  },
+  {
+   "code": "032",
+   "category": null,
+   "hex": "#a7c6c0"
+  },
+  {
+   "code": "205",
+   "category": null,
+   "hex": "#70b0d1"
+  },
+  {
+   "code": "198",
+   "category": null,
+   "hex": "#edf3ed"
+  },
+  {
+   "code": "120",
+   "category": null,
+   "hex": "#b2b7b5"
+  },
+  {
+   "code": "127",
+   "category": null,
+   "hex": "#c4c9c6"
+  },
+  {
+   "code": "92 - M",
+   "category": null,
+   "hex": "#b7b39c"
+  },
+  {
+   "code": "112",
+   "category": null,
+   "hex": "#8c907f"
+  },
+  {
+   "code": "168",
+   "category": null,
+   "hex": "#b0aba1"
+  },
+  {
+   "code": "004",
+   "category": null,
+   "hex": "#f1f3dd"
+  },
+  {
+   "code": "021",
+   "category": null,
+   "hex": "#b4bbab"
+  },
+  {
+   "code": "119 - T",
+   "category": null,
+   "hex": "#cfcbbc"
+  },
+  {
+   "code": "119",
+   "category": null,
+   "hex": "#d1dbcc"
+  },
+  {
+   "code": "188",
+   "category": null,
+   "hex": "#fae9b2"
+  },
+  {
+   "code": "090",
+   "category": null,
+   "hex": "#d4d4bc"
+  },
+  {
+   "code": "058",
+   "category": null,
+   "hex": "#d4aa8c"
+  },
+  {
+   "code": "092",
+   "category": null,
+   "hex": "#c2bfa6"
+  },
+  {
+   "code": "047",
+   "category": null,
+   "hex": "#b6ab8e"
+  },
+  {
+   "code": "164",
+   "category": null,
+   "hex": "#f5bb4f"
+  },
+  {
+   "code": "121",
+   "category": null,
+   "hex": "#cf9456"
+  },
+  {
+   "code": "139",
+   "category": null,
+   "hex": "#eecf6e"
+  },
+  {
+   "code": "087",
+   "category": null,
+   "hex": "#e27d31"
+  },
+  {
+   "code": "089",
+   "category": null,
+   "hex": "#f7d75a"
+  },
+  {
+   "code": "086",
+   "category": null,
+   "hex": "#f3bb40"
+  },
+  {
+   "code": "045",
+   "category": null,
+   "hex": "#ebbdac"
+  },
+  {
+   "code": "155",
+   "category": null,
+   "hex": "#d3642c"
+  },
+  {
+   "code": "005",
+   "category": null,
+   "hex": "#e8c7ab"
+  },
+  {
+   "code": "105",
+   "category": null,
+   "hex": "#d25a2d"
+  },
+  {
+   "code": "138",
+   "category": null,
+   "hex": "#e09c70"
+  },
+  {
+   "code": "107",
+   "category": null,
+   "hex": "#ed7f2b"
+  },
+  {
+   "code": "122",
+   "category": null,
+   "hex": "#f19b85"
+  },
+  {
+   "code": "095",
+   "category": null,
+   "hex": "#f3723f"
+  },
+  {
+   "code": "233",
+   "category": null,
+   "hex": "#f48da6"
+  },
+  {
+   "code": "134",
+   "category": null,
+   "hex": "#fbf1df"
+  },
+  {
+   "code": "094",
+   "category": null,
+   "hex": "#f7deeb"
+  },
+  {
+   "code": "006",
+   "category": null,
+   "hex": "#fdf1f6"
+  },
+  {
+   "code": "231",
+   "category": null,
+   "hex": "#f2c9df"
+  },
+  {
+   "code": "232",
+   "category": null,
+   "hex": "#e6a3c9"
+  },
+  {
+   "code": "104",
+   "category": null,
+   "hex": "#faf9db"
+  },
+  {
+   "code": "046",
+   "category": null,
+   "hex": "#f6e72c"
+  },
+  {
+   "code": "040",
+   "category": null,
+   "hex": "#ebefaa"
+  },
+  {
+   "code": "132",
+   "category": null,
+   "hex": "#f0c534"
+  },
+  {
+   "code": "098",
+   "category": null,
+   "hex": "#f5f6c8"
+  },
+  {
+   "code": "088",
+   "category": null,
+   "hex": "#edd421"
+  },
+  {
+   "code": "044",
+   "category": null,
+   "hex": "#f9f5b4"
+  },
+  {
+   "code": "043",
+   "category": null,
+   "hex": "#f5be54"
+  },
+  {
+   "code": "048",
+   "category": null,
+   "hex": "#d7c65d"
+  },
+  {
+   "code": "077",
+   "category": null,
+   "hex": "#f68622"
+  },
+  {
+   "code": "11 - M",
+   "category": null,
+   "hex": "#d5eef4"
+  },
+  {
+   "code": "065",
+   "category": null,
+   "hex": "#c6e6d7"
+  },
+  {
+   "code": "011",
+   "category": null,
+   "hex": "#d5eef2"
+  },
+  {
+   "code": "182",
+   "category": null,
+   "hex": "#aacaab"
+  },
+  {
+   "code": "160",
+   "category": null,
+   "hex": "#697c54"
+  },
+  {
+   "code": "041",
+   "category": null,
+   "hex": "#bee5ed"
+  },
+  {
+   "code": "083",
+   "category": null,
+   "hex": "#d8e369"
+  },
+  {
+   "code": "012",
+   "category": null,
+   "hex": "#72cac4"
+  },
+  {
+   "code": "230",
+   "category": null,
+   "hex": "#9fcd5a"
+  },
+  {
+   "code": "071",
+   "category": null,
+   "hex": "#59c5c5"
+  },
+  {
+   "code": "062",
+   "category": null,
+   "hex": "#cbdf83"
+  },
+  {
+   "code": "183",
+   "category": null,
+   "hex": "#44b1ac"
+  },
+  {
+   "code": "042",
+   "category": null,
+   "hex": "#b2d786"
+  },
+  {
+   "code": "013",
+   "category": null,
+   "hex": "#38c4e3"
+  },
+  {
+   "code": "085",
+   "category": null,
+   "hex": "#76c14e"
+  },
+  {
+   "code": "033",
+   "category": null,
+   "hex": "#898d7b"
+  },
+  {
+   "code": "154",
+   "category": null,
+   "hex": "#5b6561"
+  },
+  {
+   "code": "149",
+   "category": null,
+   "hex": "#7b8b8c"
+  },
+  {
+   "code": "140",
+   "category": null,
+   "hex": "#5d7172"
+  },
+  {
+   "code": "037",
+   "category": null,
+   "hex": "#556572"
+  },
+  {
+   "code": "180",
+   "category": null,
+   "hex": "#626a66"
+  },
+  {
+   "code": "010",
+   "category": null,
+   "hex": "#5e8690"
+  },
+  {
+   "code": "034",
+   "category": null,
+   "hex": "#677854"
+  },
+  {
+   "code": "170",
+   "category": null,
+   "hex": "#7d8187"
+  },
+  {
+   "code": "111",
+   "category": null,
+   "hex": "#43504c"
+  },
+  {
+   "code": "158",
+   "category": null,
+   "hex": "#62917c"
+  },
+  {
+   "code": "055",
+   "category": null,
+   "hex": "#293823"
+  },
+  {
+   "code": "142",
+   "category": null,
+   "hex": "#20767b"
+  },
+  {
+   "code": "165",
+   "category": null,
+   "hex": "#254b38"
+  },
+  {
+   "code": "189",
+   "category": null,
+   "hex": "#7a7d7e"
+  },
+  {
+   "code": "026",
+   "category": null,
+   "hex": "#526164"
+  },
+  {
+   "code": "069",
+   "category": null,
+   "hex": "#72788d"
+  },
+  {
+   "code": "060",
+   "category": null,
+   "hex": "#5e5e56"
+  },
+  {
+   "code": "028",
+   "category": null,
+   "hex": "#1e2844"
+  },
+  {
+   "code": "115",
+   "category": null,
+   "hex": "#93a194"
+  },
+  {
+   "code": "166",
+   "category": null,
+   "hex": "#a99b81"
+  },
+  {
+   "code": "024",
+   "category": null,
+   "hex": "#86836e"
+  },
+  {
+   "code": "080",
+   "category": null,
+   "hex": "#514731"
+  },
+  {
+   "code": "023",
+   "category": null,
+   "hex": "#968e7c"
+  },
+  {
+   "code": "022",
+   "category": null,
+   "hex": "#394043"
+  },
+  {
+   "code": "060 - A",
+   "category": null,
+   "hex": "#5a5952"
+  },
+  {
+   "code": "025",
+   "category": null,
+   "hex": "#593630"
+  },
+  {
+   "code": "029",
+   "category": null,
+   "hex": "#131a39"
+  },
+  {
+   "code": "159",
+   "category": null,
+   "hex": "#0e1612"
+  },
+  {
+   "code": "039",
+   "category": null,
+   "hex": "#93a6d5"
+  },
+  {
+   "code": "099",
+   "category": null,
+   "hex": "#8e6992"
+  },
+  {
+   "code": "009",
+   "category": null,
+   "hex": "#a79bc5"
+  },
+  {
+   "code": "173",
+   "category": null,
+   "hex": "#524e88"
+  },
+  {
+   "code": "051",
+   "category": null,
+   "hex": "#322865"
+  },
+  {
+   "code": "151",
+   "category": null,
+   "hex": "#3abddf"
+  },
+  {
+   "code": "131",
+   "category": null,
+   "hex": "#1b7bab"
+  },
+  {
+   "code": "073",
+   "category": null,
+   "hex": "#1f81b4"
+  },
+  {
+   "code": "147",
+   "category": null,
+   "hex": "#1674a9"
+  },
+  {
+   "code": "153",
+   "category": null,
+   "hex": "#1c7fb0"
+  },
+  {
+   "code": "152",
+   "category": null,
+   "hex": "#137ebc"
+  },
+  {
+   "code": "091",
+   "category": null,
+   "hex": "#1f91a7"
+  },
+  {
+   "code": "014",
+   "category": null,
+   "hex": "#1c739f"
+  },
+  {
+   "code": "074",
+   "category": null,
+   "hex": "#29596d"
+  },
+  {
+   "code": "141",
+   "category": null,
+   "hex": "#3c6b9e"
+  },
+  {
+   "code": "156",
+   "category": null,
+   "hex": "#1fb8aa"
+  },
+  {
+   "code": "031",
+   "category": null,
+   "hex": "#1ca1a1"
+  },
+  {
+   "code": "053",
+   "category": null,
+   "hex": "#188e4b"
+  },
+  {
+   "code": "144",
+   "category": null,
+   "hex": "#127656"
+  },
+  {
+   "code": "035",
+   "category": null,
+   "hex": "#236738"
+  },
+  {
+   "code": "076",
+   "category": null,
+   "hex": "#99a686"
+  },
+  {
+   "code": "222",
+   "category": null,
+   "hex": "#6487b4"
+  },
+  {
+   "code": "177",
+   "category": null,
+   "hex": "#7a9ba9"
+  },
+  {
+   "code": "221",
+   "category": null,
+   "hex": "#586579"
+  },
+  {
+   "code": "123",
+   "category": null,
+   "hex": "#8f9e84"
+  },
+  {
+   "code": "130",
+   "category": null,
+   "hex": "#6a7480"
+  },
+  {
+   "code": "056",
+   "category": null,
+   "hex": "#86a6af"
+  },
+  {
+   "code": "135",
+   "category": null,
+   "hex": "#42678f"
+  },
+  {
+   "code": "008",
+   "category": null,
+   "hex": "#628cb9"
+  },
+  {
+   "code": "133",
+   "category": null,
+   "hex": "#547f9d"
+  },
+  {
+   "code": "052",
+   "category": null,
+   "hex": "#1c63a9"
+  },
+  {
+   "code": "015",
+   "category": null,
+   "hex": "#233d7e"
+  },
+  {
+   "code": "081",
+   "category": null,
+   "hex": "#265ba0"
+  },
+  {
+   "code": "097",
+   "category": null,
+   "hex": "#1e3262"
+  },
+  {
+   "code": "136",
+   "category": null,
+   "hex": "#24336a"
+  },
+  {
+   "code": "220",
+   "category": null,
+   "hex": "#334c60"
+  },
+  {
+   "code": "148",
+   "category": null,
+   "hex": "#29367b"
+  },
+  {
+   "code": "157",
+   "category": null,
+   "hex": "#304965"
+  },
+  {
+   "code": "167",
+   "category": null,
+   "hex": "#27255e"
+  },
+  {
+   "code": "068",
+   "category": null,
+   "hex": "#5688a6"
+  },
+  {
+   "code": "078",
+   "category": null,
+   "hex": "#2a2764"
+  },
+  {
+   "code": "229",
+   "category": null,
+   "hex": "#0c1e22"
+  },
+  {
+   "code": "146",
+   "category": null,
+   "hex": "#1c2854"
+  },
+  {
+   "code": "150",
+   "category": null,
+   "hex": "#223d67"
+  },
+  {
+   "code": "067",
+   "category": null,
+   "hex": "#0f153c"
+  },
+  {
+   "code": "175",
+   "category": null,
+   "hex": "#7a203b"
+  },
+  {
+   "code": "106",
+   "category": null,
+   "hex": "#613939"
+  },
+  {
+   "code": "050",
+   "category": null,
+   "hex": "#471f50"
+  },
+  {
+   "code": "075",
+   "category": null,
+   "hex": "#2b2926"
+  },
+  {
+   "code": "126",
+   "category": null,
+   "hex": "#503a31"
+  },
+  {
+   "code": "142 - L",
+   "category": null,
+   "hex": "#29605e"
+  },
+  {
+   "code": "211",
+   "category": null,
+   "hex": "#4f81a7"
+  },
+  {
+   "code": "52 - T",
+   "category": null,
+   "hex": "#114e88"
+  },
+  {
+   "code": "116",
+   "category": null,
+   "hex": "#0e3e63"
+  },
+  {
+   "code": "152 - T",
+   "category": null,
+   "hex": "#186296"
+  },
+  {
+   "code": "206",
+   "category": null,
+   "hex": "#4d7e9f"
+  },
+  {
+   "code": "135 - T",
+   "category": null,
+   "hex": "#3d4c7a"
+  },
+  {
+   "code": "202",
+   "category": null,
+   "hex": "#182e45"
+  },
+  {
+   "code": "140 - T",
+   "category": null,
+   "hex": "#384259"
+  },
+  {
+   "code": "191",
+   "category": null,
+   "hex": "#0f1e3c"
+  },
+  {
+   "code": "023 - T",
+   "category": null,
+   "hex": "#5d5440"
+  },
+  {
+   "code": "197",
+   "category": null,
+   "hex": "#707a6c"
+  },
+  {
+   "code": "223",
+   "category": null,
+   "hex": "#848270"
+  },
+  {
+   "code": "209",
+   "category": null,
+   "hex": "#958632"
+  },
+  {
+   "code": "208",
+   "category": null,
+   "hex": "#3c4827"
+  },
+  {
+   "code": "163",
+   "category": null,
+   "hex": "#da668b"
+  },
+  {
+   "code": "145",
+   "category": null,
+   "hex": "#f36e23"
+  },
+  {
+   "code": "172",
+   "category": null,
+   "hex": "#e93748"
+  },
+  {
+   "code": "082",
+   "category": null,
+   "hex": "#af5429"
+  },
+  {
+   "code": "018",
+   "category": null,
+   "hex": "#d9344f"
+  },
+  {
+   "code": "061",
+   "category": null,
+   "hex": "#d55027"
+  },
+  {
+   "code": "019",
+   "category": null,
+   "hex": "#d32e29"
+  },
+  {
+   "code": "196",
+   "category": null,
+   "hex": "#612e24"
+  },
+  {
+   "code": "101",
+   "category": null,
+   "hex": "#db2b2c"
+  },
+  {
+   "code": "169",
+   "category": null,
+   "hex": "#603325"
+  },
+  {
+   "code": "213",
+   "category": null,
+   "hex": "#5b5955"
+  },
+  {
+   "code": "214",
+   "category": null,
+   "hex": "#13141a"
+  },
+  {
+   "code": "128",
+   "category": null,
+   "hex": "#1c1b28"
+  },
+  {
+   "code": "29-M",
+   "category": null,
+   "hex": "#16181d"
+  },
+  {
+   "code": "161",
+   "category": null,
+   "hex": "#111416"
+  },
+  {
+   "code": "193",
+   "category": null,
+   "hex": "#1a351a"
+  },
+  {
+   "code": "234",
+   "category": null,
+   "hex": "#9a9899"
+  },
+  {
+   "code": "027",
+   "category": null,
+   "hex": "#1b1c23"
+  },
+  {
+   "code": "020",
+   "category": null,
+   "hex": "#3b1411"
+  },
+  {
+   "code": "193-T",
+   "category": null,
+   "hex": "#162916"
+  },
+  {
+   "code": "59 - A",
+   "category": null,
+   "hex": "#bbbaba"
+  },
+  {
+   "code": "179",
+   "category": null,
+   "hex": "#17181d"
+  },
+  {
+   "code": "100",
+   "category": null,
+   "hex": "#311211"
+  },
+  {
+   "code": "030",
+   "category": null,
+   "hex": "#121211"
+  },
+  {
+   "code": "125",
+   "category": null,
+   "hex": "#2b1111"
+  },
+  {
+   "code": "236",
+   "category": null,
+   "hex": "#575047"
+  },
+  {
+   "code": "237",
+   "category": null,
+   "hex": "#302c23"
+  }
+ ],
+ "maryland-usa-fine-twill": [
+  {
+   "code": "#1238",
+   "category": null,
+   "hex": "#23275b"
+  },
+  {
+   "code": "100",
+   "category": null,
+   "hex": "#c9cbdc"
+  },
+  {
+   "code": "2300",
+   "category": null,
+   "hex": "#eaeaf5"
+  },
+  {
+   "code": "01",
+   "category": null,
+   "hex": "#d7d7e3"
+  },
+  {
+   "code": "601",
+   "category": null,
+   "hex": "#f1f3f4"
+  },
+  {
+   "code": "601-M",
+   "category": null,
+   "hex": "#f4f7f9"
+  },
+  {
+   "code": "398",
+   "category": null,
+   "hex": "#d2d2d2"
+  },
+  {
+   "code": "301",
+   "category": null,
+   "hex": "#e0ecec"
+  },
+  {
+   "code": "300",
+   "category": null,
+   "hex": "#d1ecea"
+  },
+  {
+   "code": "2311",
+   "category": null,
+   "hex": "#d0e4f0"
+  },
+  {
+   "code": "2327",
+   "category": null,
+   "hex": "#c7c6c5"
+  },
+  {
+   "code": "300-B",
+   "category": null,
+   "hex": "#e2e5e5"
+  },
+  {
+   "code": "300-L",
+   "category": null,
+   "hex": "#eaf6f3"
+  },
+  {
+   "code": "298",
+   "category": null,
+   "hex": "#c5d2de"
+  },
+  {
+   "code": "2294",
+   "category": null,
+   "hex": "#d6d9d7"
+  },
+  {
+   "code": "298-K",
+   "category": null,
+   "hex": "#d1dde5"
+  },
+  {
+   "code": "429",
+   "category": null,
+   "hex": "#a0bfd6"
+  },
+  {
+   "code": "299",
+   "category": null,
+   "hex": "#a0a9d6"
+  },
+  {
+   "code": "302",
+   "category": null,
+   "hex": "#b8d8f2"
+  },
+  {
+   "code": "328",
+   "category": null,
+   "hex": "#8fafdc"
+  },
+  {
+   "code": "428",
+   "category": null,
+   "hex": "#9fb4dc"
+  },
+  {
+   "code": "317",
+   "category": null,
+   "hex": "#9cc6e4"
+  },
+  {
+   "code": "328-M",
+   "category": null,
+   "hex": "#a6c1e5"
+  },
+  {
+   "code": "327",
+   "category": null,
+   "hex": "#7db7d8"
+  },
+  {
+   "code": "329-L",
+   "category": null,
+   "hex": "#758bb8"
+  },
+  {
+   "code": "317-T",
+   "category": null,
+   "hex": "#98bde3"
+  },
+  {
+   "code": "2302",
+   "category": null,
+   "hex": "#819ac8"
+  },
+  {
+   "code": "326",
+   "category": null,
+   "hex": "#6888bc"
+  },
+  {
+   "code": "329",
+   "category": null,
+   "hex": "#4b68b1"
+  },
+  {
+   "code": "2273",
+   "category": null,
+   "hex": "#7a90c9"
+  },
+  {
+   "code": "322-K",
+   "category": null,
+   "hex": "#3c77bc"
+  },
+  {
+   "code": "2289",
+   "category": null,
+   "hex": "#fbf1e7"
+  },
+  {
+   "code": "602",
+   "category": null,
+   "hex": "#fee9d6"
+  },
+  {
+   "code": "606",
+   "category": null,
+   "hex": "#f8f4e3"
+  },
+  {
+   "code": "600",
+   "category": null,
+   "hex": "#f3ecdc"
+  },
+  {
+   "code": "6031",
+   "category": null,
+   "hex": "#f7e6db"
+  },
+  {
+   "code": "930",
+   "category": null,
+   "hex": "#efe5da"
+  },
+  {
+   "code": "107",
+   "category": null,
+   "hex": "#f7ddc1"
+  },
+  {
+   "code": "060",
+   "category": null,
+   "hex": "#cfc8ba"
+  },
+  {
+   "code": "152",
+   "category": null,
+   "hex": "#efcbac"
+  },
+  {
+   "code": "2328",
+   "category": null,
+   "hex": "#dbdcc6"
+  },
+  {
+   "code": "119",
+   "category": null,
+   "hex": "#d5d0c2"
+  },
+  {
+   "code": "2344",
+   "category": null,
+   "hex": "#acae9a"
+  },
+  {
+   "code": "106",
+   "category": null,
+   "hex": "#d8b59b"
+  },
+  {
+   "code": "52-A",
+   "category": null,
+   "hex": "#d8b69d"
+  },
+  {
+   "code": "020",
+   "category": null,
+   "hex": "#b39b8d"
+  },
+  {
+   "code": "2239",
+   "category": null,
+   "hex": "#dbd0b6"
+  },
+  {
+   "code": "145-K",
+   "category": null,
+   "hex": "#d7c6b5"
+  },
+  {
+   "code": "112",
+   "category": null,
+   "hex": "#c9beaa"
+  },
+  {
+   "code": "2306",
+   "category": null,
+   "hex": "#c6a78c"
+  },
+  {
+   "code": "102",
+   "category": null,
+   "hex": "#a28977"
+  },
+  {
+   "code": "145-A",
+   "category": null,
+   "hex": "#c5c2b8"
+  },
+  {
+   "code": "5164",
+   "category": null,
+   "hex": "#ccdac9"
+  },
+  {
+   "code": "6136",
+   "category": null,
+   "hex": "#84837f"
+  },
+  {
+   "code": "145",
+   "category": null,
+   "hex": "#bac2b2"
+  },
+  {
+   "code": "2316",
+   "category": null,
+   "hex": "#979896"
+  },
+  {
+   "code": "145-T",
+   "category": null,
+   "hex": "#b4b3a5"
+  },
+  {
+   "code": "6136-M",
+   "category": null,
+   "hex": "#6d6b69"
+  },
+  {
+   "code": "146",
+   "category": null,
+   "hex": "#9d9f92"
+  },
+  {
+   "code": "2333",
+   "category": null,
+   "hex": "#656863"
+  },
+  {
+   "code": "147",
+   "category": null,
+   "hex": "#838d81"
+  },
+  {
+   "code": "5161",
+   "category": null,
+   "hex": "#a8beba"
+  },
+  {
+   "code": "2264",
+   "category": null,
+   "hex": "#9ca590"
+  },
+  {
+   "code": "2263",
+   "category": null,
+   "hex": "#7e9190"
+  },
+  {
+   "code": "5163",
+   "category": null,
+   "hex": "#716b5e"
+  },
+  {
+   "code": "2334",
+   "category": null,
+   "hex": "#8da297"
+  },
+  {
+   "code": "2266",
+   "category": null,
+   "hex": "#8f9a98"
+  },
+  {
+   "code": "114",
+   "category": null,
+   "hex": "#b1aeb7"
+  },
+  {
+   "code": "2285",
+   "category": null,
+   "hex": "#8c9492"
+  },
+  {
+   "code": "2282",
+   "category": null,
+   "hex": "#9995a8"
+  },
+  {
+   "code": "2262",
+   "category": null,
+   "hex": "#7c8482"
+  },
+  {
+   "code": "A-20",
+   "category": null,
+   "hex": "#cecae4"
+  },
+  {
+   "code": "226",
+   "category": null,
+   "hex": "#93a7ad"
+  },
+  {
+   "code": "216",
+   "category": null,
+   "hex": "#a9b4b5"
+  },
+  {
+   "code": "293",
+   "category": null,
+   "hex": "#a4a2b7"
+  },
+  {
+   "code": "291",
+   "category": null,
+   "hex": "#667982"
+  },
+  {
+   "code": "2313",
+   "category": null,
+   "hex": "#b9b5da"
+  },
+  {
+   "code": "2278",
+   "category": null,
+   "hex": "#a3a2af"
+  },
+  {
+   "code": "203",
+   "category": null,
+   "hex": "#9c9bb2"
+  },
+  {
+   "code": "229",
+   "category": null,
+   "hex": "#7697b4"
+  },
+  {
+   "code": "286",
+   "category": null,
+   "hex": "#636f8c"
+  },
+  {
+   "code": "219",
+   "category": null,
+   "hex": "#b5dae2"
+  },
+  {
+   "code": "2240",
+   "category": null,
+   "hex": "#5b6e6c"
+  },
+  {
+   "code": "2281",
+   "category": null,
+   "hex": "#57748a"
+  },
+  {
+   "code": "248",
+   "category": null,
+   "hex": "#535655"
+  },
+  {
+   "code": "287",
+   "category": null,
+   "hex": "#80a6c3"
+  },
+  {
+   "code": "2341",
+   "category": null,
+   "hex": "#4c5756"
+  },
+  {
+   "code": "2338",
+   "category": null,
+   "hex": "#455468"
+  },
+  {
+   "code": "26",
+   "category": null,
+   "hex": "#56605f"
+  },
+  {
+   "code": "230",
+   "category": null,
+   "hex": "#506573"
+  },
+  {
+   "code": "247",
+   "category": null,
+   "hex": "#516288"
+  },
+  {
+   "code": "289",
+   "category": null,
+   "hex": "#777e84"
+  },
+  {
+   "code": "2304",
+   "category": null,
+   "hex": "#6c747f"
+  },
+  {
+   "code": "2297",
+   "category": null,
+   "hex": "#c9beaa"
+  },
+  {
+   "code": "290",
+   "category": null,
+   "hex": "#c6a78c"
+  },
+  {
+   "code": "2330",
+   "category": null,
+   "hex": "#a28977"
+  },
+  {
+   "code": "900",
+   "category": null,
+   "hex": "#37505f"
+  },
+  {
+   "code": "2280",
+   "category": null,
+   "hex": "#bcc8b5"
+  },
+  {
+   "code": "2275",
+   "category": null,
+   "hex": "#343837"
+  },
+  {
+   "code": "7223",
+   "category": null,
+   "hex": "#a29e7b"
+  },
+  {
+   "code": "2275-K",
+   "category": null,
+   "hex": "#565f5e"
+  },
+  {
+   "code": "237",
+   "category": null,
+   "hex": "#a8a989"
+  },
+  {
+   "code": "246",
+   "category": null,
+   "hex": "#414443"
+  },
+  {
+   "code": "132-K",
+   "category": null,
+   "hex": "#8f8165"
+  },
+  {
+   "code": "2295",
+   "category": null,
+   "hex": "#494a4e"
+  },
+  {
+   "code": "2292",
+   "category": null,
+   "hex": "#8a806f"
+  },
+  {
+   "code": "103",
+   "category": null,
+   "hex": "#d9bab9"
+  },
+  {
+   "code": "217",
+   "category": null,
+   "hex": "#6d6157"
+  },
+  {
+   "code": "168",
+   "category": null,
+   "hex": "#9b8561"
+  },
+  {
+   "code": "2319-K",
+   "category": null,
+   "hex": "#3d3a33"
+  },
+  {
+   "code": "150",
+   "category": null,
+   "hex": "#3a2b24"
+  },
+  {
+   "code": "129",
+   "category": null,
+   "hex": "#412a1e"
+  },
+  {
+   "code": "2284",
+   "category": null,
+   "hex": "#42454b"
+  },
+  {
+   "code": "128-A",
+   "category": null,
+   "hex": "#35261f"
+  },
+  {
+   "code": "2312",
+   "category": null,
+   "hex": "#232728"
+  },
+  {
+   "code": "129-K",
+   "category": null,
+   "hex": "#4d3124"
+  },
+  {
+   "code": "2317",
+   "category": null,
+   "hex": "#283537"
+  },
+  {
+   "code": "128-T",
+   "category": null,
+   "hex": "#2d221b"
+  },
+  {
+   "code": "2345",
+   "category": null,
+   "hex": "#222828"
+  },
+  {
+   "code": "148",
+   "category": null,
+   "hex": "#3a271d"
+  },
+  {
+   "code": "806",
+   "category": null,
+   "hex": "#36323a"
+  },
+  {
+   "code": "2324",
+   "category": null,
+   "hex": "#b8ab7d"
+  },
+  {
+   "code": "132",
+   "category": null,
+   "hex": "#7b6c5e"
+  },
+  {
+   "code": "2296",
+   "category": null,
+   "hex": "#ac9772"
+  },
+  {
+   "code": "25",
+   "category": null,
+   "hex": "#7f794e"
+  },
+  {
+   "code": "7224",
+   "category": null,
+   "hex": "#ad9273"
+  },
+  {
+   "code": "605",
+   "category": null,
+   "hex": "#f9dba5"
+  },
+  {
+   "code": "2301",
+   "category": null,
+   "hex": "#785b24"
+  },
+  {
+   "code": "192",
+   "category": null,
+   "hex": "#825e2c"
+  },
+  {
+   "code": "160",
+   "category": null,
+   "hex": "#70634b"
+  },
+  {
+   "code": "171",
+   "category": null,
+   "hex": "#c68763"
+  },
+  {
+   "code": "192-T",
+   "category": null,
+   "hex": "#825c26"
+  },
+  {
+   "code": "604",
+   "category": null,
+   "hex": "#886c4f"
+  },
+  {
+   "code": "575",
+   "category": null,
+   "hex": "#564426"
+  },
+  {
+   "code": "2277",
+   "category": null,
+   "hex": "#8d7055"
+  },
+  {
+   "code": "2343",
+   "category": null,
+   "hex": "#5d3e20"
+  },
+  {
+   "code": "2308",
+   "category": null,
+   "hex": "#7caaa3"
+  },
+  {
+   "code": "2299",
+   "category": null,
+   "hex": "#597c85"
+  },
+  {
+   "code": "5160",
+   "category": null,
+   "hex": "#839d94"
+  },
+  {
+   "code": "2298",
+   "category": null,
+   "hex": "#739eab"
+  },
+  {
+   "code": "528",
+   "category": null,
+   "hex": "#56705a"
+  },
+  {
+   "code": "519",
+   "category": null,
+   "hex": "#acdee2"
+  },
+  {
+   "code": "509",
+   "category": null,
+   "hex": "#7a987e"
+  },
+  {
+   "code": "321",
+   "category": null,
+   "hex": "#24b4d5"
+  },
+  {
+   "code": "2314",
+   "category": null,
+   "hex": "#659b76"
+  },
+  {
+   "code": "2279",
+   "category": null,
+   "hex": "#76bdc2"
+  },
+  {
+   "code": "509-T",
+   "category": null,
+   "hex": "#567a55"
+  },
+  {
+   "code": "323",
+   "category": null,
+   "hex": "#06aec8"
+  },
+  {
+   "code": "534",
+   "category": null,
+   "hex": "#35833f"
+  },
+  {
+   "code": "324-T",
+   "category": null,
+   "hex": "#177592"
+  },
+  {
+   "code": "532",
+   "category": null,
+   "hex": "#1c6f4b"
+  },
+  {
+   "code": "533",
+   "category": null,
+   "hex": "#0c795b"
+  },
+  {
+   "code": "330",
+   "category": null,
+   "hex": "#146256"
+  },
+  {
+   "code": "544",
+   "category": null,
+   "hex": "#1d3e2c"
+  },
+  {
+   "code": "311",
+   "category": null,
+   "hex": "#10564f"
+  },
+  {
+   "code": "2315",
+   "category": null,
+   "hex": "#15533e"
+  },
+  {
+   "code": "555",
+   "category": null,
+   "hex": "#078a83"
+  },
+  {
+   "code": "276",
+   "category": null,
+   "hex": "#5c564e"
+  },
+  {
+   "code": "033",
+   "category": null,
+   "hex": "#184242"
+  },
+  {
+   "code": "56",
+   "category": null,
+   "hex": "#1f281c"
+  },
+  {
+   "code": "532-B",
+   "category": null,
+   "hex": "#176d46"
+  },
+  {
+   "code": "809",
+   "category": null,
+   "hex": "#565251"
+  },
+  {
+   "code": "324",
+   "category": null,
+   "hex": "#138096"
+  },
+  {
+   "code": "548",
+   "category": null,
+   "hex": "#283227"
+  },
+  {
+   "code": "550",
+   "category": null,
+   "hex": "#0c3d49"
+  },
+  {
+   "code": "2309",
+   "category": null,
+   "hex": "#252c23"
+  },
+  {
+   "code": "844",
+   "category": null,
+   "hex": "#dce688"
+  },
+  {
+   "code": "573",
+   "category": null,
+   "hex": "#83a93f"
+  },
+  {
+   "code": "570",
+   "category": null,
+   "hex": "#b5cc83"
+  },
+  {
+   "code": "537",
+   "category": null,
+   "hex": "#9aca40"
+  },
+  {
+   "code": "569",
+   "category": null,
+   "hex": "#6dae47"
+  },
+  {
+   "code": "2276",
+   "category": null,
+   "hex": "#fce172"
+  },
+  {
+   "code": "2274",
+   "category": null,
+   "hex": "#deb065"
+  },
+  {
+   "code": "539",
+   "category": null,
+   "hex": "#dbe125"
+  },
+  {
+   "code": "2290",
+   "category": null,
+   "hex": "#f4be5c"
+  },
+  {
+   "code": "574",
+   "category": null,
+   "hex": "#e2e16a"
+  },
+  {
+   "code": "717",
+   "category": null,
+   "hex": "#d8a371"
+  },
+  {
+   "code": "536",
+   "category": null,
+   "hex": "#2ba055"
+  },
+  {
+   "code": "719",
+   "category": null,
+   "hex": "#f58230"
+  },
+  {
+   "code": "535",
+   "category": null,
+   "hex": "#1da26a"
+  },
+  {
+   "code": "617",
+   "category": null,
+   "hex": "#c8b144"
+  },
+  {
+   "code": "618",
+   "category": null,
+   "hex": "#fef388"
+  },
+  {
+   "code": "621",
+   "category": null,
+   "hex": "#fed521"
+  },
+  {
+   "code": "618-T",
+   "category": null,
+   "hex": "#faee49"
+  },
+  {
+   "code": "619",
+   "category": null,
+   "hex": "#ecba3f"
+  },
+  {
+   "code": "619-T",
+   "category": null,
+   "hex": "#f5ad1c"
+  },
+  {
+   "code": "572",
+   "category": null,
+   "hex": "#fce172"
+  },
+  {
+   "code": "771",
+   "category": null,
+   "hex": "#99525e"
+  },
+  {
+   "code": "571",
+   "category": null,
+   "hex": "#e8c5db"
+  },
+  {
+   "code": "770",
+   "category": null,
+   "hex": "#ba848b"
+  },
+  {
+   "code": "2310",
+   "category": null,
+   "hex": "#c2abb1"
+  },
+  {
+   "code": "2267-T",
+   "category": null,
+   "hex": "#f4db6b"
+  },
+  {
+   "code": "843",
+   "category": null,
+   "hex": "#eab4c6"
+  },
+  {
+   "code": "620",
+   "category": null,
+   "hex": "#fcea09"
+  },
+  {
+   "code": "395",
+   "category": null,
+   "hex": "#a57da1"
+  },
+  {
+   "code": "394",
+   "category": null,
+   "hex": "#7e568e"
+  },
+  {
+   "code": "163",
+   "category": null,
+   "hex": "#6f5464"
+  },
+  {
+   "code": "391",
+   "category": null,
+   "hex": "#584457"
+  },
+  {
+   "code": "2335",
+   "category": null,
+   "hex": "#952d21"
+  },
+  {
+   "code": "331",
+   "category": null,
+   "hex": "#1d484a"
+  },
+  {
+   "code": "716-M",
+   "category": null,
+   "hex": "#f47735"
+  },
+  {
+   "code": "722",
+   "category": null,
+   "hex": "#d92528"
+  },
+  {
+   "code": "716",
+   "category": null,
+   "hex": "#e74225"
+  },
+  {
+   "code": "728",
+   "category": null,
+   "hex": "#922e22"
+  },
+  {
+   "code": "714",
+   "category": null,
+   "hex": "#f47a41"
+  },
+  {
+   "code": "723",
+   "category": null,
+   "hex": "#d1242a"
+  },
+  {
+   "code": "715",
+   "category": null,
+   "hex": "#e84629"
+  },
+  {
+   "code": "726",
+   "category": null,
+   "hex": "#87211b"
+  },
+  {
+   "code": "2307",
+   "category": null,
+   "hex": "#ba4b27"
+  },
+  {
+   "code": "727",
+   "category": null,
+   "hex": "#5e1914"
+  },
+  {
+   "code": "807",
+   "category": null,
+   "hex": "#2199ca"
+  },
+  {
+   "code": "322",
+   "category": null,
+   "hex": "#1b6eb3"
+  },
+  {
+   "code": "807-T",
+   "category": null,
+   "hex": "#1c86b5"
+  },
+  {
+   "code": "2291",
+   "category": null,
+   "hex": "#127799"
+  },
+  {
+   "code": "294",
+   "category": null,
+   "hex": "#3c6fa4"
+  },
+  {
+   "code": "370-B",
+   "category": null,
+   "hex": "#1a4788"
+  },
+  {
+   "code": "292",
+   "category": null,
+   "hex": "#25597a"
+  },
+  {
+   "code": "51",
+   "category": null,
+   "hex": "#14304b"
+  },
+  {
+   "code": "392-B",
+   "category": null,
+   "hex": "#00569b"
+  },
+  {
+   "code": "370",
+   "category": null,
+   "hex": "#0a4e7a"
+  },
+  {
+   "code": "392-K",
+   "category": null,
+   "hex": "#11529b"
+  },
+  {
+   "code": "314",
+   "category": null,
+   "hex": "#305578"
+  },
+  {
+   "code": "392",
+   "category": null,
+   "hex": "#2166b0"
+  },
+  {
+   "code": "2293",
+   "category": null,
+   "hex": "#2a3c61"
+  },
+  {
+   "code": "387",
+   "category": null,
+   "hex": "#23488e"
+  },
+  {
+   "code": "386",
+   "category": null,
+   "hex": "#282963"
+  },
+  {
+   "code": "382",
+   "category": null,
+   "hex": "#2e4c9b"
+  },
+  {
+   "code": "384",
+   "category": null,
+   "hex": "#2a357a"
+  },
+  {
+   "code": "385",
+   "category": null,
+   "hex": "#273d72"
+  },
+  {
+   "code": "371",
+   "category": null,
+   "hex": "#295172"
+  },
+  {
+   "code": "383",
+   "category": null,
+   "hex": "#1c1749"
+  },
+  {
+   "code": "51-A",
+   "category": null,
+   "hex": "#1c2e35"
+  },
+  {
+   "code": "380",
+   "category": null,
+   "hex": "#212456"
+  },
+  {
+   "code": "51-K",
+   "category": null,
+   "hex": "#123053"
+  },
+  {
+   "code": "380-K",
+   "category": null,
+   "hex": "#354077"
+  },
+  {
+   "code": "312",
+   "category": null,
+   "hex": "#0f1c31"
+  },
+  {
+   "code": "384-T",
+   "category": null,
+   "hex": "#262d67"
+  },
+  {
+   "code": "338",
+   "category": null,
+   "hex": "#121534"
+  },
+  {
+   "code": "050",
+   "category": null,
+   "hex": "#232730"
+  },
+  {
+   "code": "3982",
+   "category": null,
+   "hex": "#141417"
+  },
+  {
+   "code": "3981",
+   "category": null,
+   "hex": "#18141b"
+  },
+  {
+   "code": "3983",
+   "category": null,
+   "hex": "#18171d"
+  },
+  {
+   "code": "393",
+   "category": null,
+   "hex": "#141722"
+  },
+  {
+   "code": "538",
+   "category": null,
+   "hex": "#f26a23"
+  },
+  {
+   "code": "3899",
+   "category": null,
+   "hex": "#141725"
+  },
+  {
+   "code": "388",
+   "category": null,
+   "hex": "#25235b"
+  },
+  {
+   "code": "401",
+   "category": null,
+   "hex": "#0d0e10"
+  },
+  {
+   "code": "389",
+   "category": null,
+   "hex": "#2c1846"
+  },
+  {
+   "code": "050-K",
+   "category": null,
+   "hex": "#111b29"
+  },
+  {
+   "code": "18-K",
+   "category": null,
+   "hex": "#111213"
+  },
+  {
+   "code": "3982-M",
+   "category": null,
+   "hex": "#19212d"
+  },
+  {
+   "code": "18",
+   "category": null,
+   "hex": "#171417"
+  },
+  {
+   "code": "163-L",
+   "category": null,
+   "hex": "#5b464e"
+  },
+  {
+   "code": "738",
+   "category": null,
+   "hex": "#e42e36"
+  },
+  {
+   "code": "6136 - T",
+   "category": null,
+   "hex": "#7f7d77"
+  },
+  {
+   "code": "2342",
+   "category": null,
+   "hex": "#444533"
+  }
+ ],
+ "venhouston-usa-drill": [
+  {
+   "code": "201",
+   "category": null,
+   "hex": "#ffffff"
+  },
+  {
+   "code": "203",
+   "category": null,
+   "hex": "#98d6e7"
+  },
+  {
+   "code": "202",
+   "category": null,
+   "hex": "#f0f1e8"
+  },
+  {
+   "code": "204",
+   "category": null,
+   "hex": "#57add5"
+  },
+  {
+   "code": "205",
+   "category": null,
+   "hex": "#45c6eb"
+  },
+  {
+   "code": "206",
+   "category": null,
+   "hex": "#dad5b4"
+  },
+  {
+   "code": "208",
+   "category": null,
+   "hex": "#857251"
+  },
+  {
+   "code": "207",
+   "category": null,
+   "hex": "#b4a37d"
+  },
+  {
+   "code": "209",
+   "category": null,
+   "hex": "#6792a9"
+  },
+  {
+   "code": "210",
+   "category": null,
+   "hex": "#4f5552"
+  },
+  {
+   "code": "221",
+   "category": null,
+   "hex": "#741c16"
+  },
+  {
+   "code": "223",
+   "category": null,
+   "hex": "#283227"
+  },
+  {
+   "code": "222",
+   "category": null,
+   "hex": "#361c11"
+  },
+  {
+   "code": "224",
+   "category": null,
+   "hex": "#2b3275"
+  },
+  {
+   "code": "225",
+   "category": null,
+   "hex": "#2a1914"
+  },
+  {
+   "code": "226",
+   "category": null,
+   "hex": "#1c5d40"
+  },
+  {
+   "code": "228",
+   "category": null,
+   "hex": "#1f422b"
+  },
+  {
+   "code": "227",
+   "category": null,
+   "hex": "#f7f7d3"
+  },
+  {
+   "code": "229",
+   "category": null,
+   "hex": "#ded7bc"
+  },
+  {
+   "code": "230",
+   "category": null,
+   "hex": "#c3c4ba"
+  },
+  {
+   "code": "211",
+   "category": null,
+   "hex": "#1e2e5c"
+  },
+  {
+   "code": "213",
+   "category": null,
+   "hex": "#212153"
+  },
+  {
+   "code": "212",
+   "category": null,
+   "hex": "#12487b"
+  },
+  {
+   "code": "214",
+   "category": null,
+   "hex": "#323535"
+  },
+  {
+   "code": "215",
+   "category": null,
+   "hex": "#181c1d"
+  },
+  {
+   "code": "216",
+   "category": null,
+   "hex": "#f0c335"
+  },
+  {
+   "code": "218",
+   "category": null,
+   "hex": "#742a1f"
+  },
+  {
+   "code": "217",
+   "category": null,
+   "hex": "#d03428"
+  },
+  {
+   "code": "219",
+   "category": null,
+   "hex": "#f15d3e"
+  },
+  {
+   "code": "220",
+   "category": null,
+   "hex": "#0f1010"
+  },
+  {
+   "code": "231",
+   "category": null,
+   "hex": "#2e353f"
+  },
+  {
+   "code": "233",
+   "category": null,
+   "hex": "#5d6248"
+  },
+  {
+   "code": "232",
+   "category": null,
+   "hex": "#81906a"
+  },
+  {
+   "code": "234",
+   "category": null,
+   "hex": "#8dc85c"
+  },
+  {
+   "code": "235",
+   "category": null,
+   "hex": "#43a051"
+  },
+  {
+   "code": "236",
+   "category": null,
+   "hex": "#b5e1dd"
+  },
+  {
+   "code": "238",
+   "category": null,
+   "hex": "#a772a2"
+  },
+  {
+   "code": "237",
+   "category": null,
+   "hex": "#758392"
+  },
+  {
+   "code": "229.B",
+   "category": null,
+   "hex": "#ffffff"
+  },
+  {
+   "code": "312",
+   "category": null,
+   "hex": "#11181b"
+  },
+  {
+   "code": "321",
+   "category": null,
+   "hex": "#22bfe5"
+  },
+  {
+   "code": "312.A",
+   "category": null,
+   "hex": "#ffffff"
+  },
+  {
+   "code": "807",
+   "category": null,
+   "hex": "#1981a8"
+  },
+  {
+   "code": "903",
+   "category": null,
+   "hex": "#e8ddd3"
+  },
+  {
+   "code": "317",
+   "category": null,
+   "hex": "#82c0dd"
+  },
+  {
+   "code": "202M",
+   "category": null,
+   "hex": "#fbfdf8"
+  },
+  {
+   "code": "210K",
+   "category": null,
+   "hex": "#636d7c"
+  },
+  {
+   "code": "621",
+   "category": null,
+   "hex": "#f4d03e"
+  },
+  {
+   "code": "389",
+   "category": null,
+   "hex": "#4f346e"
+  },
+  {
+   "code": "617",
+   "category": null,
+   "hex": "#e09140"
+  },
+  {
+   "code": "539",
+   "category": null,
+   "hex": "#ebe70e"
+  },
+  {
+   "code": "538",
+   "category": null,
+   "hex": "#f15f22"
+  },
+  {
+   "code": "298",
+   "category": null,
+   "hex": "#d3dbe4"
+  },
+  {
+   "code": "328",
+   "category": null,
+   "hex": "#8db5e0"
+  },
+  {
+   "code": "A20",
+   "category": null,
+   "hex": "#c3c8d2"
+  },
+  {
+   "code": "537",
+   "category": null,
+   "hex": "#80c342"
+  },
+  {
+   "code": "555",
+   "category": null,
+   "hex": "#157f7d"
+  }
+ ],
+ "ventura-usa-drill": [
+  {
+   "code": "01",
+   "category": null,
+   "hex": "#ffffff"
+  },
+  {
+   "code": "05",
+   "category": "Pemda",
+   "hex": "#857d62"
+  },
+  {
+   "code": "06",
+   "category": null,
+   "hex": "#d3d5ae"
+  },
+  {
+   "code": "1292",
+   "category": null,
+   "hex": "#81725b"
+  },
+  {
+   "code": "25",
+   "category": "Bpn",
+   "hex": "#686042"
+  },
+  {
+   "code": "325",
+   "category": null,
+   "hex": "#b5a088"
+  },
+  {
+   "code": "A 20",
+   "category": null,
+   "hex": "#c7c4e2"
+  },
+  {
+   "code": "320",
+   "category": "Pns Polri",
+   "hex": "#b5a088"
+  },
+  {
+   "code": "216",
+   "category": null,
+   "hex": "#777e82"
+  },
+  {
+   "code": "102",
+   "category": null,
+   "hex": "#7f7368"
+  },
+  {
+   "code": "299",
+   "category": null,
+   "hex": "#aed7ea"
+  },
+  {
+   "code": "02",
+   "category": null,
+   "hex": "#aa9a8e"
+  },
+  {
+   "code": "286",
+   "category": null,
+   "hex": "#5d6464"
+  },
+  {
+   "code": "23",
+   "category": null,
+   "hex": "#94847c"
+  },
+  {
+   "code": "52",
+   "category": null,
+   "hex": "#7c7671"
+  },
+  {
+   "code": "167",
+   "category": null,
+   "hex": "#706457"
+  },
+  {
+   "code": "1012",
+   "category": null,
+   "hex": "#554c41"
+  },
+  {
+   "code": "166",
+   "category": null,
+   "hex": "#7b6b60"
+  },
+  {
+   "code": "12",
+   "category": null,
+   "hex": "#413932"
+  },
+  {
+   "code": "148",
+   "category": null,
+   "hex": "#2d281f"
+  },
+  {
+   "code": "327",
+   "category": "Jasa Marga",
+   "hex": "#699dc5"
+  },
+  {
+   "code": "5160",
+   "category": null,
+   "hex": "#779790"
+  },
+  {
+   "code": "26",
+   "category": "Smu",
+   "hex": "#3f5056"
+  },
+  {
+   "code": "07",
+   "category": null,
+   "hex": "#6c7e76"
+  },
+  {
+   "code": "229",
+   "category": "Smu",
+   "hex": "#53697f"
+  },
+  {
+   "code": "527",
+   "category": "Pkk",
+   "hex": "#5e766b"
+  },
+  {
+   "code": "53",
+   "category": "Smu",
+   "hex": "#656e7b"
+  },
+  {
+   "code": "16",
+   "category": null,
+   "hex": "#535240"
+  },
+  {
+   "code": "30",
+   "category": null,
+   "hex": "#2e3133"
+  },
+  {
+   "code": "14",
+   "category": null,
+   "hex": "#3b342e"
+  },
+  {
+   "code": "026",
+   "category": "Bea & Cukai",
+   "hex": "#ddceb6"
+  },
+  {
+   "code": "2262",
+   "category": null,
+   "hex": "#9a9e96"
+  },
+  {
+   "code": "151",
+   "category": null,
+   "hex": "#e1d6ca"
+  },
+  {
+   "code": "2134",
+   "category": null,
+   "hex": "#a8abaf"
+  },
+  {
+   "code": "7966",
+   "category": null,
+   "hex": "#2a1314"
+  },
+  {
+   "code": "328",
+   "category": null,
+   "hex": "#8ba7c0"
+  },
+  {
+   "code": "242",
+   "category": null,
+   "hex": "#608181"
+  },
+  {
+   "code": "22 A",
+   "category": null,
+   "hex": "#233a51"
+  },
+  {
+   "code": "501 T",
+   "category": null,
+   "hex": "#7e7f54"
+  },
+  {
+   "code": "329",
+   "category": null,
+   "hex": "#5c7aae"
+  },
+  {
+   "code": "5351",
+   "category": "Pemda",
+   "hex": "#6e8e74"
+  },
+  {
+   "code": "3981",
+   "category": null,
+   "hex": "#0f1015"
+  },
+  {
+   "code": "2427",
+   "category": null,
+   "hex": "#313d45"
+  },
+  {
+   "code": "235",
+   "category": null,
+   "hex": "#5f5859"
+  },
+  {
+   "code": "581",
+   "category": null,
+   "hex": "#4a4748"
+  },
+  {
+   "code": "172",
+   "category": "Pramuka",
+   "hex": "#caad7e"
+  },
+  {
+   "code": "233",
+   "category": "Astra",
+   "hex": "#a6c0ba"
+  },
+  {
+   "code": "234",
+   "category": null,
+   "hex": "#d2e8c8"
+  },
+  {
+   "code": "241",
+   "category": "Tni - Al",
+   "hex": "#64787b"
+  },
+  {
+   "code": "51",
+   "category": null,
+   "hex": "#11233b"
+  },
+  {
+   "code": "232",
+   "category": null,
+   "hex": "#81988e"
+  },
+  {
+   "code": "321",
+   "category": "Parkir Dki",
+   "hex": "#3fc1db"
+  },
+  {
+   "code": "17",
+   "category": null,
+   "hex": "#6e7c69"
+  },
+  {
+   "code": "331",
+   "category": null,
+   "hex": "#839fd2"
+  },
+  {
+   "code": "236",
+   "category": null,
+   "hex": "#cbc8b3"
+  },
+  {
+   "code": "322",
+   "category": "Parkir Dki",
+   "hex": "#1771ad"
+  },
+  {
+   "code": "146",
+   "category": null,
+   "hex": "#96a38f"
+  },
+  {
+   "code": "330",
+   "category": null,
+   "hex": "#4c81bb"
+  },
+  {
+   "code": "6136",
+   "category": null,
+   "hex": "#898e79"
+  },
+  {
+   "code": "314",
+   "category": null,
+   "hex": "#27324e"
+  },
+  {
+   "code": "5338",
+   "category": null,
+   "hex": "#94a557"
+  },
+  {
+   "code": "509 T (HANSIP)",
+   "category": null,
+   "hex": "#638143"
+  },
+  {
+   "code": "509",
+   "category": "Hansip",
+   "hex": "#97ab7c"
+  },
+  {
+   "code": "501",
+   "category": null,
+   "hex": "#666c44"
+  },
+  {
+   "code": "20 T",
+   "category": null,
+   "hex": "#50502c"
+  },
+  {
+   "code": "392",
+   "category": null,
+   "hex": "#0b4e82"
+  },
+  {
+   "code": "532",
+   "category": null,
+   "hex": "#134f34"
+  },
+  {
+   "code": "50",
+   "category": "Smp",
+   "hex": "#112135"
+  },
+  {
+   "code": "22",
+   "category": null,
+   "hex": "#1f414d"
+  },
+  {
+   "code": "383",
+   "category": null,
+   "hex": "#28306c"
+  },
+  {
+   "code": "544",
+   "category": null,
+   "hex": "#0a271a"
+  },
+  {
+   "code": "3939",
+   "category": null,
+   "hex": "#121327"
+  },
+  {
+   "code": "28",
+   "category": null,
+   "hex": "#152317"
+  },
+  {
+   "code": "10",
+   "category": null,
+   "hex": "#181b1c"
+  },
+  {
+   "code": "29",
+   "category": null,
+   "hex": "#112016"
+  },
+  {
+   "code": "171",
+   "category": "Pramuka",
+   "hex": "#c39f72"
+  },
+  {
+   "code": "1008",
+   "category": null,
+   "hex": "#746748"
+  },
+  {
+   "code": "169",
+   "category": null,
+   "hex": "#9e8747"
+  },
+  {
+   "code": "128",
+   "category": "Pramuka",
+   "hex": "#55412e"
+  },
+  {
+   "code": "13",
+   "category": null,
+   "hex": "#28221f"
+  },
+  {
+   "code": "6137",
+   "category": "Polri",
+   "hex": "#7d8c78"
+  },
+  {
+   "code": "389",
+   "category": null,
+   "hex": "#56346e"
+  },
+  {
+   "code": "143",
+   "category": null,
+   "hex": "#7c6841"
+  },
+  {
+   "code": "214",
+   "category": null,
+   "hex": "#2c3a4a"
+  },
+  {
+   "code": "193",
+   "category": null,
+   "hex": "#81572d"
+  },
+  {
+   "code": "388",
+   "category": null,
+   "hex": "#191346"
+  },
+  {
+   "code": "529",
+   "category": null,
+   "hex": "#5b4d24"
+  },
+  {
+   "code": "312",
+   "category": "Smp",
+   "hex": "#0d162e"
+  },
+  {
+   "code": "381",
+   "category": null,
+   "hex": "#171619"
+  },
+  {
+   "code": "18",
+   "category": null,
+   "hex": "#0c0b0e"
+  },
+  {
+   "code": "202",
+   "category": "Dllajr",
+   "hex": "#8ab1bb"
+  },
+  {
+   "code": "15",
+   "category": "Kehutanan",
+   "hex": "#6f7746"
+  },
+  {
+   "code": "243",
+   "category": "Tni - Al",
+   "hex": "#5b676b"
+  },
+  {
+   "code": "150",
+   "category": null,
+   "hex": "#221f19"
+  },
+  {
+   "code": "1705",
+   "category": null,
+   "hex": "#82371c"
+  },
+  {
+   "code": "145",
+   "category": null,
+   "hex": "#d2ded4"
+  },
+  {
+   "code": "781",
+   "category": null,
+   "hex": "#f1c2bb"
+  },
+  {
+   "code": "804",
+   "category": null,
+   "hex": "#444d47"
+  },
+  {
+   "code": "326",
+   "category": null,
+   "hex": "#97d1a7"
+  },
+  {
+   "code": "289",
+   "category": null,
+   "hex": "#656d76"
+  },
+  {
+   "code": "324",
+   "category": null,
+   "hex": "#76cccd"
+  },
+  {
+   "code": "160",
+   "category": "Brimob",
+   "hex": "#685e46"
+  },
+  {
+   "code": "533",
+   "category": null,
+   "hex": "#11715a"
+  },
+  {
+   "code": "382",
+   "category": "Brimob",
+   "hex": "#13151c"
+  },
+  {
+   "code": "551",
+   "category": null,
+   "hex": "#1e9b9a"
+  },
+  {
+   "code": "119",
+   "category": null,
+   "hex": "#9f664c"
+  },
+  {
+   "code": "765",
+   "category": null,
+   "hex": "#c74b2a"
+  },
+  {
+   "code": "729",
+   "category": null,
+   "hex": "#f79c7b"
+  },
+  {
+   "code": "777",
+   "category": null,
+   "hex": "#8e5c2f"
+  },
+  {
+   "code": "789",
+   "category": null,
+   "hex": "#6b4628"
+  },
+  {
+   "code": "617",
+   "category": null,
+   "hex": "#bd9a35"
+  },
+  {
+   "code": "162",
+   "category": null,
+   "hex": "#a1722c"
+  },
+  {
+   "code": "569",
+   "category": null,
+   "hex": "#90c85a"
+  },
+  {
+   "code": "555",
+   "category": null,
+   "hex": "#0e9784"
+  },
+  {
+   "code": "513",
+   "category": null,
+   "hex": "#cede54"
+  },
+  {
+   "code": "323",
+   "category": null,
+   "hex": "#2a95af"
+  },
+  {
+   "code": "536",
+   "category": null,
+   "hex": "#239151"
+  },
+  {
+   "code": "550",
+   "category": null,
+   "hex": "#10615d"
+  },
+  {
+   "code": "556",
+   "category": null,
+   "hex": "#5f7534"
+  },
+  {
+   "code": "033",
+   "category": null,
+   "hex": "#0d4239"
+  },
+  {
+   "code": "601",
+   "category": null,
+   "hex": "#fafdff"
+  },
+  {
+   "code": "619",
+   "category": null,
+   "hex": "#f3bc48"
+  },
+  {
+   "code": "600",
+   "category": null,
+   "hex": "#f6f5c0"
+  },
+  {
+   "code": "714",
+   "category": null,
+   "hex": "#f47b2e"
+  },
+  {
+   "code": "715",
+   "category": null,
+   "hex": "#ee5834"
+  },
+  {
+   "code": "780",
+   "category": null,
+   "hex": "#fbcfca"
+  },
+  {
+   "code": "738",
+   "category": null,
+   "hex": "#e93535"
+  },
+  {
+   "code": "771",
+   "category": null,
+   "hex": "#a26263"
+  },
+  {
+   "code": "749",
+   "category": null,
+   "hex": "#f27176"
+  },
+  {
+   "code": "770",
+   "category": null,
+   "hex": "#b77976"
+  },
+  {
+   "code": "722",
+   "category": null,
+   "hex": "#e3272b"
+  },
+  {
+   "code": "726",
+   "category": "Sd",
+   "hex": "#731c18"
+  },
+  {
+   "code": "791",
+   "category": null,
+   "hex": "#e33058"
+  },
+  {
+   "code": "7996",
+   "category": "Sd",
+   "hex": "#5b1415"
+  },
+  {
+   "code": "779",
+   "category": null,
+   "hex": "#852758"
+  },
+  {
+   "code": "247",
+   "category": null,
+   "hex": "#555d6e"
+  },
+  {
+   "code": "573",
+   "category": null,
+   "hex": "#3e473d"
+  },
+  {
+   "code": "281",
+   "category": "Pos & Giro",
+   "hex": "#2d2c2b"
+  },
+  {
+   "code": "660",
+   "category": null,
+   "hex": "#f4e326"
+  },
+  {
+   "code": "105",
+   "category": null,
+   "hex": "#85795a"
+  },
+  {
+   "code": "618",
+   "category": null,
+   "hex": "#f57f2f"
+  },
+  {
+   "code": "54",
+   "category": null,
+   "hex": "#333f30"
+  },
+  {
+   "code": "212",
+   "category": null,
+   "hex": "#6fb0c7"
+  },
+  {
+   "code": "56",
+   "category": "Tni",
+   "hex": "#2e332c"
+  },
+  {
+   "code": "7223",
+   "category": "Pemda",
+   "hex": "#aaa674"
+  },
+  {
+   "code": "55",
+   "category": "Tni",
+   "hex": "#4a5c44"
+  },
+  {
+   "code": "287",
+   "category": "Smu",
+   "hex": "#4e6a7c"
+  },
+  {
+   "code": "528",
+   "category": "Pertanian",
+   "hex": "#568376"
+  },
+  {
+   "code": "106",
+   "category": "Smu",
+   "hex": "#496073"
+  },
+  {
+   "code": "288",
+   "category": null,
+   "hex": "#5a6873"
+  },
+  {
+   "code": "357",
+   "category": null,
+   "hex": "#eaf6f7"
+  },
+  {
+   "code": "518",
+   "category": null,
+   "hex": "#115e49"
+  },
+  {
+   "code": "206",
+   "category": null,
+   "hex": "#dad7cf"
+  },
+  {
+   "code": "1293",
+   "category": null,
+   "hex": "#83796a"
+  },
+  {
+   "code": "218",
+   "category": null,
+   "hex": "#7e9a9f"
+  },
+  {
+   "code": "413",
+   "category": null,
+   "hex": "#11131e"
+  },
+  {
+   "code": "2428",
+   "category": null,
+   "hex": "#527994"
+  },
+  {
+   "code": "607",
+   "category": null,
+   "hex": "#b09771"
+  },
+  {
+   "code": "393",
+   "category": null,
+   "hex": "#1a3460"
+  },
+  {
+   "code": "151 T",
+   "category": null,
+   "hex": "#e2d3b6"
+  },
+  {
+   "code": "170",
+   "category": null,
+   "hex": "#1e895a"
+  },
+  {
+   "code": "2014",
+   "category": null,
+   "hex": "#0f233c"
+  },
+  {
+   "code": "396",
+   "category": null,
+   "hex": "#8e3d7e"
+  },
+  {
+   "code": "& HAM",
+   "category": null,
+   "hex": "#efd6a3"
+  },
+  {
+   "code": "604",
+   "category": null,
+   "hex": "#938667"
+  },
+  {
+   "code": "603",
+   "category": null,
+   "hex": "#ecdec3"
+  },
+  {
+   "code": "168",
+   "category": "Polri",
+   "hex": "#8d7f76"
+  },
+  {
+   "code": "1678",
+   "category": null,
+   "hex": "#67594c"
+  },
+  {
+   "code": "313",
+   "category": null,
+   "hex": "#121323"
+  },
+  {
+   "code": "575",
+   "category": null,
+   "hex": "#323620"
+  },
+  {
+   "code": "508",
+   "category": "Hansip",
+   "hex": "#232820"
+  },
+  {
+   "code": "606",
+   "category": null,
+   "hex": "#c8da2b"
+  },
+  {
+   "code": "149",
+   "category": null,
+   "hex": "#231e19"
+  },
+  {
+   "code": "605",
+   "category": null,
+   "hex": "#eb5324"
+  },
+  {
+   "code": "100",
+   "category": null,
+   "hex": "#f6f0f7"
+  },
+  {
+   "code": "103",
+   "category": null,
+   "hex": "#b09e8f"
+  },
+  {
+   "code": "530",
+   "category": null,
+   "hex": "#0e695a"
+  },
+  {
+   "code": "6138",
+   "category": null,
+   "hex": "#686c5e"
+  },
+  {
+   "code": "2429",
+   "category": null,
+   "hex": "#dab79d"
+  },
+  {
+   "code": "2431",
+   "category": null,
+   "hex": "#978a86"
+  },
+  {
+   "code": "2430",
+   "category": null,
+   "hex": "#56514c"
+  },
+  {
+   "code": "832",
+   "category": null,
+   "hex": "#1d1e1c"
+  },
+  {
+   "code": "290 - A",
+   "category": null,
+   "hex": "#707877"
+  },
+  {
+   "code": "2028",
+   "category": null,
+   "hex": "#d7cfac"
+  }
+ ],
+ "verlando-bulltop": [
+  {
+   "code": "801",
+   "category": null,
+   "hex": "#f4f5f7"
+  },
+  {
+   "code": "803",
+   "category": null,
+   "hex": "#a8c1a7"
+  },
+  {
+   "code": "802",
+   "category": null,
+   "hex": "#e2f0d8"
+  },
+  {
+   "code": "804",
+   "category": null,
+   "hex": "#8ec8e5"
+  },
+  {
+   "code": "805",
+   "category": null,
+   "hex": "#13131e"
+  },
+  {
+   "code": "806",
+   "category": null,
+   "hex": "#d3ddb6"
+  },
+  {
+   "code": "811",
+   "category": null,
+   "hex": "#f8fbf8"
+  },
+  {
+   "code": "808",
+   "category": null,
+   "hex": "#7f8270"
+  },
+  {
+   "code": "813",
+   "category": null,
+   "hex": "#7e7152"
+  },
+  {
+   "code": "807",
+   "category": null,
+   "hex": "#a3ad96"
+  },
+  {
+   "code": "812",
+   "category": null,
+   "hex": "#a8b289"
+  },
+  {
+   "code": "809",
+   "category": null,
+   "hex": "#6e6951"
+  },
+  {
+   "code": "814",
+   "category": null,
+   "hex": "#6a8a8b"
+  },
+  {
+   "code": "810",
+   "category": null,
+   "hex": "#0f1416"
+  },
+  {
+   "code": "815",
+   "category": null,
+   "hex": "#162018"
+  },
+  {
+   "code": "816",
+   "category": null,
+   "hex": "#cce0e0"
+  },
+  {
+   "code": "818",
+   "category": null,
+   "hex": "#1e342f"
+  },
+  {
+   "code": "817",
+   "category": null,
+   "hex": "#8a926d"
+  },
+  {
+   "code": "819",
+   "category": null,
+   "hex": "#2c2824"
+  },
+  {
+   "code": "820",
+   "category": null,
+   "hex": "#121515"
+  },
+  {
+   "code": "821",
+   "category": null,
+   "hex": "#efc03f"
+  },
+  {
+   "code": "826",
+   "category": null,
+   "hex": "#0f1111"
+  },
+  {
+   "code": "823",
+   "category": null,
+   "hex": "#282660"
+  },
+  {
+   "code": "828",
+   "category": null,
+   "hex": "#ea3e34"
+  },
+  {
+   "code": "822",
+   "category": null,
+   "hex": "#dd3528"
+  },
+  {
+   "code": "827",
+   "category": null,
+   "hex": "#2a3f54"
+  },
+  {
+   "code": "824",
+   "category": null,
+   "hex": "#165342"
+  },
+  {
+   "code": "829",
+   "category": null,
+   "hex": "#223825"
+  },
+  {
+   "code": "825",
+   "category": null,
+   "hex": "#e4553d"
+  },
+  {
+   "code": "830",
+   "category": null,
+   "hex": "#141515"
+  },
+  {
+   "code": "831",
+   "category": null,
+   "hex": "#293527"
+  },
+  {
+   "code": "833",
+   "category": null,
+   "hex": "#f8f7ec"
+  },
+  {
+   "code": "832",
+   "category": null,
+   "hex": "#687071"
+  },
+  {
+   "code": "837",
+   "category": null,
+   "hex": "#554c42"
+  }
+ ],
+ "verlando-cp-american-drill": [
+  {
+   "code": "01",
+   "category": "Satpam",
+   "hex": "#eaf6f7"
+  },
+  {
+   "code": "602",
+   "category": null,
+   "hex": "#d6cab5"
+  },
+  {
+   "code": "601",
+   "category": null,
+   "hex": "#f8f4e1"
+  },
+  {
+   "code": "600",
+   "category": null,
+   "hex": "#e2e0c7"
+  },
+  {
+   "code": "060",
+   "category": null,
+   "hex": "#a29d87"
+  },
+  {
+   "code": "603",
+   "category": null,
+   "hex": "#e1d6c5"
+  },
+  {
+   "code": "112",
+   "category": "Kesehatan",
+   "hex": "#b8b0a9"
+  },
+  {
+   "code": "152",
+   "category": null,
+   "hex": "#a49b8b"
+  },
+  {
+   "code": "903",
+   "category": null,
+   "hex": "#b9aba4"
+  },
+  {
+   "code": "151",
+   "category": null,
+   "hex": "#c4b2a0"
+  },
+  {
+   "code": "113",
+   "category": null,
+   "hex": "#9c908e"
+  },
+  {
+   "code": "6136",
+   "category": "Polri",
+   "hex": "#71716f"
+  },
+  {
+   "code": "103",
+   "category": null,
+   "hex": "#a0948f"
+  },
+  {
+   "code": "106",
+   "category": null,
+   "hex": "#a28f7a"
+  },
+  {
+   "code": "020",
+   "category": null,
+   "hex": "#837163"
+  },
+  {
+   "code": "102",
+   "category": null,
+   "hex": "#9e8a75"
+  },
+  {
+   "code": "217",
+   "category": null,
+   "hex": "#534b4c"
+  },
+  {
+   "code": "901",
+   "category": null,
+   "hex": "#8e7b6f"
+  },
+  {
+   "code": "1011",
+   "category": null,
+   "hex": "#574a44"
+  },
+  {
+   "code": "120",
+   "category": null,
+   "hex": "#483928"
+  },
+  {
+   "code": "A 20 (PERHUBUNGAN)",
+   "category": null,
+   "hex": "#a9b4c9"
+  },
+  {
+   "code": "203",
+   "category": "Sma/Smu",
+   "hex": "#6e86a2"
+  },
+  {
+   "code": "132",
+   "category": "Pemda",
+   "hex": "#6d5938"
+  },
+  {
+   "code": "287",
+   "category": "Sma/Smu",
+   "hex": "#547a94"
+  },
+  {
+   "code": "146",
+   "category": null,
+   "hex": "#8f9082"
+  },
+  {
+   "code": "226",
+   "category": null,
+   "hex": "#6a797f"
+  },
+  {
+   "code": "7223",
+   "category": "Pemda",
+   "hex": "#695a42"
+  },
+  {
+   "code": "229",
+   "category": "Sma/Smu",
+   "hex": "#4b7495"
+  },
+  {
+   "code": "216",
+   "category": "Sma/Smu",
+   "hex": "#627685"
+  },
+  {
+   "code": "286",
+   "category": null,
+   "hex": "#536680"
+  },
+  {
+   "code": "301",
+   "category": null,
+   "hex": "#dbf0f2"
+  },
+  {
+   "code": "192",
+   "category": null,
+   "hex": "#816241"
+  },
+  {
+   "code": "107",
+   "category": null,
+   "hex": "#d5c3a0"
+  },
+  {
+   "code": "127",
+   "category": null,
+   "hex": "#422e20"
+  },
+  {
+   "code": "128 A",
+   "category": null,
+   "hex": "#29211f"
+  },
+  {
+   "code": "299",
+   "category": null,
+   "hex": "#a0b7ce"
+  },
+  {
+   "code": "600 D",
+   "category": null,
+   "hex": "#eee5d2"
+  },
+  {
+   "code": "327",
+   "category": null,
+   "hex": "#5686aa"
+  },
+  {
+   "code": "575",
+   "category": null,
+   "hex": "#443324"
+  },
+  {
+   "code": "328",
+   "category": null,
+   "hex": "#86a4c3"
+  },
+  {
+   "code": "133",
+   "category": "Pemda",
+   "hex": "#8b7a67"
+  },
+  {
+   "code": "326",
+   "category": null,
+   "hex": "#587da4"
+  },
+  {
+   "code": "168",
+   "category": "Polri",
+   "hex": "#7d6a63"
+  },
+  {
+   "code": "329",
+   "category": null,
+   "hex": "#44699f"
+  },
+  {
+   "code": "148",
+   "category": "Polri",
+   "hex": "#1e1918"
+  },
+  {
+   "code": "298",
+   "category": null,
+   "hex": "#b2bac9"
+  },
+  {
+   "code": "5160",
+   "category": null,
+   "hex": "#556c6f"
+  },
+  {
+   "code": "060 A",
+   "category": null,
+   "hex": "#bca593"
+  },
+  {
+   "code": "2262",
+   "category": null,
+   "hex": "#757474"
+  },
+  {
+   "code": "230",
+   "category": null,
+   "hex": "#2e4456"
+  },
+  {
+   "code": "289",
+   "category": null,
+   "hex": "#76767d"
+  },
+  {
+   "code": "528",
+   "category": "Pertanian",
+   "hex": "#42645e"
+  },
+  {
+   "code": "057",
+   "category": null,
+   "hex": "#403d36"
+  },
+  {
+   "code": "246",
+   "category": null,
+   "hex": "#384248"
+  },
+  {
+   "code": "247",
+   "category": null,
+   "hex": "#454e60"
+  },
+  {
+   "code": "900",
+   "category": null,
+   "hex": "#2e546e"
+  },
+  {
+   "code": "26",
+   "category": null,
+   "hex": "#4f636f"
+  },
+  {
+   "code": "803",
+   "category": null,
+   "hex": "#1b2833"
+  },
+  {
+   "code": "150",
+   "category": null,
+   "hex": "#241e1c"
+  },
+  {
+   "code": "804",
+   "category": null,
+   "hex": "#1a2729"
+  },
+  {
+   "code": "801",
+   "category": null,
+   "hex": "#43352b"
+  },
+  {
+   "code": "276",
+   "category": null,
+   "hex": "#45423e"
+  },
+  {
+   "code": "802",
+   "category": null,
+   "hex": "#46392f"
+  },
+  {
+   "code": "809",
+   "category": null,
+   "hex": "#343337"
+  },
+  {
+   "code": "393",
+   "category": null,
+   "hex": "#16181f"
+  },
+  {
+   "code": "050",
+   "category": null,
+   "hex": "#1f2430"
+  },
+  {
+   "code": "560",
+   "category": null,
+   "hex": "#1f2826"
+  },
+  {
+   "code": "337",
+   "category": null,
+   "hex": "#151d27"
+  },
+  {
+   "code": "56",
+   "category": "Tni",
+   "hex": "#252520"
+  },
+  {
+   "code": "312",
+   "category": "Smp",
+   "hex": "#181f31"
+  },
+  {
+   "code": "548",
+   "category": null,
+   "hex": "#292a24"
+  },
+  {
+   "code": "3981",
+   "category": null,
+   "hex": "#171b20"
+  },
+  {
+   "code": "128",
+   "category": "Pramuka",
+   "hex": "#34211e"
+  },
+  {
+   "code": "18",
+   "category": null,
+   "hex": "#151617"
+  },
+  {
+   "code": "3899",
+   "category": null,
+   "hex": "#181422"
+  },
+  {
+   "code": "509",
+   "category": "Hansip",
+   "hex": "#62695f"
+  },
+  {
+   "code": "55",
+   "category": "Tni",
+   "hex": "#4f5343"
+  },
+  {
+   "code": "509T",
+   "category": "Hansip",
+   "hex": "#454a35"
+  },
+  {
+   "code": "532",
+   "category": null,
+   "hex": "#103e36"
+  },
+  {
+   "code": "544",
+   "category": null,
+   "hex": "#192a27"
+  },
+  {
+   "code": "519",
+   "category": null,
+   "hex": "#bbdddc"
+  },
+  {
+   "code": "618",
+   "category": null,
+   "hex": "#f7e583"
+  },
+  {
+   "code": "288",
+   "category": null,
+   "hex": "#565c63"
+  },
+  {
+   "code": "808",
+   "category": null,
+   "hex": "#a02d45"
+  },
+  {
+   "code": "780",
+   "category": null,
+   "hex": "#f0ac9c"
+  },
+  {
+   "code": "391",
+   "category": null,
+   "hex": "#55384f"
+  },
+  {
+   "code": "331",
+   "category": null,
+   "hex": "#0f2c3c"
+  },
+  {
+   "code": "726",
+   "category": "Sd",
+   "hex": "#621c22"
+  },
+  {
+   "code": "550",
+   "category": null,
+   "hex": "#0f424f"
+  },
+  {
+   "code": "727",
+   "category": "Sd",
+   "hex": "#43181e"
+  },
+  {
+   "code": "390",
+   "category": null,
+   "hex": "#c1b2bf"
+  },
+  {
+   "code": "389",
+   "category": null,
+   "hex": "#312549"
+  },
+  {
+   "code": "394",
+   "category": null,
+   "hex": "#786896"
+  },
+  {
+   "code": "395",
+   "category": null,
+   "hex": "#986787"
+  },
+  {
+   "code": "388",
+   "category": null,
+   "hex": "#23224a"
+  },
+  {
+   "code": "321",
+   "category": null,
+   "hex": "#239dc0"
+  },
+  {
+   "code": "323",
+   "category": null,
+   "hex": "#00a7c4"
+  },
+  {
+   "code": "322",
+   "category": null,
+   "hex": "#1871a2"
+  },
+  {
+   "code": "555",
+   "category": null,
+   "hex": "#0c5b50"
+  },
+  {
+   "code": "807",
+   "category": null,
+   "hex": "#1187b3"
+  },
+  {
+   "code": "324",
+   "category": null,
+   "hex": "#10757c"
+  },
+  {
+   "code": "292",
+   "category": null,
+   "hex": "#074976"
+  },
+  {
+   "code": "533",
+   "category": null,
+   "hex": "#106444"
+  },
+  {
+   "code": "383",
+   "category": null,
+   "hex": "#10182f"
+  },
+  {
+   "code": "330",
+   "category": null,
+   "hex": "#154940"
+  },
+  {
+   "code": "569",
+   "category": null,
+   "hex": "#619343"
+  },
+  {
+   "code": "536",
+   "category": null,
+   "hex": "#19783c"
+  },
+  {
+   "code": "537",
+   "category": null,
+   "hex": "#9ccb3e"
+  },
+  {
+   "code": "714",
+   "category": null,
+   "hex": "#d94728"
+  },
+  {
+   "code": "806",
+   "category": null,
+   "hex": "#282834"
+  },
+  {
+   "code": "620",
+   "category": null,
+   "hex": "#e1d727"
+  },
+  {
+   "code": "539",
+   "category": null,
+   "hex": "#c8da35"
+  },
+  {
+   "code": "619",
+   "category": null,
+   "hex": "#e5a724"
+  },
+  {
+   "code": "392",
+   "category": null,
+   "hex": "#105795"
+  },
+  {
+   "code": "538",
+   "category": null,
+   "hex": "#f15f23"
+  },
+  {
+   "code": "715",
+   "category": null,
+   "hex": "#d83827"
+  },
+  {
+   "code": "716",
+   "category": null,
+   "hex": "#d23f27"
+  },
+  {
+   "code": "384",
+   "category": null,
+   "hex": "#1f3465"
+  },
+  {
+   "code": "381",
+   "category": null,
+   "hex": "#161823"
+  },
+  {
+   "code": "386",
+   "category": null,
+   "hex": "#172047"
+  },
+  {
+   "code": "145",
+   "category": null,
+   "hex": "#a5a496"
+  },
+  {
+   "code": "604",
+   "category": null,
+   "hex": "#6f5743"
+  },
+  {
+   "code": "061",
+   "category": null,
+   "hex": "#aaa38c"
+  },
+  {
+   "code": "171",
+   "category": "Pramuka",
+   "hex": "#916f4f"
+  },
+  {
+   "code": "129",
+   "category": "Pramuka",
+   "hex": "#2a1d17"
+  },
+  {
+   "code": "300",
+   "category": null,
+   "hex": "#becece"
+  },
+  {
+   "code": "621",
+   "category": null,
+   "hex": "#f1d530"
+  },
+  {
+   "code": "510",
+   "category": null,
+   "hex": "#3c4d32"
+  },
+  {
+   "code": "193",
+   "category": null,
+   "hex": "#5e3a1e"
+  },
+  {
+   "code": "147",
+   "category": null,
+   "hex": "#848b89"
+  },
+  {
+   "code": "144",
+   "category": null,
+   "hex": "#a7b099"
+  },
+  {
+   "code": "770",
+   "category": null,
+   "hex": "#915153"
+  },
+  {
+   "code": "722",
+   "category": null,
+   "hex": "#a91f24"
+  },
+  {
+   "code": "772",
+   "category": null,
+   "hex": "#6a2d28"
+  },
+  {
+   "code": "771",
+   "category": null,
+   "hex": "#74332e"
+  },
+  {
+   "code": "100",
+   "category": null,
+   "hex": "#c6cade"
+  },
+  {
+   "code": "617",
+   "category": null,
+   "hex": "#aa8e35"
+  },
+  {
+   "code": "781",
+   "category": null,
+   "hex": "#d89e70"
+  },
+  {
+   "code": "385",
+   "category": null,
+   "hex": "#112343"
+  },
+  {
+   "code": "290",
+   "category": null,
+   "hex": "#3b4046"
+  },
+  {
+   "code": "2264",
+   "category": null,
+   "hex": "#a5b2af"
+  },
+  {
+   "code": "392 B",
+   "category": null,
+   "hex": "#184680"
+  },
+  {
+   "code": "902",
+   "category": null,
+   "hex": "#305980"
+  },
+  {
+   "code": "332",
+   "category": null,
+   "hex": "#4482b1"
+  },
+  {
+   "code": "2265",
+   "category": null,
+   "hex": "#5c6a67"
+  },
+  {
+   "code": "387",
+   "category": null,
+   "hex": "#1f3b72"
+  },
+  {
+   "code": "331 - K",
+   "category": null,
+   "hex": "#19323d"
+  },
+  {
+   "code": "51",
+   "category": null,
+   "hex": "#13263d"
+  },
+  {
+   "code": "332 K",
+   "category": null,
+   "hex": "#3477ac"
+  },
+  {
+   "code": "1023",
+   "category": null,
+   "hex": "#7c7166"
+  },
+  {
+   "code": "1022",
+   "category": null,
+   "hex": "#9d9287"
+  },
+  {
+   "code": "2267",
+   "category": null,
+   "hex": "#848b8c"
+  },
+  {
+   "code": "2266",
+   "category": null,
+   "hex": "#6f7772"
+  },
+  {
+   "code": "2269",
+   "category": null,
+   "hex": "#85908d"
+  },
+  {
+   "code": "BJ-8503",
+   "category": null,
+   "hex": "#2f393a"
+  },
+  {
+   "code": "2285",
+   "category": null,
+   "hex": "#7f8489"
+  },
+  {
+   "code": "BJ-8505",
+   "category": null,
+   "hex": "#262d3b"
+  },
+  {
+   "code": "2270",
+   "category": null,
+   "hex": "#51584a"
+  },
+  {
+   "code": "BJ-8504",
+   "category": null,
+   "hex": "#2d2a29"
+  },
+  {
+   "code": "BJ-8501",
+   "category": null,
+   "hex": "#325b7a"
+  },
+  {
+   "code": "BJ-8506",
+   "category": null,
+   "hex": "#232833"
+  },
+  {
+   "code": "BJ-8502",
+   "category": null,
+   "hex": "#17222b"
+  },
+  {
+   "code": "BJ-8507",
+   "category": null,
+   "hex": "#151818"
+  },
+  {
+   "code": "2311",
+   "category": null,
+   "hex": "#c2d1dc"
+  },
+  {
+   "code": "2322",
+   "category": null,
+   "hex": "#8ebacd"
+  },
+  {
+   "code": "2318",
+   "category": null,
+   "hex": "#0b4b7f"
+  },
+  {
+   "code": "2305 K",
+   "category": null,
+   "hex": "#191d2c"
+  },
+  {
+   "code": "2323",
+   "category": null,
+   "hex": "#1d1e1c"
+  },
+  {
+   "code": "532 B",
+   "category": null,
+   "hex": "#115946"
+  },
+  {
+   "code": "2336",
+   "category": null,
+   "hex": "#b7bfb6"
+  },
+  {
+   "code": "2333",
+   "category": null,
+   "hex": "#7a6f2c"
+  },
+  {
+   "code": "171 - M",
+   "category": null,
+   "hex": "#aa805b"
+  },
+  {
+   "code": "2346",
+   "category": null,
+   "hex": "#64543f"
+  },
+  {
+   "code": "2337",
+   "category": null,
+   "hex": "#676758"
+  },
+  {
+   "code": "151 - M",
+   "category": null,
+   "hex": "#c1a386"
+  },
+  {
+   "code": "738",
+   "category": null,
+   "hex": "#c72828"
+  },
+  {
+   "code": "246 - M",
+   "category": null,
+   "hex": "#353f45"
+  },
+  {
+   "code": "322 - M",
+   "category": null,
+   "hex": "#1c6fa3"
+  }
+ ],
+ "verlando-gabardine-deluxe": [
+  {
+   "code": "001",
+   "category": null,
+   "hex": "#fafafc"
+  },
+  {
+   "code": "003",
+   "category": null,
+   "hex": "#5b5e49"
+  },
+  {
+   "code": "002",
+   "category": null,
+   "hex": "#9b8563"
+  },
+  {
+   "code": "004",
+   "category": null,
+   "hex": "#1a1f28"
+  },
+  {
+   "code": "005",
+   "category": null,
+   "hex": "#121615"
+  },
+  {
+   "code": "006",
+   "category": null,
+   "hex": "#4d687e"
+  },
+  {
+   "code": "008",
+   "category": null,
+   "hex": "#636369"
+  },
+  {
+   "code": "007",
+   "category": null,
+   "hex": "#51352c"
+  },
+  {
+   "code": "009",
+   "category": null,
+   "hex": "#75241f"
+  },
+  {
+   "code": "010",
+   "category": null,
+   "hex": "#101015"
+  },
+  {
+   "code": "011",
+   "category": null,
+   "hex": "#fafdff"
+  },
+  {
+   "code": "013",
+   "category": null,
+   "hex": "#78916a"
+  },
+  {
+   "code": "012",
+   "category": null,
+   "hex": "#7fcdec"
+  },
+  {
+   "code": "014",
+   "category": null,
+   "hex": "#2a4030"
+  },
+  {
+   "code": "015",
+   "category": null,
+   "hex": "#1a73a8"
+  },
+  {
+   "code": "016",
+   "category": null,
+   "hex": "#f4c541"
+  },
+  {
+   "code": "018",
+   "category": null,
+   "hex": "#10502d"
+  },
+  {
+   "code": "017",
+   "category": null,
+   "hex": "#64b846"
+  },
+  {
+   "code": "019",
+   "category": null,
+   "hex": "#da3534"
+  },
+  {
+   "code": "020",
+   "category": null,
+   "hex": "#f78f45"
+  },
+  {
+   "code": "021",
+   "category": null,
+   "hex": "#98adb4"
+  },
+  {
+   "code": "023",
+   "category": null,
+   "hex": "#b8cada"
+  },
+  {
+   "code": "022",
+   "category": null,
+   "hex": "#4fb961"
+  },
+  {
+   "code": "024",
+   "category": null,
+   "hex": "#264a95"
+  },
+  {
+   "code": "025",
+   "category": null,
+   "hex": "#322020"
+  },
+  {
+   "code": "026",
+   "category": null,
+   "hex": "#f3e0ba"
+  },
+  {
+   "code": "028",
+   "category": null,
+   "hex": "#2e4734"
+  },
+  {
+   "code": "027",
+   "category": null,
+   "hex": "#59a0ca"
+  },
+  {
+   "code": "029",
+   "category": null,
+   "hex": "#65316d"
+  },
+  {
+   "code": "030",
+   "category": null,
+   "hex": "#575851"
+  },
+  {
+   "code": "031",
+   "category": null,
+   "hex": "#4c7280"
+  },
+  {
+   "code": "033",
+   "category": null,
+   "hex": "#7e2630"
+  },
+  {
+   "code": "032",
+   "category": null,
+   "hex": "#ffe3c3"
+  },
+  {
+   "code": "034",
+   "category": null,
+   "hex": "#12182c"
+  },
+  {
+   "code": "035",
+   "category": null,
+   "hex": "#0e181f"
+  },
+  {
+   "code": "036",
+   "category": null,
+   "hex": "#1c1215"
+  },
+  {
+   "code": "038",
+   "category": null,
+   "hex": "#321818"
+  },
+  {
+   "code": "037",
+   "category": null,
+   "hex": "#b6c7bf"
+  },
+  {
+   "code": "039",
+   "category": null,
+   "hex": "#108247"
+  },
+  {
+   "code": "040",
+   "category": null,
+   "hex": "#a88959"
+  },
+  {
+   "code": "041",
+   "category": null,
+   "hex": "#edd6bd"
+  },
+  {
+   "code": "043",
+   "category": null,
+   "hex": "#8e7f82"
+  },
+  {
+   "code": "042",
+   "category": null,
+   "hex": "#4c432e"
+  },
+  {
+   "code": "044",
+   "category": null,
+   "hex": "#1f1d1b"
+  },
+  {
+   "code": "045",
+   "category": null,
+   "hex": "#247fbc"
+  },
+  {
+   "code": "046",
+   "category": null,
+   "hex": "#517d88"
+  },
+  {
+   "code": "048",
+   "category": null,
+   "hex": "#ffffff"
+  },
+  {
+   "code": "047",
+   "category": null,
+   "hex": "#0f2a35"
+  },
+  {
+   "code": "049",
+   "category": null,
+   "hex": "#978b87"
+  },
+  {
+   "code": "050",
+   "category": null,
+   "hex": "#423a27"
+  }
+ ],
+ "verlando-japan-drill": [],
+ "verlando-plat": [
+  {
+   "code": "001",
+   "category": null,
+   "hex": "#f2f1f0"
+  },
+  {
+   "code": "146",
+   "category": null,
+   "hex": "#a6bcb2"
+  },
+  {
+   "code": "601",
+   "category": null,
+   "hex": "#f7f8f8"
+  },
+  {
+   "code": "132",
+   "category": null,
+   "hex": "#fafcfa"
+  },
+  {
+   "code": "336",
+   "category": null,
+   "hex": "#181e28"
+  },
+  {
+   "code": "327",
+   "category": null,
+   "hex": "#4e9dc1"
+  },
+  {
+   "code": "106",
+   "category": null,
+   "hex": "#7f807f"
+  },
+  {
+   "code": "130",
+   "category": null,
+   "hex": "#a58150"
+  },
+  {
+   "code": "237",
+   "category": null,
+   "hex": "#34517b"
+  },
+  {
+   "code": "127",
+   "category": null,
+   "hex": "#1075aa"
+  },
+  {
+   "code": "204",
+   "category": null,
+   "hex": "#4b6166"
+  },
+  {
+   "code": "171",
+   "category": null,
+   "hex": "#bd8d64"
+  },
+  {
+   "code": "124",
+   "category": null,
+   "hex": "#758658"
+  },
+  {
+   "code": "306",
+   "category": null,
+   "hex": "#472c15"
+  },
+  {
+   "code": "337",
+   "category": null,
+   "hex": "#091822"
+  },
+  {
+   "code": "620",
+   "category": null,
+   "hex": "#f4e956"
+  },
+  {
+   "code": "223",
+   "category": null,
+   "hex": "#186d45"
+  },
+  {
+   "code": "721",
+   "category": null,
+   "hex": "#c93128"
+  },
+  {
+   "code": "215",
+   "category": null,
+   "hex": "#ee6924"
+  },
+  {
+   "code": "384 - M",
+   "category": null,
+   "hex": "#263a63"
+  },
+  {
+   "code": "335",
+   "category": null,
+   "hex": "#701c1b"
+  },
+  {
+   "code": "218 - T",
+   "category": null,
+   "hex": "#f89839"
+  },
+  {
+   "code": "339",
+   "category": null,
+   "hex": "#381e4e"
+  },
+  {
+   "code": "2314",
+   "category": null,
+   "hex": "#57af94"
+  },
+  {
+   "code": "2982",
+   "category": null,
+   "hex": "#10120f"
+  },
+  {
+   "code": "334",
+   "category": null,
+   "hex": "#064942"
+  },
+  {
+   "code": "218",
+   "category": null,
+   "hex": "#f6a850"
+  },
+  {
+   "code": "334 - A",
+   "category": null,
+   "hex": "#14433b"
+  },
+  {
+   "code": "401",
+   "category": null,
+   "hex": "#0c0f16"
+  },
+  {
+   "code": "384T",
+   "category": null,
+   "hex": "#122242"
+  }
+ ],
+ "verlando-tropical": [
+  {
+   "code": "01",
+   "category": null,
+   "hex": "#dee7f5"
+  },
+  {
+   "code": "03",
+   "category": null,
+   "hex": "#f8e7ca"
+  },
+  {
+   "code": "02",
+   "category": null,
+   "hex": "#fcfbe8"
+  },
+  {
+   "code": "04",
+   "category": null,
+   "hex": "#f7f8d9"
+  },
+  {
+   "code": "05",
+   "category": null,
+   "hex": "#efd7c4"
+  },
+  {
+   "code": "06",
+   "category": null,
+   "hex": "#fce5ef"
+  },
+  {
+   "code": "11",
+   "category": null,
+   "hex": "#a7dacd"
+  },
+  {
+   "code": "08",
+   "category": null,
+   "hex": "#83a4c1"
+  },
+  {
+   "code": "13",
+   "category": null,
+   "hex": "#1eb9d3"
+  },
+  {
+   "code": "07",
+   "category": null,
+   "hex": "#8abfdf"
+  },
+  {
+   "code": "12",
+   "category": null,
+   "hex": "#85cdaf"
+  },
+  {
+   "code": "09",
+   "category": null,
+   "hex": "#9e8fb5"
+  },
+  {
+   "code": "14",
+   "category": null,
+   "hex": "#137aba"
+  },
+  {
+   "code": "10",
+   "category": null,
+   "hex": "#47717c"
+  },
+  {
+   "code": "15",
+   "category": null,
+   "hex": "#233c78"
+  },
+  {
+   "code": "31",
+   "category": null,
+   "hex": "#2ba892"
+  },
+  {
+   "code": "33",
+   "category": null,
+   "hex": "#596260"
+  },
+  {
+   "code": "32",
+   "category": null,
+   "hex": "#8faaa0"
+  },
+  {
+   "code": "34",
+   "category": null,
+   "hex": "#485e4f"
+  },
+  {
+   "code": "35",
+   "category": null,
+   "hex": "#25793f"
+  },
+  {
+   "code": "36",
+   "category": null,
+   "hex": "#a6c3d7"
+  },
+  {
+   "code": "41",
+   "category": null,
+   "hex": "#acdee6"
+  },
+  {
+   "code": "38",
+   "category": null,
+   "hex": "#e0b298"
+  },
+  {
+   "code": "43",
+   "category": null,
+   "hex": "#f6be3b"
+  },
+  {
+   "code": "37",
+   "category": null,
+   "hex": "#41535e"
+  },
+  {
+   "code": "42",
+   "category": null,
+   "hex": "#c0dd97"
+  },
+  {
+   "code": "39",
+   "category": null,
+   "hex": "#abacd6"
+  },
+  {
+   "code": "44",
+   "category": null,
+   "hex": "#f3f1a2"
+  },
+  {
+   "code": "40",
+   "category": null,
+   "hex": "#e0e993"
+  },
+  {
+   "code": "45",
+   "category": null,
+   "hex": "#f1a9a1"
+  },
+  {
+   "code": "16",
+   "category": null,
+   "hex": "#d1e0d0"
+  },
+  {
+   "code": "18",
+   "category": null,
+   "hex": "#eb2f5b"
+  },
+  {
+   "code": "17",
+   "category": null,
+   "hex": "#89afdd"
+  },
+  {
+   "code": "19",
+   "category": null,
+   "hex": "#e32e3c"
+  },
+  {
+   "code": "20",
+   "category": null,
+   "hex": "#9e2527"
+  },
+  {
+   "code": "21",
+   "category": null,
+   "hex": "#bdc2b0"
+  },
+  {
+   "code": "26",
+   "category": null,
+   "hex": "#5e6466"
+  },
+  {
+   "code": "23",
+   "category": null,
+   "hex": "#807151"
+  },
+  {
+   "code": "28",
+   "category": null,
+   "hex": "#172231"
+  },
+  {
+   "code": "22",
+   "category": null,
+   "hex": "#c9c281"
+  },
+  {
+   "code": "27",
+   "category": null,
+   "hex": "#172638"
+  },
+  {
+   "code": "24",
+   "category": null,
+   "hex": "#686356"
+  },
+  {
+   "code": "29",
+   "category": null,
+   "hex": "#121720"
+  },
+  {
+   "code": "25",
+   "category": null,
+   "hex": "#36291f"
+  },
+  {
+   "code": "30",
+   "category": null,
+   "hex": "#15131a"
+  },
+  {
+   "code": "46",
+   "category": null,
+   "hex": "#f8e722"
+  },
+  {
+   "code": "48",
+   "category": null,
+   "hex": "#c8a833"
+  },
+  {
+   "code": "47",
+   "category": null,
+   "hex": "#cab88a"
+  },
+  {
+   "code": "49",
+   "category": null,
+   "hex": "#77a6c8"
+  },
+  {
+   "code": "50",
+   "category": null,
+   "hex": "#401f4f"
+  },
+  {
+   "code": "51",
+   "category": null,
+   "hex": "#3b2b66"
+  },
+  {
+   "code": "56",
+   "category": null,
+   "hex": "#a4d9e4"
+  },
+  {
+   "code": "53",
+   "category": null,
+   "hex": "#269a4b"
+  },
+  {
+   "code": "58",
+   "category": null,
+   "hex": "#bcaf90"
+  },
+  {
+   "code": "52",
+   "category": null,
+   "hex": "#0475bc"
+  },
+  {
+   "code": "57",
+   "category": null,
+   "hex": "#a3a4b1"
+  },
+  {
+   "code": "54",
+   "category": null,
+   "hex": "#bccccd"
+  },
+  {
+   "code": "59",
+   "category": null,
+   "hex": "#f7f8f6"
+  },
+  {
+   "code": "55",
+   "category": null,
+   "hex": "#544e33"
+  },
+  {
+   "code": "60",
+   "category": null,
+   "hex": "#514d49"
+  },
+  {
+   "code": "61",
+   "category": null,
+   "hex": "#ea6e2a"
+  },
+  {
+   "code": "63",
+   "category": null,
+   "hex": "#b6dae8"
+  },
+  {
+   "code": "060 A",
+   "category": null,
+   "hex": "#141b17"
+  },
+  {
+   "code": "64",
+   "category": null,
+   "hex": "#a5c9eb"
+  },
+  {
+   "code": "65",
+   "category": null,
+   "hex": "#aad4bc"
+  },
+  {
+   "code": "227",
+   "category": null,
+   "hex": "#d1d5c9"
+  },
+  {
+   "code": "71",
+   "category": null,
+   "hex": "#95c6bc"
+  },
+  {
+   "code": "68",
+   "category": null,
+   "hex": "#3d6796"
+  },
+  {
+   "code": "73",
+   "category": null,
+   "hex": "#169ed5"
+  },
+  {
+   "code": "129",
+   "category": null,
+   "hex": "#0c172f"
+  },
+  {
+   "code": "72",
+   "category": null,
+   "hex": "#9fb9c6"
+  },
+  {
+   "code": "66",
+   "category": null,
+   "hex": "#a4b0b5"
+  },
+  {
+   "code": "74",
+   "category": null,
+   "hex": "#15727a"
+  },
+  {
+   "code": "70",
+   "category": null,
+   "hex": "#9baab7"
+  },
+  {
+   "code": "75",
+   "category": null,
+   "hex": "#312f29"
+  },
+  {
+   "code": "76",
+   "category": null,
+   "hex": "#7f8470"
+  },
+  {
+   "code": "78",
+   "category": null,
+   "hex": "#27397c"
+  },
+  {
+   "code": "77",
+   "category": null,
+   "hex": "#fffbf7"
+  },
+  {
+   "code": "79",
+   "category": null,
+   "hex": "#b3dddc"
+  },
+  {
+   "code": "163",
+   "category": null,
+   "hex": "#78b6cf"
+  },
+  {
+   "code": "59 A",
+   "category": null,
+   "hex": "#f1f6f8"
+  },
+  {
+   "code": "38 A",
+   "category": null,
+   "hex": "#f4d4b6"
+  },
+  {
+   "code": "222",
+   "category": null,
+   "hex": "#a1a093"
+  }
+ ]
+}

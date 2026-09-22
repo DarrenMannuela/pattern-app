@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { layoutGarmentViews, isSideSegment } from "../lib/garmentFlat";
 import { pocketPath } from "../lib/pocketShapes";
 import { MotifDefs, motifFill } from "./MotifDefs.jsx";
+import FabricColorPicker from "./FabricColorPicker.jsx";
 
 // Darkens a #rrggbb hex color by the given fraction, for seam-line
 // strokes that read as "the same fabric, one shade darker" rather
@@ -29,6 +30,7 @@ const spin = (item) => (item.rotation ? `rotate(${item.rotation} ${item.x + item
 function fillFor(item, color, secondaryColor, accent) {
   if (ACCESSORY_FILL[item.category]) return ACCESSORY_FILL[item.category];
   if (item.category === "trim" || item.category === "panel" || item.category === "motif") return accent;
+  if (item.fabric === "contrast") return accent; // a sleeve or pocket cut from the second fabric
   if (secondaryColor && item.half === "mirror") return secondaryColor;
   return color;
 }
@@ -201,7 +203,7 @@ function ViewPanel({ title, viewKey, layout, color, secondaryColor, accent, patt
       // the garment whatever the fabric colour.
       return (
         <g key={item.key} {...dragProps} transform={`translate(${item.x} ${item.y})${item.rotation ? ` rotate(${item.rotation} ${item.width / 2} ${item.height / 2})` : ""}`}>
-          <path d={pocketPath(item.shape, item.width, item.height)} fill={lighten(color, 0.16)} stroke={stroke} strokeWidth={0.45} />
+          <path d={pocketPath(item.shape, item.width, item.height)} fill={item.fabric === "contrast" ? motifFill(patternPrefix, pattern, "v") || accent : lighten(color, 0.16)} stroke={stroke} strokeWidth={0.45} />
           <line x1={0.6} y1={1.4} x2={item.width - 0.6} y2={1.4} stroke={stroke} strokeWidth={0.25} strokeDasharray="0.9,0.7" />
         </g>
       );
@@ -253,7 +255,7 @@ function ViewPanel({ title, viewKey, layout, color, secondaryColor, accent, patt
         <path
           d={item.d}
           transform={item.transform}
-          fill={item.noFill ? "none" : (item.category === "motif" || item.category === "panel") && motifFill(patternPrefix, pattern, item.orient) || fill}
+          fill={item.noFill ? "none" : (item.category === "motif" || item.category === "panel" || (item.category === "pocket" && item.fabric === "contrast")) && motifFill(patternPrefix, pattern, item.orient) || fill}
           stroke={item.noStroke ? "none" : stroke}
           strokeWidth={0.3}
           clipPath={clipId ? `url(#${clipId})` : undefined}
@@ -275,7 +277,7 @@ function ViewPanel({ title, viewKey, layout, color, secondaryColor, accent, patt
         onDragOver={onCanvasDrop ? (e) => e.preventDefault() : undefined}
         onDrop={onCanvasDrop ? handleCanvasDrop : undefined}
       >
-        {pattern && pattern !== "solid" && items.some((i) => i.category === "motif" || i.category === "panel") && <MotifDefs prefix={patternPrefix} base={accent} />}
+        {pattern && pattern !== "solid" && items.some((i) => i.category === "motif" || i.category === "panel" || (i.category === "pocket" && i.fabric === "contrast")) && <MotifDefs prefix={patternPrefix} base={accent} />}
         <g transform={`translate(${originX} ${originY})`}>
           {items.map((item) => {
             const el = renderItem(item);
@@ -299,7 +301,7 @@ function ViewPanel({ title, viewKey, layout, color, secondaryColor, accent, patt
   );
 }
 
-export default function GarmentFlatPreview({ pieces, accessories = [], gender, dartPosition, sleeveStyle, collarStyle, onAddAccessory, onRemoveAccessory, onDragAccessory, onDropAccessory, merchItem, compact = false, views = "both", zoom, colorHint, onColorChange, pattern = "solid" }) {
+export default function GarmentFlatPreview({ pieces, accessories = [], gender, dartPosition, sleeveStyle, collarStyle, onAddAccessory, onRemoveAccessory, onDragAccessory, onDropAccessory, merchItem, compact = false, views = "both", zoom, colorHint, onColorChange, fabricColors, pattern = "solid" }) {
   const uid = useId().replace(/[^a-zA-Z0-9]/g, "");
   const [sidesOn, setSidesOn] = useState(false);
   const [color, setColor] = useState("#33475B");
@@ -369,7 +371,9 @@ export default function GarmentFlatPreview({ pieces, accessories = [], gender, d
     setPendingAdd(null);
   }
 
-  const hasAccent = (pieces || []).some((p) => /neck trim|piping strip|insert panel|side stripe|motif|chest band|shoulder band|hem band/i.test(p.name));
+  const hasAccent =
+    (pieces || []).some((p) => p.fabric === "contrast" || /neck trim|piping strip|insert panel|side stripe|motif|chest band|shoulder band|hem band/i.test(p.name)) ||
+    accessories.some((a) => a.fabric === "contrast");
 
   return (
     <div className="garment-preview">
@@ -378,7 +382,9 @@ export default function GarmentFlatPreview({ pieces, accessories = [], gender, d
       </div>
       <div className="preview-controls">
         <div className="field" style={{ margin: 0, display: "flex", alignItems: "center", gap: 8 }}>
-          <label style={{ margin: 0 }}>Fabric color</label>
+          <label style={{ margin: 0 }} title="A free-pick preview colour — it isn't checked against any real fabric. For an order using a cataloged fabric, pick its actual colour from the swatches in the Fabric section above instead.">
+            Preview color (free pick)
+          </label>
           <input
             type="color"
             value={color}
@@ -391,7 +397,7 @@ export default function GarmentFlatPreview({ pieces, accessories = [], gender, d
         </div>
         {hasAccent && (
           <div className="field" style={{ margin: 0, display: "flex", alignItems: "center", gap: 8 }}>
-            <label style={{ margin: 0 }}>Trim / panel color</label>
+            <label style={{ margin: 0 }} title="A free-pick preview colour — it isn't checked against any real fabric.">Trim / panel color</label>
             <input
               type="color"
               value={accentColor}
@@ -425,6 +431,28 @@ export default function GarmentFlatPreview({ pieces, accessories = [], gender, d
           </div>
         )}
       </div>
+      {fabricColors?.length > 0 ? (
+        <div className="fabric-colors-inline">
+          <label style={{ margin: "0 0 4px", display: "block" }}>
+            {fabricColors.length} real colours for this fabric
+          </label>
+          <FabricColorPicker colors={fabricColors} colorHint={colorHint} onPick={(slot, hex) => onColorChange?.({ [slot]: hex })} />
+        </div>
+      ) : (
+        <p className="fabric-colors-hint">
+          No catalog fabric picked yet — "Preview color" above is a free-pick guess, not a real fabric colour.{" "}
+          <a
+            href="#fabric-picker"
+            onClick={(e) => {
+              e.preventDefault();
+              document.getElementById("fabric-picker")?.scrollIntoView({ behavior: "smooth", block: "start" });
+            }}
+          >
+            Pick a fabric ↑
+          </a>{" "}
+          to see its real colours here.
+        </p>
+      )}
       <div className="garment-preview-body">
         <div className="flat-views">
           {(views === "both" || views === "front" || views === "all") && (

@@ -19,6 +19,7 @@ export default function Sidebar({
   const [height, setHeight] = useState(40);
   const [qty, setQty] = useState(2);
   const [color, setColor] = useState(DEFAULT_COLOR);
+  const [fabric, setFabric] = useState("main");
   const [grainLocked, setGrainLocked] = useState(false);
 
   function handleAdd() {
@@ -30,6 +31,7 @@ export default function Sidebar({
       qty: Number(qty),
       color: color.trim() || DEFAULT_COLOR,
       grainLocked,
+      ...(fabric === "contrast" ? { fabric } : {}),
     });
     setName("");
   }
@@ -112,6 +114,13 @@ export default function Sidebar({
           />
         </div>
       </div>
+      <div className="field">
+        <label>Fabric — a different fabric is nested and counted separately</label>
+        <select className="select" value={fabric} onChange={(e) => setFabric(e.target.value)}>
+          <option value="main">Main fabric</option>
+          <option value="contrast">Contrast fabric</option>
+        </select>
+      </div>
       <label className="check">
         <input
           type="checkbox"
@@ -134,6 +143,7 @@ export default function Sidebar({
             <div className="info">
               <span className="swatch" style={{ background: p.color }} />
               <span className="name">{p.name}</span>
+              {p.fabric === "contrast" && <span className="fabric-badge">contrast</span>}
               <span className="dims">
                 {p.width}×{p.height} ×{p.qty}
               </span>

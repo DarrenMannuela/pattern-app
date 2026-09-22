@@ -114,6 +114,7 @@ type mockupRequest struct {
 	Neckline     string               `json:"neckline"`
 	Trim         string               `json:"trim"`
 	Panel        string               `json:"panel"`
+	SleeveFabric string               `json:"sleeveFabric"`
 	Motifs       []string             `json:"motifs"`
 	Pattern      string               `json:"pattern"`
 	Trousers     draft.TrouserOptions `json:"trousers"`
@@ -141,6 +142,7 @@ func (req mockupRequest) options() draft.ShirtOptions {
 		Neckline:     req.Neckline,
 		Trim:         req.Trim,
 		Panel:        req.Panel,
+		SleeveFabric: req.SleeveFabric,
 		Motifs:       req.Motifs,
 		Pattern:      req.Pattern,
 		Trousers:     req.Trousers,

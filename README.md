@@ -105,11 +105,20 @@ VITE_API_URL=http://localhost:9000 npm run dev
 
 ```bash
 cd backend  && gofmt -l . && go vet ./... && go test ./...
-cd frontend && npm run lint
+cd frontend && npm run lint && npm test
 ```
 
 `npm run lint` does not catch undefined identifiers or missing imports, so after
 changing imports or shared libraries, open each garment type in the browser too.
+
+`npm test` runs the 2D-preview geometry tests (`frontend/src/lib/__tests__/`) —
+`torsoGeometry`, `collarGeometry`, `sleeveWrap` and `pocketShapes` — against real
+pieces captured from the backend (`__tests__/fixtures.js`), not hand-written
+stand-ins, so they exercise the shapes the app actually drafts. If a drafting
+formula changes shape enough to break these, regenerate the fixtures by hitting
+`/api/orders/{id}/preview` on a temp order (collar/convertible/full sleeve;
+v_neck/contrast trim/three_quarter sleeve; polo collar) and re-saving the pieces
+keyed by name.
 
 ## Photo reading (optional)
 
@@ -179,16 +188,51 @@ are the fields of `draft.ShirtOptions` in `backend/draft/shirt.go`.
 
 ## Known limitations and next steps
 
-- **Different fabric, different cut.** Motif bands, the insert panel and contrast
-  trim are cut in another fabric, but the cutting layout still treats every piece
-  as one fabric. Next: mark each piece's fabric and nest and count yardage per
-  fabric.
 - **More efficient cutting.** The nester uses a grid check on real outlines, not a
-  true no-fit-polygon algorithm, so it leaves gaps a better nester would close.
-  Worth researching, since fabric waste matters.
+  true no-fit-polygon algorithm. This was researched properly, not just noted:
+  placement scoring by contact with already-placed fabric, trying several piece
+  orderings, and a post-placement compaction pass were each implemented and
+  measured against this app's own real drafted pieces (a small shirt's pieces
+  and a real 3-size, 260-instance combined marker). All three came back
+  no-better-or-worse at real extra cost (up to 4x slower) and were reverted —
+  see `backend/nesting/irregular_test.go` for the two regression tests that
+  came out of that work. Closing the real gap to commercial (~85-92%) efficiency
+  needs an actual different algorithm — a true no-fit-polygon nester with a
+  genetic/metaheuristic search over piece order *and* rotation, the way
+  [SVGnest](https://github.com/Jack000/SVGnest)/Deepnest do — which is a
+  multi-day-to-multi-week build, not a heuristic tweak. Real marker-making also
+  treats grainline as a hard rule, not a tuning knob (a piece cut off-grain
+  hangs and washes wrong); this app already respects that — every drafted
+  garment piece sent to the layout is grain-locked (only 180° flips) — so
+  "allow more rotation" is not a lever worth pulling here.
+- **The 2D preview's sleeve cap and collar are re-derived, not traced.** The
+  torso, leg and skirt outlines read their real drafted geometry (Landmarks,
+  path points) directly off the cutting piece. The sleeve cap and the collar
+  illustration instead pull a handful of scalars (cap height, stand height,
+  point length...) off their pieces and reconstruct the visible shape with
+  their own separate, hand-tuned curve constants — so a shirt whose sleeve-cap
+  "fullness" or collar proportions genuinely differ from the illustration's own
+  assumptions would look the same in the picture even though it's cut
+  differently. Fixing this means tracing the actual drafted curves (see
+  `draft.go`'s `solveSleeveCap`/`sleeveCapControls` for the sleeve, and the
+  collar leaf/stand pieces' own path data) onto the flat layout's frame — real,
+  valuable geometry work, but it reshapes a part of the illustration that took
+  many rounds of visual back-and-forth to get right, so it needs the same kind
+  of live "does this look right" review, not a one-shot change.
+- **Backend option lists are still hand-duplicated in the frontend.**
+  `DartPositions`, `MotifPlacements`, `MotifPatterns`, the pocket segment→anchor
+  table, and the pocket corner-rounding math each exist once in
+  `backend/draft/*.go` and again, by hand, in the frontend (comments on each
+  copy say so). The pocket corner math was brought back in sync with the
+  backend's exact formula (see `frontend/src/lib/__tests__/pocketShapes.test.js`);
+  the option lists and the anchor table are still two copies kept in sync by a
+  promise in a comment, not by the compiler. Serving them from a small
+  `/api/catalog`-style endpoint (the app already does this for `/api/fabrics`)
+  would close this properly.
 - **Printed fabric** (a batik cloth) is shown as a pattern fill on motif bands
-  only, not modelled as fabric with its own cutting rules. Drop-shoulder and
-  kimono sleeves, side vents and ruffles are not in the catalog.
+  and contrast pockets, not modelled as fabric with its own cutting rules.
+  Drop-shoulder and kimono sleeves, side vents and ruffles are not in the
+  catalog.
 - **Drafts are proportional blocks, not fitted patterns.** They follow published
   drafting references (see below) but are not a substitute for a fitting: make a
   muslin before cutting production fabric.

@@ -51,6 +51,22 @@ func TestReferenceBoys8Shirt(t *testing.T) {
 	near(t, "sleeve cap height (chart: 8)", pathPoints(sleeve.PathData)[1].y, 8, 1.5)
 }
 
+func TestBodiceArmholeDepthMatchesShirtScye(t *testing.T) {
+	// DraftBodice and DraftShirt draft the same real quantity (armhole/scye
+	// depth) and must use the same, chart-cited formula (shirtScye) — this
+	// pins a real bug found by review: DraftBodice was still using an older
+	// "Bust/4 + 2.5" formula shirt.go's own comment says drafts an armhole
+	// 2-5cm too deep, after the shirt draft had already moved off it.
+	m := Measurements{Bust: 96, Waist: 84, BackWaistLength: 42, Shoulder: 13, Neck: 38, Ease: 6, SleeveLength: 60, UpperArm: 30, Wrist: 18}
+	ps := DraftBodice(m, "waist")
+	back := pieceNamed(t, ps, "Bodice back")
+	underarm := pathPoints(back.PathData)[3]
+	near(t, "bodice back underarm depth", underarm.y, round1(shirtScye(m.Bust)), 0.05)
+	if old := round1(m.Bust/4 + 2.5); math.Abs(underarm.y-old) < 0.05 {
+		t.Errorf("still using the discredited Bust/4+2.5 formula (got %.2f, that formula gives %.2f)", underarm.y, old)
+	}
+}
+
 func TestReferencePolo5XLUnderarmDepth(t *testing.T) {
 	// Chart: chest 164 (41 wide quarter panel), underarm 4.5 + 37.5 below the neck line.
 	near(t, "underarm depth from neck line", shirtScye(164), 4.5+37.5, 1.0)
@@ -417,6 +433,166 @@ func TestMotifBands(t *testing.T) {
 	ps := DraftShirt(m, ShirtOptions{Collar: true, Motifs: []string{"hem", "hem", "nonsense"}})
 	if len(ps) != len(base)+1 {
 		t.Errorf("only one hem band expected, got %d extra", len(ps)-len(base))
+	}
+}
+
+func TestContrastFabricTagging(t *testing.T) {
+	m := Measurements{Bust: 96, Waist: 84, BackWaistLength: 42, Shoulder: 13, Neck: 38, Ease: 6, SleeveLength: 60, UpperArm: 30, Wrist: 18}
+	byName := func(ps []Piece, name string) *Piece {
+		for i := range ps {
+			if ps[i].Name == name {
+				return &ps[i]
+			}
+		}
+		return nil
+	}
+	// A plain shirt: nothing is contrast fabric.
+	plain := DraftShirt(m, ShirtOptions{Collar: true})
+	for _, p := range plain {
+		if p.Fabric == "contrast" {
+			t.Errorf("a plain shirt has no contrast-fabric piece, got one: %q", p.Name)
+		}
+	}
+	// The insert panel is contrast fabric; the front pieces either side of it are not.
+	panelled := DraftShirt(m, ShirtOptions{Collar: true, Panel: "side"})
+	if p := byName(panelled, "Insert panel"); p == nil || p.Fabric != "contrast" {
+		t.Errorf("Insert panel should be contrast fabric: %+v", p)
+	}
+	for _, name := range []string{"Front inner (panel side)", "Front outer (panel side)"} {
+		if p := byName(panelled, name); p == nil || p.Fabric == "contrast" {
+			t.Errorf("%q should stay the main fabric: %+v", name, p)
+		}
+	}
+	// A contrast collar's piping is contrast fabric; the collar itself is not.
+	piped := DraftShirt(m, ShirtOptions{Collar: true, Trim: "contrast"})
+	if p := byName(piped, "Piping strip"); p == nil || p.Fabric != "contrast" {
+		t.Errorf("Piping strip should be contrast fabric: %+v", p)
+	}
+	if p := byName(piped, "Collar leaf"); p != nil && p.Fabric == "contrast" {
+		t.Errorf("the collar itself should stay the main fabric")
+	}
+	// A V-neck's trim is contrast fabric; its plain facing is not.
+	trimmed := DraftShirt(m, ShirtOptions{Neckline: "v_neck", Trim: "contrast"})
+	if p := byName(trimmed, "Neck trim"); p == nil || p.Fabric != "contrast" {
+		t.Errorf("Neck trim should be contrast fabric: %+v", p)
+	}
+	faced := DraftShirt(m, ShirtOptions{Neckline: "v_neck"})
+	if p := byName(faced, "Neck facing"); p == nil || p.Fabric == "contrast" {
+		t.Errorf("Neck facing (self fabric) should not be contrast: %+v", p)
+	}
+	// Every motif band is contrast fabric.
+	motifed := DraftShirt(m, ShirtOptions{Collar: true, Motifs: []string{"centre", "chest", "shoulder", "hem", "arms"}, Pattern: "batik"})
+	for _, name := range []string{"Motif streak", "Chest band", "Shoulder band", "Hem band", "Arm motif band"} {
+		if p := byName(motifed, name); p == nil || p.Fabric != "contrast" {
+			t.Errorf("%q should be contrast fabric: %+v", name, p)
+		}
+	}
+	// A trouser side stripe is contrast fabric; the legs are not.
+	tm := Measurements{Waist: 82, Hip: 104, Rise: 28, Inseam: 76, Ease: 4}
+	striped := DraftTrousers(tm, "Pants", AddOns{}, TrouserOptions{Stripe: "side"})
+	if p := byName(striped, "Side stripe"); p == nil || p.Fabric != "contrast" {
+		t.Errorf("Side stripe should be contrast fabric: %+v", p)
+	}
+	if p := byName(striped, "Pants front"); p != nil && p.Fabric == "contrast" {
+		t.Errorf("the leg panel should stay the main fabric")
+	}
+	// Finish (seam allowance + grainline) must not drop the tag.
+	finished := FinishAll(panelled)
+	if p := byName(finished, "Insert panel"); p == nil || p.Fabric != "contrast" {
+		t.Errorf("Finish should preserve the fabric tag: %+v", p)
+	}
+}
+
+func TestContrastFabricPocket(t *testing.T) {
+	m := Measurements{Bust: 96, Waist: 84, BackWaistLength: 42, Shoulder: 13, Neck: 38, Ease: 6, SleeveLength: 60, UpperArm: 30, Wrist: 18}
+	pocket := func(fabric string) Piece {
+		ps := DraftShirt(m, ShirtOptions{Collar: true, AddOns: AddOns{Accessories: []Accessory{{ID: "a", Type: "pocket", Segment: SegmentLeftChest, Fabric: fabric}}}})
+		return pieceNamed(t, ps, pocketName(SegmentLeftChest))
+	}
+	if p := pocket(""); p.Fabric == "contrast" {
+		t.Errorf("a pocket defaults to the main fabric: %+v", p)
+	}
+	p := pocket("contrast")
+	if p.Fabric != "contrast" {
+		t.Errorf("Fabric: \"contrast\" on the accessory should tag the drafted pocket piece: %+v", p)
+	}
+	if !strings.Contains(p.Notes, "contrast") {
+		t.Errorf("a contrast pocket's notes should say so: %s", p.Notes)
+	}
+}
+
+func TestMotifPiecesDoNotDoubleCountSeamAllowance(t *testing.T) {
+	// Every block in this package is drafted allowance-free and gets its seam
+	// allowance added exactly once, by Finish (see finish.go's own doc
+	// comment). Motif pieces used to hand-bake an extra 1cm into their raw
+	// dimensions on top of that, quietly inflating the cut size and yardage
+	// estimate. A plain rectangle with no fold edge and a name Finish doesn't
+	// recognise as a garment hem gets the ordinary 1cm seam allowance on
+	// every edge, so a raw height/width of h should finish at h+2 exactly.
+	m := Measurements{Bust: 96, Waist: 84, BackWaistLength: 42, Shoulder: 13, Neck: 38, Ease: 6, SleeveLength: 60, UpperArm: 30, Wrist: 18}
+	ps := FinishAll(DraftShirt(m, ShirtOptions{Collar: true, Motifs: []string{"chest", "shoulder", "hem", "arms"}, Pattern: "batik"}))
+	for name, rawHeight := range map[string]float64{"Chest band": 7, "Shoulder band": 8, "Hem band": 8, "Arm motif band": 5} {
+		p := pieceNamed(t, ps, name)
+		near(t, name+" cut height", p.CutHeight, rawHeight+2, 0.05)
+	}
+	streak := pieceNamed(t, FinishAll(DraftShirt(m, ShirtOptions{Collar: true, Motifs: []string{"centre"}})), "Motif streak")
+	near(t, "motif streak cut width", streak.CutWidth, 5+2, 0.05)
+}
+
+func TestPoloHasStraightHemAndVent(t *testing.T) {
+	m := Measurements{Bust: 96, Waist: 84, BackWaistLength: 42, Shoulder: 13, Neck: 38, Ease: 6, SleeveLength: 60, UpperArm: 30, Wrist: 18}
+	ps := DraftShirt(m, ShirtOptions{Collar: true, CollarStyle: "polo", SleeveStyle: "half"})
+	for _, name := range []string{"Shirt front", "Shirt back"} {
+		p := pieceNamed(t, ps, name)
+		// Every front/back already has a neck curve and an armhole curve (2
+		// C's); curveHem would add a third for the shirttail sweep.
+		if strings.Count(p.PathData, "C") > 2 {
+			t.Errorf("%q should have a straight hem, not a shirttail curve: %s", name, p.PathData)
+		}
+		if !strings.Contains(p.Notes, "vent") {
+			t.Errorf("%q should note the side vent: %s", name, p.Notes)
+		}
+		vent, ok := p.Landmarks["ventTop"]
+		if !ok {
+			t.Fatalf("%q should carry a ventTop landmark for the preview to draw", name)
+		}
+		if vent.Y >= p.Height || vent.Y <= 0 {
+			t.Errorf("%q vent top should sit a little above the hem, not at or past it: vent.Y=%.1f height=%.1f", name, vent.Y, p.Height)
+		}
+	}
+	// A regular (non-polo) shirt keeps its curved hem and has no vent.
+	reg := pieceNamed(t, DraftShirt(m, ShirtOptions{Collar: true, CollarStyle: "convertible"}), "Shirt front")
+	if _, ok := reg.Landmarks["ventTop"]; ok {
+		t.Errorf("a non-polo shirt shouldn't have a vent landmark")
+	}
+}
+
+func TestSleeveFabricTagsSleeveAndCuffOnly(t *testing.T) {
+	m := Measurements{Bust: 96, Waist: 84, BackWaistLength: 42, Shoulder: 13, Neck: 38, Ease: 6, SleeveLength: 60, UpperArm: 30, Wrist: 18}
+	ps := DraftShirt(m, ShirtOptions{Collar: true, CollarStyle: "convertible", SleeveFabric: "contrast"})
+	contrast := map[string]bool{"Sleeve": true, "Cuff": true, "Cuff slit facing": true}
+	for _, p := range ps {
+		want := contrast[p.Name]
+		got := p.Fabric == "contrast"
+		if got != want {
+			t.Errorf("%q: Fabric=%q, want contrast=%v", p.Name, p.Fabric, want)
+		}
+	}
+
+	// Left at the default, nothing is tagged — the torso stays the whole
+	// story, same as before this option existed.
+	def := DraftShirt(m, ShirtOptions{Collar: true, CollarStyle: "convertible"})
+	for _, p := range def {
+		if p.Fabric == "contrast" {
+			t.Errorf("%q shouldn't be contrast fabric without SleeveFabric set", p.Name)
+		}
+	}
+
+	// A half sleeve has no cuff to tag, but the rib trim should still follow.
+	half := DraftShirt(m, ShirtOptions{Collar: true, CollarStyle: "polo", SleeveStyle: "half", SleeveFabric: "contrast"})
+	rib := pieceNamed(t, half, "Sleeve rib")
+	if rib.Fabric != "contrast" {
+		t.Errorf("a polo's sleeve rib should follow SleeveFabric too, got %q", rib.Fabric)
 	}
 }
 

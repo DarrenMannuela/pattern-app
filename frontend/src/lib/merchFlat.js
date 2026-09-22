@@ -167,8 +167,21 @@ export function layoutMerchView(pieces, viewName, opts) {
       halfW = p.width / 2 + 1;
       height = p.height;
       shape("patch", p.pathData, `translate(${-p.width / 2} 0)`);
-      const inset = Math.min(p.width, p.height) * 0.12;
-      items.push({ key: "stitch", kind: "rect", x: -p.width / 2 + inset, y: inset, width: p.width - inset * 2, height: p.height - inset * 2, rx: inset, category: "seam", stitch: true });
+      // The inner topstitch traces the patch's own outline, scaled down
+      // around its center — a fixed rounded-rect inset cuts straight across
+      // a circular or shield-shaped patch instead of following its curve.
+      const minSide = Math.min(p.width, p.height);
+      const inset = minSide * 0.12;
+      const s = 1 - (2 * inset) / minSide;
+      const cx = p.width / 2, cy = p.height / 2;
+      items.push({
+        key: "stitch",
+        kind: "path",
+        d: p.pathData,
+        transform: `translate(${-p.width / 2} 0) translate(${cx} ${cy}) scale(${s}) translate(${-cx} ${-cy})`,
+        category: "seam",
+        noFill: true,
+      });
       bodyBox = { x: -p.width / 2, y: 0, width: p.width, height: p.height };
       break;
     }

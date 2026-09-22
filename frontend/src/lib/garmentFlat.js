@@ -135,6 +135,7 @@ function accessoryItem(accessory, pieces, front, back, sleeve, frame, segments) 
       height,
       shape: accessory.shape || "classic",
       category: "pocket",
+      fabric: accessory.fabric,
       rotation: accessory.rotation || 0,
       fraction: { x: xFrac, y: yFrac },
       fractionKind: sideBound ? "unsigned" : "signed",
@@ -274,14 +275,26 @@ function layoutTorsoView(pieces, view, opts) {
     if (arch) both("collar-arch", arch, "collar");
   }
 
-  // The sleeve: from the shoulder point of THIS view's panel.
+  // The sleeve: from the shoulder point of THIS view's panel. Carries the
+  // real sleeve piece's own fabric tag, so a sleeve cut from the contrast
+  // fabric (opts.SleeveFabric) is filled with that colour, not the torso's.
   const tube = g.tubes[view];
   const S = tube.shoulder;
-  both("sleeve", tube.d, "body");
+  both("sleeve", tube.d, "body", { fabric: g.sleeve?.fabric });
 
   // Body: the back is the yoke above the back panel.
   if (view === "back" && g.yoke) both("yoke", g.yoke.pathData, "body");
   both("body", sil.d, "body");
+
+  // A polo's side seam is left open below this point as a vent — marked with
+  // a short tick crossing the seam, at the real cut height the piece itself
+  // carries (not a guessed fraction of the hem). A line drawn right on the
+  // seam itself would just sit on top of the silhouette's own edge and
+  // disappear.
+  if (body.landmarks?.ventTop) {
+    const { x: vx, y: vy } = body.landmarks.ventTop;
+    line("vent", vx - 1.4, vy, vx + 1.4, vy, "seam");
+  }
 
   // A contrast insert panel down one side of the front (the viewer's left, like
   // the reference uniform), shoulder to hem, from its own cutting piece.
@@ -315,10 +328,13 @@ function layoutTorsoView(pieces, view, opts) {
         onBody("motif-streak", rect(-2.5, start - 0.5, 2.5, hemY + 2), "v");
       }
     }
-    const around = (name, y0, y1) => onBody(name, rect(-60, y0, 60, y1), "h");
-    if (chest) around("motif-chest", sil.underarm[1] - 10, sil.underarm[1] - 3);
-    if (shoulder) around("motif-shoulder", -4, 9);
-    if (hem) around("motif-hem", hemY - 8.5, hemY + 2);
+    // Each band's drawn height comes straight from its own cutting piece
+    // (not a guessed span), so the illustration can't drift from the pattern
+    // the way a hand-tuned constant would if the draft's own height changed.
+    const around = (name, y1, height) => onBody(name, rect(-60, y1 - height, 60, y1), "h");
+    if (chest) around("motif-chest", sil.underarm[1] - 3, chest.height);
+    if (shoulder) around("motif-shoulder", -4 + shoulder.height, shoulder.height);
+    if (hem) around("motif-hem", hemY + 2, hem.height);
     if (arms) {
       const M = [(tube.underarm[0] + tube.bicepOuter[0]) / 2, (tube.underarm[1] + tube.bicepOuter[1]) / 2];
       const p = [M[0] + (tube.center[0] - M[0]) * 0.55, M[1] + (tube.center[1] - M[1]) * 0.55];
@@ -506,6 +522,7 @@ function sideAccessoryItem(acc, side, g) {
     height: h,
     shape: isPocket ? acc.shape || "classic" : undefined,
     category: isPocket ? "pocket" : acc.type,
+    fabric: isPocket ? acc.fabric : undefined,
     label: acc.label,
     rotation: acc.rotation || 0,
     fraction: { x: fx, y: fy },
@@ -544,7 +561,7 @@ function layoutSleeveView(pieces, side, opts) {
   const st = sideStrip(g.tubes.front);
   const sign = side === "left" ? 1 : -1;
   const hh = st.wHem / 2;
-  const items = [{ key: "sleeve-side", kind: "path", d: sideStripPath(st), transform: "", category: "body", half: "main" }];
+  const items = [{ key: "sleeve-side", kind: "path", d: sideStripPath(st), transform: "", category: "body", half: "main", fabric: g.sleeve?.fabric }];
   const line = (key, x1, y1, x2, y2) => items.push({ key, kind: "line", x1, y1, x2, y2, category: "seam" });
   const isPolo = collarStyle === "polo";
   // The cuff (or a polo's rib), with the slit near the back edge of the arm.
@@ -638,7 +655,7 @@ function backPocketItems(acc, { pieces, frameW, height, cfShift }) {
   const posY = acc.position ? acc.position.y * height : realPiece?.anchor ? realPiece.anchor.y : height * 0.15;
   const fraction = { x: posX / frameW, y: posY / height };
   const size = acc.width && acc.height ? { width: acc.width, height: acc.height } : POCKET_VISUAL_SIZE;
-  const base = { key: `acc-${acc.id}`, category: "pocket", accessoryId: acc.id, segment: "back", fraction, fractionKind: "signed", rotation: acc.rotation || 0 };
+  const base = { key: `acc-${acc.id}`, category: "pocket", accessoryId: acc.id, segment: "back", fraction, fractionKind: "signed", rotation: acc.rotation || 0, fabric: acc.fabric };
   if (realPiece?.pathData && !acc.width) {
     const rot = acc.rotation || 0;
     return [{ ...base, kind: "path", d: realPiece.pathData, transform: `translate(${posX - realPiece.width / 2} ${posY}) rotate(${rot} ${realPiece.width / 2} ${realPiece.height / 2})` }];

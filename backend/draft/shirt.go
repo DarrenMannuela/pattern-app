@@ -72,6 +72,10 @@ type ShirtOptions struct {
 	// Trim: "none" (default) or "contrast" — a contrast-fabric binding round a
 	// V-neck, or piping along the collar edge.
 	Trim string `json:"trim"`
+	// SleeveFabric: "main" (default) or "contrast" — cuts the sleeve (and its
+	// cuff, on a long sleeve) from the garment's second fabric instead of the
+	// torso's, so the cutting layout nests and quantifies it separately.
+	SleeveFabric string `json:"sleeveFabric"`
 	// Panel: "none" (default) or "side" — a contrast insert panel down one
 	// side of the front, from shoulder to hem.
 	Panel string `json:"panel"`
@@ -148,6 +152,9 @@ func DraftShirt(m Measurements, opts ShirtOptions) []Piece {
 	if !isPolo && opts.HemStyle != "straight" {
 		front, back = curveHem(front), curveHem(back)
 	}
+	// A classic pique polo keeps its straight-across hem even when the
+	// maker's own Hem choice isn't offered for it — a polo's hem is
+	// conventionally cut straight, not into a shirttail curve.
 	vNeck := !isPolo && !opts.Collar && opts.Neckline == "v_neck"
 	vDepth := round1(scye * vNeckDepthFactor)
 	if vNeck {
@@ -155,19 +162,41 @@ func DraftShirt(m Measurements, opts ShirtOptions) []Piece {
 	}
 
 	sleeve := draftSleeve(frontArmhole+backArmhole, m.SleeveLength, m.UpperArm, m.Wrist, ease, opts.SleeveStyle, "Sleeve")
+	if opts.SleeveFabric == "contrast" {
+		sleeve.Fabric = "contrast"
+	}
 	pieces := []Piece{front, yoke, back, sleeve}
 	if yoke.PathData == "" {
 		pieces = []Piece{front, back, sleeve}
 	}
 	if isPolo {
+		// Left open at each side seam so the shirt sits better untucked — a
+		// real, named feature of a classic pique polo, not just "no hem
+		// curve"; ventTop lets the preview draw exactly where it starts.
+		const poloVentRise = 5.0
+		for _, p := range []*Piece{&front, &back} {
+			if p.Landmarks == nil {
+				p.Landmarks = map[string]Point{}
+			}
+			p.Landmarks["ventTop"] = Point{X: p.Width, Y: round1(p.Height - poloVentRise)}
+			p.Notes += fmt.Sprintf(" Leave the last %.0fcm of each side seam open as a vent and bar-tack both ends.", poloVentRise)
+		}
 		pieces = []Piece{front, back, sleeve}
 		if opts.SleeveStyle == "half" {
-			pieces = append(pieces, draftSleeveRib(sleeve.Width))
+			rib := draftSleeveRib(sleeve.Width)
+			if opts.SleeveFabric == "contrast" {
+				rib.Fabric = "contrast"
+			}
+			pieces = append(pieces, rib)
 		}
 	} else if opts.SleeveStyle != "half" {
 		// Every long-sleeve reference shirt has a buttoned cuff and a
-		// slit above it.
-		pieces = append(pieces, draftCuff(m.Wrist), draftCuffSlit(m.SleeveLength))
+		// slit above it — cut from the same fabric as the sleeve itself.
+		cuff, cuffSlit := draftCuff(m.Wrist), draftCuffSlit(m.SleeveLength)
+		if opts.SleeveFabric == "contrast" {
+			cuff.Fabric, cuffSlit.Fabric = "contrast", "contrast"
+		}
+		pieces = append(pieces, cuff, cuffSlit)
 	}
 
 	if opts.Collar {

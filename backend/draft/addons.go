@@ -68,6 +68,12 @@ type Accessory struct {
 	// sleeve "left" / "right" (the outside of that sleeve). It decides which
 	// face of a sleeve a pocket sits on.
 	View string `json:"view,omitempty"`
+	// Fabric is "" (cut from the garment's main fabric, the default) or
+	// "contrast" — a pocket cut from the same second fabric as a motif band
+	// or insert panel (a batik-fabric pocket on a plain shirt is common
+	// konveksi work). Only meaningful for a pocket; embroidery and sablon
+	// are printed onto whatever fabric is already there.
+	Fabric string `json:"fabric,omitempty"`
 }
 
 // Position is a fraction (0-1) of a parent piece's own width/height —
@@ -189,6 +195,10 @@ func draftAccessoryPockets(accessories []Accessory, front, back, sleeve *Piece) 
 		}
 		pocket := draftPatchPocket(width, height, anchorX, anchorY, name, acc.Shape)
 		pocket.Segment = acc.Segment
+		if acc.Fabric == "contrast" {
+			pocket.Fabric = "contrast"
+			pocket.Notes += " Cut in the contrast (batik or printed) fabric, to match the garment's trim."
+		}
 		if face := sleeveFace(acc); face != "" {
 			pocket.Notes += " Sew it on the " + face + " of the sleeve."
 		}

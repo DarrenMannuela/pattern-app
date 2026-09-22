@@ -35,6 +35,14 @@ const SLOTS = [
     ],
   },
   {
+    key: "sleeveFabric",
+    label: "Sleeve fabric",
+    parts: [
+      { value: "main", label: "Main", hint: "Same fabric as the torso" },
+      { value: "contrast", label: "Contrast", hint: "Cut from the second fabric — cuff too" },
+    ],
+  },
+  {
     key: "collar",
     label: "Collar",
     parts: [
@@ -194,6 +202,7 @@ function currentPart(slotKey, value) {
   switch (slotKey) {
     case "fit": return value.gender;
     case "sleeve": return value.sleeveStyle;
+    case "sleeveFabric": return value.sleeveFabric || "main";
     case "collar": return value.collarEnabled ? value.collarStyle : value.neckline === "v_neck" ? "v_neck" : "none";
     case "trim": return value.trim;
     case "bands": return value.motifs;
@@ -220,6 +229,7 @@ function patchFor(slotKey, part) {
   switch (slotKey) {
     case "fit": return { gender: part };
     case "sleeve": return { sleeveStyle: part };
+    case "sleeveFabric": return { sleeveFabric: part };
     case "collar":
       if (part === "none") return { collarEnabled: false, neckline: "round" };
       if (part === "v_neck") return { collarEnabled: false, neckline: "v_neck" };
@@ -253,6 +263,7 @@ function previewPayload(garmentType, value, size, accessories) {
   const payload = {
     gender: value.gender,
     sleeveStyle: value.sleeveStyle,
+    sleeveFabric: value.sleeveFabric,
     dartPosition: value.dartPosition,
     frontStyle: value.frontStyle,
     backStyle: value.backStyle,
@@ -314,7 +325,7 @@ function startExtraDrag(e, extra) {
   e.dataTransfer.effectAllowed = "copy";
 }
 
-export default function PatternMaker({ orderId, garmentType, sizes, value, onChange, dartPositions, accessories = [], onAddAccessory, onRemoveAccessory, onUpdateAccessory, onMirrorAccessory, onDragAccessory, colorHint, onColorHint, referencePhoto, onReferencePhoto }) {
+export default function PatternMaker({ orderId, garmentType, sizes, value, onChange, dartPositions, accessories = [], onAddAccessory, onRemoveAccessory, onUpdateAccessory, onMirrorAccessory, onDragAccessory, colorHint, onColorHint, fabricColors, referencePhoto, onReferencePhoto }) {
   const [pieces, setPieces] = useState(null);
   const [error, setError] = useState(null);
   const [dragging, setDragging] = useState(null); // { slot, value }
@@ -384,8 +395,9 @@ export default function PatternMaker({ orderId, garmentType, sizes, value, onCha
     }
   }
 
-  // Loads a reference photo to match by eye (no service involved) and asks who
-  // could read it for us.
+  // Loads a reference photo to match by eye and immediately asks whoever can
+  // read it (the Claude API or a local model) to match it — a photo you just
+  // picked is a photo you want matched, not a separate step to remember.
   async function loadPhoto(file) {
     if (!file) return;
     setMatchError(null);
@@ -394,7 +406,9 @@ export default function PatternMaker({ orderId, garmentType, sizes, value, onCha
       setPhoto({ url: dataUrl });
       onReferencePhoto?.(dataUrl);
       setPhotoResult(null);
-      api.photoStatus().then(setReaderStatus).catch(() => setReaderStatus(null));
+      const status = await api.photoStatus().catch(() => null);
+      setReaderStatus(status);
+      if (status?.provider && status.provider !== "none") await runMatch(dataUrl, status);
     } catch (e) {
       setMatchError(e.message);
     }
@@ -404,15 +418,14 @@ export default function PatternMaker({ orderId, garmentType, sizes, value, onCha
     onColorHint?.({ [kind]: color });
   }
 
-  // Has the available reader (the Claude API or a local model) set the parts,
-  // pockets, prints and colours to match the photo as closely as the catalog allows.
-  async function matchPhoto() {
-    if (!photo) return;
+  // Has the available reader set the parts, pockets, prints and colours to
+  // match photoUrl as closely as the catalog allows.
+  async function runMatch(photoUrl, status) {
     setMatching(true);
     setMatchError(null);
     try {
       // A local model reads a smaller picture much faster and about as well.
-      const design = await api.analyzePhoto(readerStatus?.provider === "ollama" ? await shrinkDataUrl(photo.url, 768) : photo.url);
+      const design = await api.analyzePhoto(status?.provider === "ollama" ? await shrinkDataUrl(photoUrl, 768) : photoUrl);
       const result = designToMaker(design, garmentType);
       if (Object.keys(result.patch).length > 0) onChange(result.patch);
       if (!result.mismatch) {
@@ -426,6 +439,14 @@ export default function PatternMaker({ orderId, garmentType, sizes, value, onCha
     } finally {
       setMatching(false);
     }
+  }
+
+  // The manual "Match parts" button re-runs the match against whatever
+  // photo and reader are already loaded — for a retry, or after changing
+  // the fabric/trim colour picked from the photo.
+  function matchPhoto() {
+    if (!photo) return;
+    return runMatch(photo.url, readerStatus);
   }
 
   function addExtra(type, extra, presetKey) {
@@ -605,6 +626,15 @@ export default function PatternMaker({ orderId, garmentType, sizes, value, onCha
                       </select>
                     </div>
                   )}
+                  {a.type === "pocket" && (
+                    <div className="pm-extra-row">
+                      <label>Fabric</label>
+                      <select className="select" value={a.fabric === "contrast" ? "contrast" : "main"} onChange={(e) => onUpdateAccessory?.(a.id, { fabric: e.target.value === "contrast" ? "contrast" : undefined })} title="A contrast pocket is cut from the trim/motif fabric, batik included">
+                        <option value="main">Main fabric</option>
+                        <option value="contrast">Contrast fabric</option>
+                      </select>
+                    </div>
+                  )}
                   <div className="pm-extra-row">
                     <label>Rotation {Math.round(a.rotation || 0)}°</label>
                     <input type="range" min="-180" max="180" step="5" value={a.rotation || 0} onChange={(e) => onUpdateAccessory?.(a.id, { rotation: Number(e.target.value) })} />
@@ -670,6 +700,7 @@ export default function PatternMaker({ orderId, garmentType, sizes, value, onCha
                   merchItem={isMerch(garmentType) ? value.merch.item : undefined}
                   accessories={accessories}
                   colorHint={colorHint}
+                  fabricColors={fabricColors}
                   pattern={value.pattern}
                   onAddAccessory={onAddAccessory}
                   onDragAccessory={onDragAccessory}

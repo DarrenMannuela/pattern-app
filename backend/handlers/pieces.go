@@ -23,6 +23,11 @@ type StoredPiece struct {
 	Color       string  `json:"color"`
 	GrainLocked bool    `json:"grainLocked"`
 	PathData    string  `json:"pathData,omitempty"`
+	// Fabric is "" (the garment's main fabric) or "contrast" — see
+	// draft.Piece.Fabric. Pieces of different fabrics come from different
+	// bolts of cloth, so they are nested and their yardage counted separately
+	// rather than as one length of fabric.
+	Fabric string `json:"fabric,omitempty"`
 }
 
 // Store is a simple thread-safe in-memory piece list. Swap this out

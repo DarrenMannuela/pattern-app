@@ -298,8 +298,8 @@ func DraftTrousers(m Measurements, name string, addOns AddOns, opts TrouserOptio
 		pieces = append(pieces, draftFlyFacing(m.Rise))
 	}
 	if opts.Stripe == "side" {
-		pieces = append(pieces, withQty(draftRectPiece("Side stripe", 3.2, m.Rise+m.Inseam, "", ""), 2,
-			"Cut 2 in the contrast fabric (one per leg), 3.2cm wide, sewn over the outer side seam from the waistband to the hem and topstitched both sides."))
+		pieces = append(pieces, contrastFabric(withQty(draftRectPiece("Side stripe", 3.2, m.Rise+m.Inseam, "", ""), 2,
+			"Cut 2 in the contrast fabric (one per leg), 3.2cm wide, sewn over the outer side seam from the waistband to the hem and topstitched both sides.")))
 	}
 
 	pieces = append(pieces, draftAccessoryPockets(addOns.Accessories, &front, &back, nil)...)

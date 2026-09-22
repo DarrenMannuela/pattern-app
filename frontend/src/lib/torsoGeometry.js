@@ -95,8 +95,17 @@ export function sleeveTube(S, U, geo, neck) {
   const th = SLEEVE_ANGLE;
   const axis = [Math.sin(th), Math.cos(th)]; // down the arm, away from the body
   const across = [Math.cos(th), -Math.sin(th)]; // across the sleeve, outward
-  const bicep = geo.halfBicep; // flat width at the bicep line
-  const opening = Math.min(geo.wristHalf, bicep * 0.95); // flat width at the hem
+  // geo.halfBicep/wristHalf are HALF the sleeve piece's own flat width — the
+  // piece is cut in one go all the way around the arm (unlike the body,
+  // which is drafted and drawn as a half panel), so at full value they put
+  // the sleeve's visible edge almost as far out as the underarm itself,
+  // reading as a puffed/bishop sleeve instead of a set-in one. Halving them
+  // brings the sleeve to the body's own "quarter of the round" convention:
+  // the body's half panel already shows a quarter of the chest circumference
+  // as its half-width, so the sleeve's front-view half-width should be a
+  // quarter of the arm's circumference too, not half of it.
+  const bicep = geo.halfBicep * 0.5; // flat width at the bicep line
+  const opening = Math.min(geo.wristHalf * 0.5, bicep * 0.95); // flat width at the hem
   const B = [U[0] + across[0] * bicep * 0.92, U[1] + across[1] * bicep * 0.92];
   const run = Math.max(6, geo.length - (geo.capHeight || 12));
   const mid = [(U[0] + B[0]) / 2, (U[1] + B[1]) / 2];

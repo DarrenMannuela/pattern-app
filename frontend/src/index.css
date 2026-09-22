@@ -329,6 +329,31 @@ button {
   white-space: nowrap;
 }
 
+.fabric-badge {
+  font-weight: 600;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #17181a;
+  background: #e0b04a;
+  border-radius: 3px;
+  padding: 1px 5px;
+  margin-right: 8px;
+  flex-shrink: 0;
+}
+
+.fabric-layout + .fabric-layout {
+  margin-top: 28px;
+  padding-top: 20px;
+  border-top: 1px solid #3a4248;
+}
+
+.fabric-layout-title {
+  font-size: 14px;
+  margin: 0 0 10px;
+  color: #d3d8db;
+}
+
 .piece .rm {
   background: none;
   color: #787e82;
@@ -997,6 +1022,167 @@ textarea:focus {
 .pm-part-hint {
   font-size: 11px;
   color: #a9b0b5;
+}
+.fabric-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-bottom: 12px;
+}
+.fabric-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.fabric-swatch {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  width: 76px;
+  padding: 6px;
+  border: 1px solid #454c51;
+  border-radius: 6px;
+  background: #2a3035;
+  cursor: pointer;
+  text-align: center;
+}
+.fabric-swatch:hover {
+  border-color: #6f7c85;
+}
+.fabric-swatch-active {
+  border-color: #3f8a92;
+  background: #2f5a60;
+}
+.fabric-swatch img {
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: 4px;
+  background: #1c2124;
+}
+.fabric-swatch-noimg {
+  width: 64px;
+  height: 64px;
+  border-radius: 4px;
+  background: repeating-linear-gradient(45deg, #333a3f, #333a3f 6px, #2a3035 6px, #2a3035 12px);
+}
+.fabric-swatch-label {
+  font-size: 11px;
+  color: #e6e8ea;
+  line-height: 1.25;
+}
+.fabric-detail {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: -6px 0 12px;
+}
+.fabric-detail img {
+  width: 48px;
+  height: 48px;
+  object-fit: cover;
+  border-radius: 4px;
+  flex: none;
+}
+.fabric-detail .note {
+  margin: 0;
+}
+.fabric-color-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.fabric-color-target {
+  display: flex;
+  gap: 4px;
+}
+.fabric-color-target button {
+  font-size: 11px;
+  padding: 3px 8px;
+  border: 1px solid #454c51;
+  border-radius: 999px;
+  background: #2a3035;
+  color: #9aa0a5;
+  cursor: pointer;
+}
+.fabric-color-target button.on {
+  border-color: #3f8a92;
+  background: #2f5a60;
+  color: #e6e8ea;
+}
+.fabric-colors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-height: 220px;
+  overflow-y: auto;
+  padding: 2px;
+}
+.fabric-color-swatch {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  width: 48px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 4px;
+  flex: none;
+}
+.fabric-color-swatch:hover {
+  background: #2a3035;
+}
+.fabric-color-swatch-fill {
+  display: block;
+  width: 42px;
+  height: 32px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+.fabric-color-swatch-active .fabric-color-swatch-fill {
+  border: 2px solid #3f8a92;
+  box-shadow: 0 0 0 1px #3f8a92;
+}
+.fabric-color-swatch-code {
+  font-size: 9.5px;
+  color: #9aa0a5;
+  line-height: 1.15;
+  max-width: 48px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fabric-color-swatch-active .fabric-color-swatch-code {
+  color: #7fc3c9;
+  font-weight: 600;
+}
+.fabric-colors-inline {
+  margin: -4px 0 12px;
+  padding: 8px 10px;
+  border: 1px solid #454c51;
+  border-radius: 6px;
+  background: #23282c;
+}
+.fabric-colors-inline label {
+  font-size: 11.5px;
+  color: #9aa0a5;
+}
+.fabric-colors-inline .fabric-colors {
+  max-height: 140px;
+}
+.fabric-colors-hint {
+  margin: -4px 0 12px;
+  padding: 8px 10px;
+  border: 1px dashed #454c51;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #9aa0a5;
+}
+.fabric-colors-hint a {
+  color: #6fb8bf;
 }
 .pm-stage {
   position: relative;

@@ -5,9 +5,33 @@ import CustomDesigner, { customPayload } from "./CustomDesigner.jsx";
 import GarmentFlatPreview from "./GarmentFlatPreview";
 import ErrorBoundary from "./ErrorBoundary";
 import GarmentTypePicker from "./GarmentTypePicker";
+import FabricColorPicker from "./FabricColorPicker.jsx";
 import { sleeveAlignment } from "../lib/garmentFlat.js";
 
 const STATUS_OPTIONS = ["consultation", "mockup", "revision", "approved"];
+
+// A catalog fabric's stored/displayed identity: brand-qualified when it has
+// one, since two brands can share a plain name (Verlando and Maryland both
+// sell a "Tropical Deluxe").
+const fabricLabel = (f) => (f.brand ? `${f.brand} — ${f.name}` : f.name);
+
+// The key fabricColors (colors.json) is keyed by — the image filename
+// stem, since that's the one identifier already unique per catalog entry.
+function fabricSlug(f) {
+  return f.imageUrl?.match(/([^/]+)\.[a-z]+$/)?.[1];
+}
+
+// Groups the fabric list by brand, in the order each brand first appears,
+// with the older brandless reference entries collected under one heading.
+function groupFabrics(fabrics) {
+  const groups = new Map();
+  for (const f of fabrics) {
+    const key = f.brand || "Other reference fabrics";
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(f);
+  }
+  return [...groups.entries()];
+}
 
 const DEFAULT_MERCH = { item: "tote_bag", size: "medium", width: 0, height: 0, shape: "", strap: "", pocket: "none", bottom: "flat", brim: "short", closure: "zip" };
 
@@ -173,6 +197,11 @@ export default function OrderDetailView({ orderId, onBack }) {
   const [error, setError] = useState(null);
   const [saving, setSaving] = useState(false);
   const [fabrics, setFabrics] = useState([]);
+  // The supplier's real per-fabric colour codes, extracted from their own
+  // e-catalog PDFs (frontend/public/fabric-catalog/colors.json) and keyed
+  // by the same slug as each fabric's ImageURL — static reference data,
+  // fetched once, not tied to any one order.
+  const [fabricColors, setFabricColors] = useState({});
   const [dartPosition, setDartPosition] = useState("waist");
   // Gender/sleeveStyle apply to every shirt garment type (school/PE
   // presets used to hardcode a fitted silhouette regardless of this —
@@ -181,6 +210,7 @@ export default function OrderDetailView({ orderId, onBack }) {
   // silently read as gendered either way until someone picks one.
   const [gender, setGender] = useState("unisex");
   const [sleeveStyle, setSleeveStyle] = useState("full");
+  const [sleeveFabric, setSleeveFabric] = useState("main");
   const [collarEnabled, setCollarEnabled] = useState(false); // uniform_shirt only
   const [collarStyle, setCollarStyle] = useState("convertible");
   // Premade construction options (see draft.ShirtOptions): the pattern is
@@ -216,6 +246,7 @@ export default function OrderDetailView({ orderId, onBack }) {
   const [activeSizeLabel, setActiveSizeLabel] = useState(null);
   const [focusIdx, setFocusIdx] = useState(0);
   const [sentAll, setSentAll] = useState(false);
+  const [sentFabricCounts, setSentFabricCounts] = useState(null); // { main, contrast } piece counts, once sent
 
   useEffect(() => {
     setOrder(null);
@@ -248,12 +279,20 @@ export default function OrderDetailView({ orderId, onBack }) {
       .catch(() => {});
   }, [orderId]);
 
+  useEffect(() => {
+    fetch("/fabric-catalog/colors.json")
+      .then((r) => r.json())
+      .then(setFabricColors)
+      .catch(() => {});
+  }, []);
+
   // Sets the maker's choices back to what a saved revision was made with, so
   // reopening an order shows the garment that was built, not the defaults.
   function restoreOptions(opt) {
     setGender(opt.gender || "unisex");
     setDartPosition(opt.dartPosition || "waist");
     setSleeveStyle(opt.sleeveStyle || "full");
+    setSleeveFabric(opt.sleeveFabric || "main");
     setCollarEnabled(!!opt.collar);
     if (opt.collarStyle) setCollarStyle(opt.collarStyle);
     setFrontStyle(opt.frontStyle || "placket");
@@ -347,6 +386,7 @@ export default function OrderDetailView({ orderId, onBack }) {
       if (isShirtType) {
         payload.gender = gender;
         payload.sleeveStyle = sleeveStyle;
+        payload.sleeveFabric = sleeveFabric;
         payload.dartPosition = dartPosition;
         payload.frontStyle = frontStyle;
         payload.backStyle = backStyle;
@@ -454,7 +494,20 @@ export default function OrderDetailView({ orderId, onBack }) {
     setAccessories((prev) => prev.map((a) => (a.id === id ? { ...a, position: fraction } : a)));
   }
 
+  // "contrast" for a motif band, an insert panel, a V-neck/collar trim or a
+  // side stripe — everything else is the garment's main fabric. Different
+  // fabric means a different bolt of cloth, so the cutting layout has to nest
+  // and count yardage for each one separately rather than as one length.
+  function fabricOf(piece) {
+    return piece.fabric === "contrast" ? "contrast" : "main";
+  }
+
   function colorFor(piece) {
+    // Prefer the colour actually picked for this fabric in the preview
+    // (colorHint), so the cutting layout's swatches match what's on screen —
+    // fall back to a per-part heuristic only when nothing was picked.
+    if (fabricOf(piece) === "contrast" && colorHint?.accent) return colorHint.accent;
+    if (fabricOf(piece) === "main" && colorHint?.main) return colorHint.main;
     const n = piece.name.toLowerCase();
     if (n.includes("sleeve")) return "#C79A3E";
     if (n.includes("collar")) return "#7A5B9C";
@@ -465,6 +518,7 @@ export default function OrderDetailView({ orderId, onBack }) {
   }
 
   async function sendPiece(piece, sizeLabel, quantity) {
+    const fabric = fabricOf(piece);
     await api.addPiece({
       name: `${piece.name} — ${order.customerName} ${sizeLabel}`,
       // Nest the CUT outline (with seam/hem allowances), not the sewing
@@ -475,21 +529,25 @@ export default function OrderDetailView({ orderId, onBack }) {
       color: colorFor(piece),
       grainLocked: true,
       pathData: piece.cutPathData || piece.pathData,
+      ...(fabric === "contrast" ? { fabric } : {}),
     });
   }
 
   async function handleSendAllSizes() {
     if (!activeMockup) return;
     setError(null);
+    const counts = { main: 0, contrast: 0 };
     try {
       for (const sz of order.sizes) {
         const pieces = activeMockup.pieces[sz.label];
         if (!pieces) continue;
         for (const piece of pieces) {
+          counts[fabricOf(piece)]++;
           await sendPiece(piece, sz.label, sz.quantity);
         }
       }
       setSentAll(true);
+      setSentFabricCounts(counts);
     } catch (e) {
       setError(e.message);
     }
@@ -507,7 +565,13 @@ export default function OrderDetailView({ orderId, onBack }) {
 
   const sizeLabels = activeMockup ? Object.keys(activeMockup.pieces) : [];
   const activePieces = activeMockup && activeSizeLabel ? activeMockup.pieces[activeSizeLabel] : null;
-  const matchedFabric = fabrics.find((f) => f.name === order.fabric?.name);
+  // Two catalog entries can share a plain name across brands (both Verlando
+  // and Maryland sell a "Tropical Deluxe"), so the stored/matched value is
+  // brand-qualified wherever a brand exists, not the bare name.
+  const matchedFabric = fabrics.find((f) => fabricLabel(f) === order.fabric?.name);
+  const fabricGroups = groupFabrics(fabrics);
+  const matchedFabricColors = matchedFabric ? fabricColors[fabricSlug(matchedFabric)] || [] : [];
+  const pickedFabricColor = matchedFabricColors.find((c) => c.hex === colorHint?.main);
   const fields = measurementFieldsFor(order.garmentType);
   const isBottomType = order.garmentType === "pants" || order.garmentType === "shorts";
   const isMerchType = order.garmentType === "other";
@@ -580,25 +644,59 @@ export default function OrderDetailView({ orderId, onBack }) {
 
         <div className="divider" />
 
-        <label style={{ display: "block", fontSize: "11.5px", color: "#9aa0a5", marginBottom: 8 }}>
+        <label id="fabric-picker" style={{ display: "block", fontSize: "11.5px", color: "#9aa0a5", marginBottom: 8 }}>
           Fabric
         </label>
-        <div className="field">
-          <select
-            className="select"
-            value={order.fabric?.name || ""}
-            onChange={(e) => updateFabric("name", e.target.value)}
-          >
-            <option value="">— choose a fabric —</option>
-            {fabrics.map((f) => (
-              <option key={f.name} value={f.name}>{f.name}</option>
-            ))}
-          </select>
+        <div className="fabric-picker">
+          {fabricGroups.map(([group, items]) => (
+            <div key={group} className="fabric-group">
+              <div className="pm-slot-title">{group}</div>
+              <div className="fabric-swatches">
+                {items.map((f) => {
+                  const label = fabricLabel(f);
+                  return (
+                    <button
+                      type="button"
+                      key={label}
+                      className={`fabric-swatch${order.fabric?.name === label ? " fabric-swatch-active" : ""}`}
+                      onClick={() => updateFabric("name", order.fabric?.name === label ? "" : label)}
+                      title={f.sourceUrl || label}
+                    >
+                      {f.imageUrl ? <img src={f.imageUrl} alt={f.name} /> : <span className="fabric-swatch-noimg" aria-hidden="true" />}
+                      <span className="fabric-swatch-label">{f.name}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </div>
         {matchedFabric && (
-          <p className="note" style={{ marginTop: -6 }}>
-            {matchedFabric.composition} — {matchedFabric.notes}
-          </p>
+          <div className="fabric-detail">
+            {matchedFabric.imageUrl && <img src={matchedFabric.imageUrl} alt={matchedFabric.name} />}
+            <p className="note">
+              {matchedFabric.composition} — {matchedFabric.notes}
+              {matchedFabric.sourceUrl && (
+                <>
+                  {" "}
+                  <a href={matchedFabric.sourceUrl} target="_blank" rel="noreferrer">Supplier page ↗</a>
+                </>
+              )}
+            </p>
+          </div>
+        )}
+        {matchedFabricColors.length > 0 && (
+          <div className="field">
+            <label>
+              Colour — {matchedFabricColors.length} from the supplier's own e-catalog
+              {pickedFabricColor ? `: ${pickedFabricColor.code}${pickedFabricColor.category ? ` (${pickedFabricColor.category})` : ""}` : ""}
+            </label>
+            <FabricColorPicker
+              colors={matchedFabricColors}
+              colorHint={colorHint}
+              onPick={(slot, hex) => setColorHint((prev) => ({ ...prev, [slot]: hex }))}
+            />
+          </div>
         )}
         <div className="field">
           <label>Fabric notes</label>
@@ -689,13 +787,15 @@ export default function OrderDetailView({ orderId, onBack }) {
               onDragAccessory={dragAccessory}
               colorHint={colorHint}
               onColorHint={(c) => setColorHint((prev) => ({ ...prev, ...c }))}
+              fabricColors={matchedFabricColors}
               referencePhoto={order.designImage}
               onReferencePhoto={(url) => setOrder((prev) => ({ ...prev, designImage: url }))}
-              value={{ gender, dartPosition, sleeveStyle, collarEnabled, collarStyle, frontStyle, backStyle, hemStyle, neckline, trim, motifs, pattern: motifPattern, legStyle, shortsLength, frontPocket, backPocket, beltLoops, fly, trouserWaist, stripe, merch, skirt }}
+              value={{ gender, dartPosition, sleeveStyle, sleeveFabric, collarEnabled, collarStyle, frontStyle, backStyle, hemStyle, neckline, trim, motifs, pattern: motifPattern, legStyle, shortsLength, frontPocket, backPocket, beltLoops, fly, trouserWaist, stripe, merch, skirt }}
               onChange={(patch) => {
                 if ("gender" in patch) setGender(patch.gender);
                 if ("dartPosition" in patch) setDartPosition(patch.dartPosition);
                 if ("sleeveStyle" in patch) setSleeveStyle(patch.sleeveStyle);
+                if ("sleeveFabric" in patch) setSleeveFabric(patch.sleeveFabric);
                 if ("collarEnabled" in patch) setCollarEnabled(patch.collarEnabled);
                 if ("collarStyle" in patch) setCollarStyle(patch.collarStyle);
                 if ("frontStyle" in patch) setFrontStyle(patch.frontStyle);
@@ -748,13 +848,21 @@ export default function OrderDetailView({ orderId, onBack }) {
                   Revision v{activeMockup.mockup.version}
                   {activeMockup.mockup.note ? ` — ${activeMockup.mockup.note}` : ""}
                 </div>
-                <button
-                  className="btn-add btn-inline"
-                  onClick={handleSendAllSizes}
-                  disabled={sentAll}
-                >
-                  {sentAll ? "Sent all sizes to layout ✓" : "Send all sizes to cutting layout"}
-                </button>
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
+                  <button
+                    className="btn-add btn-inline"
+                    onClick={handleSendAllSizes}
+                    disabled={sentAll}
+                  >
+                    {sentAll ? "Sent all sizes to layout ✓" : "Send all sizes to cutting layout"}
+                  </button>
+                  {sentFabricCounts && (
+                    <span className="mono" style={{ fontSize: 11.5, color: "#9aa0a5" }}>
+                      {sentFabricCounts.main} main-fabric piece{sentFabricCounts.main === 1 ? "" : "s"}
+                      {sentFabricCounts.contrast > 0 ? `, ${sentFabricCounts.contrast} contrast-fabric piece${sentFabricCounts.contrast === 1 ? "" : "s"}` : ""} — kept as separate fabrics in the layout
+                    </span>
+                  )}
+                </div>
               </div>
 
               {sizeLabels.length > 1 && (
@@ -793,6 +901,7 @@ export default function OrderDetailView({ orderId, onBack }) {
                     sleeveStyle={activeMockup.mockup.options?.sleeveStyle}
                     collarStyle={activeMockup.mockup.options?.collarStyle}
                     colorHint={colorHint}
+                    fabricColors={matchedFabricColors}
                     pattern={activeMockup.mockup.options?.pattern || "solid"}
                     onColorChange={(c) => setColorHint((prev) => ({ ...prev, ...c }))}
                     merchItem={order.garmentType === "other" ? activeMockup.mockup.options?.merch?.item : undefined}
