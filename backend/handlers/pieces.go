@@ -1,7 +1,7 @@
 package handlers
 
 import (
-	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"sync"
@@ -67,12 +67,6 @@ func (s *Store) list() []StoredPiece {
 	return out
 }
 
-func writeJSON(w http.ResponseWriter, status int, v any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(v)
-}
-
 // Pieces handles GET (list) and POST (create) on /api/pieces.
 func (s *Store) Pieces(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
@@ -83,12 +77,15 @@ func (s *Store) Pieces(w http.ResponseWriter, r *http.Request) {
 
 	case http.MethodPost:
 		var p StoredPiece
-		if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
-			http.Error(w, "invalid piece payload", http.StatusBadRequest)
+		if !readJSON(w, r, &p, maxBodyBytes, "piece payload") {
 			return
 		}
 		if p.Name == "" || p.Width <= 0 || p.Height <= 0 || p.Qty <= 0 {
 			http.Error(w, "name, width, height and qty are required and must be positive", http.StatusBadRequest)
+			return
+		}
+		if p.Width > maxPieceCm || p.Height > maxPieceCm || p.Qty > maxPackInstances {
+			http.Error(w, fmt.Sprintf("piece size is limited to %d cm and quantity to %d", maxPieceCm, maxPackInstances), http.StatusBadRequest)
 			return
 		}
 		s.mu.Lock()
@@ -152,22 +149,53 @@ func (s *Store) Pack(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req packRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid pack request", http.StatusBadRequest)
+	if !readJSON(w, r, &req, 8*maxBodyBytes, "pack request") {
 		return
 	}
-	if req.FabricWidth <= 0 {
-		http.Error(w, "fabricWidth must be positive", http.StatusBadRequest)
-		return
-	}
-
 	pieces := req.Pieces
 	if pieces == nil {
 		s.mu.Lock()
 		pieces = s.list()
 		s.mu.Unlock()
 	}
+	req.Pieces = pieces
+	if msg := validatePack(req); msg != "" {
+		http.Error(w, msg, http.StatusBadRequest)
+		return
+	}
 
 	result := nesting.PackPolygons(toNestPieces(pieces), req.FabricWidth, req.SeamAllowance, req.Resolution)
 	writeJSON(w, http.StatusOK, result)
+}
+
+// Limits that keep a typo (a fabric width of 15000, a quantity of a million)
+// from asking the nester for a grid or a piece list too big to hold.
+const (
+	maxFabricWidthCm = 500
+	maxPieceCm       = 1000
+	maxPackInstances = 2000
+)
+
+// validatePack returns what is wrong with a pack request, or "" if it can run.
+func validatePack(req packRequest) string {
+	if req.FabricWidth <= 0 || req.FabricWidth > maxFabricWidthCm {
+		return fmt.Sprintf("fabricWidth must be between 0 and %d cm", maxFabricWidthCm)
+	}
+	if req.SeamAllowance < 0 || req.SeamAllowance > 20 {
+		return "seamAllowance must be between 0 and 20 cm"
+	}
+	if req.Resolution != 0 && (req.Resolution < 0.1 || req.Resolution > 5) {
+		return "resolution must be between 0.1 and 5 cm per cell"
+	}
+	total := 0
+	for _, p := range req.Pieces {
+		if p.Qty < 0 || p.Width < 0 || p.Height < 0 || p.Width > maxPieceCm || p.Height > maxPieceCm {
+			return fmt.Sprintf("piece %q has an impossible size or quantity", p.Name)
+		}
+		total += p.Qty
+		if total > maxPackInstances {
+			return fmt.Sprintf("too many pieces to lay out at once (over %d) — send them in smaller batches", maxPackInstances)
+		}
+	}
+	return ""
 }

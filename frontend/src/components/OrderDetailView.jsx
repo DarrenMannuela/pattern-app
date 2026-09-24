@@ -1,37 +1,18 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import PatternMaker from "./PatternMaker.jsx";
-import CustomDesigner, { customPayload } from "./CustomDesigner.jsx";
+import CustomDesigner from "./CustomDesigner.jsx";
+import { customPayload } from "../lib/customDesign.js";
 import GarmentFlatPreview from "./GarmentFlatPreview";
 import ErrorBoundary from "./ErrorBoundary";
+import CuttingPlan from "./CuttingPlan.jsx";
 import GarmentTypePicker from "./GarmentTypePicker";
 import FabricColorPicker from "./FabricColorPicker.jsx";
+import FabricPicker, { FabricImage } from "./FabricPicker.jsx";
 import { sleeveAlignment } from "../lib/garmentFlat.js";
+import { fabricLabel, fabricSlug } from "../lib/fabricCatalog.js";
 
 const STATUS_OPTIONS = ["consultation", "mockup", "revision", "approved"];
-
-// A catalog fabric's stored/displayed identity: brand-qualified when it has
-// one, since two brands can share a plain name (Verlando and Maryland both
-// sell a "Tropical Deluxe").
-const fabricLabel = (f) => (f.brand ? `${f.brand} — ${f.name}` : f.name);
-
-// The key fabricColors (colors.json) is keyed by — the image filename
-// stem, since that's the one identifier already unique per catalog entry.
-function fabricSlug(f) {
-  return f.imageUrl?.match(/([^/]+)\.[a-z]+$/)?.[1];
-}
-
-// Groups the fabric list by brand, in the order each brand first appears,
-// with the older brandless reference entries collected under one heading.
-function groupFabrics(fabrics) {
-  const groups = new Map();
-  for (const f of fabrics) {
-    const key = f.brand || "Other reference fabrics";
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push(f);
-  }
-  return [...groups.entries()];
-}
 
 const DEFAULT_MERCH = { item: "tote_bag", size: "medium", width: 0, height: 0, shape: "", strap: "", pocket: "none", bottom: "flat", brim: "short", closure: "zip" };
 
@@ -211,6 +192,7 @@ export default function OrderDetailView({ orderId, onBack }) {
   const [gender, setGender] = useState("unisex");
   const [sleeveStyle, setSleeveStyle] = useState("full");
   const [sleeveFabric, setSleeveFabric] = useState("main");
+  const [colorBlock, setColorBlock] = useState("none");
   const [collarEnabled, setCollarEnabled] = useState(false); // uniform_shirt only
   const [collarStyle, setCollarStyle] = useState("convertible");
   // Premade construction options (see draft.ShirtOptions): the pattern is
@@ -248,42 +230,65 @@ export default function OrderDetailView({ orderId, onBack }) {
   const [sentAll, setSentAll] = useState(false);
   const [sentFabricCounts, setSentFabricCounts] = useState(null); // { main, contrast } piece counts, once sent
 
-  useEffect(() => {
+  // Loads the order and, if it has one, its latest revision. A slower answer for
+  // an order the person has already moved on from is dropped, not shown.
+  const loadSeq = useRef(0);
+  async function loadOrder() {
+    const mine = ++loadSeq.current;
+    const stale = () => mine !== loadSeq.current;
     setOrder(null);
     setActiveMockup(null);
-    api
-      .getOrder(orderId)
-      .then((o) => {
-        setOrder(o);
-        setColorHint(o.previewColors?.main || o.previewColors?.accent ? { ...o.previewColors } : null);
-        // Jump straight to the latest revision instead of leaving the
-        // mockup section blank when reopening an order that already
-        // has one.
-        if (o.mockups && o.mockups.length > 0) {
-          const latest = o.mockups[o.mockups.length - 1].version;
-          api
-            .getMockup(orderId, latest)
-            .then((res) => {
-              setActiveMockup(res);
-              setActiveSizeLabel(Object.keys(res.pieces)[0] || null);
-              setAccessories(res.mockup.options?.addOns?.accessories || []);
-              restoreOptions(res.mockup.options || {});
-            })
-            .catch(() => {});
+    setError(null);
+    try {
+      const o = await api.getOrder(orderId);
+      if (stale()) return;
+      setOrder(o);
+      setColorHint(o.previewColors?.main || o.previewColors?.accent ? { ...o.previewColors } : null);
+      // Jump straight to the latest revision instead of leaving the
+      // mockup section blank when reopening an order that already
+      // has one.
+      if (o.mockups && o.mockups.length > 0) {
+        const latest = o.mockups[o.mockups.length - 1].version;
+        try {
+          const res = await api.getMockup(orderId, latest);
+          if (stale()) return;
+          setActiveMockup(res);
+          setActiveSizeLabel(Object.keys(res.pieces)[0] || null);
+          setAccessories(res.mockup.options?.addOns?.accessories || []);
+          restoreOptions(res.mockup.options || {});
+        } catch (e) {
+          if (!stale()) setError(`The order opened, but its latest revision couldn't be loaded: ${e.message}`);
         }
-      })
-      .catch((e) => setError(e.message));
-    api
-      .fabrics()
-      .then(setFabrics)
-      .catch(() => {});
-  }, [orderId]);
+      }
+    } catch (e) {
+      if (!stale()) setError(e.message);
+    }
+  }
 
   useEffect(() => {
-    fetch("/fabric-catalog/colors.json")
-      .then((r) => r.json())
-      .then(setFabricColors)
-      .catch(() => {});
+    const seq = loadSeq;
+    loadOrder();
+    return () => {
+      seq.current++;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orderId]);
+
+  // The catalog and its colours are extras: without them the fabric picker is
+  // just empty, so a failure is noted in the console, not shown as an error.
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .fabrics()
+      .then((f) => !cancelled && setFabrics(f))
+      .catch((e) => console.warn("Couldn't load the fabric catalog:", e.message));
+    api
+      .fabricColors()
+      .then((c) => !cancelled && setFabricColors(c))
+      .catch((e) => console.warn("Couldn't load the fabric colours:", e.message));
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Sets the maker's choices back to what a saved revision was made with, so
@@ -293,6 +298,7 @@ export default function OrderDetailView({ orderId, onBack }) {
     setDartPosition(opt.dartPosition || "waist");
     setSleeveStyle(opt.sleeveStyle || "full");
     setSleeveFabric(opt.sleeveFabric || "main");
+    setColorBlock(opt.colorBlock || "none");
     setCollarEnabled(!!opt.collar);
     if (opt.collarStyle) setCollarStyle(opt.collarStyle);
     setFrontStyle(opt.frontStyle || "placket");
@@ -359,6 +365,24 @@ export default function OrderDetailView({ orderId, onBack }) {
     }
   }
 
+  // The same standard-chart prefill, but for the elementary-school age
+  // run (6-12) the child block is graded for — a school/PE shirt order
+  // is exactly the case this covers, and previously had no way to reach
+  // it: DraftChildBodice/grade-child existed only on the backend.
+  async function prefillChildChart() {
+    try {
+      const run = await api.gradeChild({});
+      const rows = run.map((row) => ({
+        label: `Age ${row.size}`,
+        quantity: 1,
+        measurements: row.measurements,
+      }));
+      setOrder((prev) => ({ ...prev, sizes: [...(prev.sizes || []), ...rows] }));
+    } catch (e) {
+      setError(e.message);
+    }
+  }
+
   async function handleSave() {
     setSaving(true);
     setError(null);
@@ -368,10 +392,17 @@ export default function OrderDetailView({ orderId, onBack }) {
       return updated;
     } catch (e) {
       setError(e.message);
-      throw e;
+      return null;
     } finally {
       setSaving(false);
     }
+  }
+
+  // Saves what the cut really used, along with the rest of the order as it is
+  // on screen (the same as Save order). Throws so the form can show the error.
+  async function saveActualFabric(actualFabric) {
+    const updated = await api.updateOrder(orderId, { ...order, actualFabric, previewColors: { main: colorHint?.main, accent: colorHint?.accent } });
+    setOrder(updated);
   }
 
   async function handleGenerate() {
@@ -381,12 +412,13 @@ export default function OrderDetailView({ orderId, onBack }) {
       // The backend drafts from the saved order, not local edits, so
       // an unsaved size-chart change would otherwise be silently
       // ignored — save first so what's on screen is what gets drafted.
-      await handleSave();
+      if (!(await handleSave())) return; // the save error is already showing
       const payload = { note: mockupNote, accessories };
       if (isShirtType) {
         payload.gender = gender;
         payload.sleeveStyle = sleeveStyle;
         payload.sleeveFabric = sleeveFabric;
+        payload.colorBlock = colorBlock === "none" ? "" : colorBlock;
         payload.dartPosition = dartPosition;
         payload.frontStyle = frontStyle;
         payload.backStyle = backStyle;
@@ -557,7 +589,18 @@ export default function OrderDetailView({ orderId, onBack }) {
     return (
       <div className="tab-body">
         <main>
-          <p className="empty">{error || "Loading order…"}</p>
+          {error ? (
+            <div className="empty load-failed" role="alert">
+              <p>Couldn't open this order.</p>
+              <p className="load-failed-detail">{error}</p>
+              <div className="load-failed-actions">
+                <button className="btn-add btn-inline" onClick={loadOrder}>Try again</button>
+                <button className="btn-add btn-inline btn-ghost" onClick={onBack}>Back to orders</button>
+              </div>
+            </div>
+          ) : (
+            <p className="empty">Loading order…</p>
+          )}
         </main>
       </div>
     );
@@ -569,7 +612,6 @@ export default function OrderDetailView({ orderId, onBack }) {
   // and Maryland sell a "Tropical Deluxe"), so the stored/matched value is
   // brand-qualified wherever a brand exists, not the bare name.
   const matchedFabric = fabrics.find((f) => fabricLabel(f) === order.fabric?.name);
-  const fabricGroups = groupFabrics(fabrics);
   const matchedFabricColors = matchedFabric ? fabricColors[fabricSlug(matchedFabric)] || [] : [];
   const pickedFabricColor = matchedFabricColors.find((c) => c.hex === colorHint?.main);
   const fields = measurementFieldsFor(order.garmentType);
@@ -614,7 +656,7 @@ export default function OrderDetailView({ orderId, onBack }) {
             onChange={(e) => updateField("contactInfo", e.target.value)}
           />
         </div>
-        <label style={{ display: "block", fontSize: "11.5px", color: "#9aa0a5", marginBottom: 8 }}>
+        <label style={{ display: "block", fontSize: "11.5px", color: "var(--text-3)", marginBottom: 8 }}>
           Garment type
         </label>
         <GarmentTypePicker
@@ -644,45 +686,27 @@ export default function OrderDetailView({ orderId, onBack }) {
 
         <div className="divider" />
 
-        <label id="fabric-picker" style={{ display: "block", fontSize: "11.5px", color: "#9aa0a5", marginBottom: 8 }}>
+        <label id="fabric-picker" style={{ display: "block", fontSize: "11.5px", color: "var(--text-3)", marginBottom: 8 }}>
           Fabric
         </label>
-        <div className="fabric-picker">
-          {fabricGroups.map(([group, items]) => (
-            <div key={group} className="fabric-group">
-              <div className="pm-slot-title">{group}</div>
-              <div className="fabric-swatches">
-                {items.map((f) => {
-                  const label = fabricLabel(f);
-                  return (
-                    <button
-                      type="button"
-                      key={label}
-                      className={`fabric-swatch${order.fabric?.name === label ? " fabric-swatch-active" : ""}`}
-                      onClick={() => updateFabric("name", order.fabric?.name === label ? "" : label)}
-                      title={f.sourceUrl || label}
-                    >
-                      {f.imageUrl ? <img src={f.imageUrl} alt={f.name} /> : <span className="fabric-swatch-noimg" aria-hidden="true" />}
-                      <span className="fabric-swatch-label">{f.name}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-        </div>
+        <FabricPicker fabrics={fabrics} currentName={order.fabric?.name} onPick={(name) => updateFabric("name", name)} />
         {matchedFabric && (
           <div className="fabric-detail">
-            {matchedFabric.imageUrl && <img src={matchedFabric.imageUrl} alt={matchedFabric.name} />}
-            <p className="note">
-              {matchedFabric.composition} — {matchedFabric.notes}
-              {matchedFabric.sourceUrl && (
-                <>
-                  {" "}
-                  <a href={matchedFabric.sourceUrl} target="_blank" rel="noreferrer">Supplier page ↗</a>
-                </>
+            <FabricImage key={matchedFabric.imageUrl} src={matchedFabric.imageUrl} alt={matchedFabric.name} fallback={null} />
+            <div className="fabric-detail-info">
+              <p className="fabric-detail-composition">{matchedFabric.composition}</p>
+              {matchedFabric.benefits?.length > 0 && (
+                <div className="fabric-benefit-chips">
+                  {matchedFabric.benefits.map((b) => (
+                    <span key={b} className="fabric-benefit-chip">{b}</span>
+                  ))}
+                </div>
               )}
-            </p>
+              {matchedFabric.usedFor && <p className="fabric-detail-usedfor">Used for {matchedFabric.usedFor.charAt(0).toLowerCase() + matchedFabric.usedFor.slice(1)}</p>}
+              {matchedFabric.sourceUrl && (
+                <a className="fabric-detail-link" href={matchedFabric.sourceUrl} target="_blank" rel="noreferrer">Supplier page ↗</a>
+              )}
+            </div>
           </div>
         )}
         {matchedFabricColors.length > 0 && (
@@ -714,14 +738,19 @@ export default function OrderDetailView({ orderId, onBack }) {
         {error && <p className="error">{error}</p>}
       </aside>
 
-      <main>
+      <main className="order-main">
         <section>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-            <h2 style={{ fontSize: 15, margin: 0 }}>Size chart</h2>
-            <div style={{ display: "flex", gap: 8 }}>
+          <div className="section-head">
+            <h2>Size chart</h2>
+            <div className="section-head-actions">
               {isShirtType && (
-                <button className="btn-add btn-inline" onClick={prefillStandardChart}>
-                  Prefill from standard chart
+                <button className="btn-add btn-inline btn-ghost" onClick={prefillStandardChart}>
+                  Prefill: adult chart
+                </button>
+              )}
+              {isShirtType && (
+                <button className="btn-add btn-inline btn-ghost" onClick={prefillChildChart} title="Elementary-school age run (6-12), dartless child block">
+                  Prefill: children's chart
                 </button>
               )}
               <button className="btn-add btn-inline" onClick={addSizeRow}>
@@ -788,14 +817,18 @@ export default function OrderDetailView({ orderId, onBack }) {
               colorHint={colorHint}
               onColorHint={(c) => setColorHint((prev) => ({ ...prev, ...c }))}
               fabricColors={matchedFabricColors}
+              fabrics={fabrics}
+              fabricName={order.fabric?.name}
+              onFabricPick={(name) => updateFabric("name", name)}
               referencePhoto={order.designImage}
               onReferencePhoto={(url) => setOrder((prev) => ({ ...prev, designImage: url }))}
-              value={{ gender, dartPosition, sleeveStyle, sleeveFabric, collarEnabled, collarStyle, frontStyle, backStyle, hemStyle, neckline, trim, motifs, pattern: motifPattern, legStyle, shortsLength, frontPocket, backPocket, beltLoops, fly, trouserWaist, stripe, merch, skirt }}
+              value={{ gender, dartPosition, sleeveStyle, sleeveFabric, colorBlock, collarEnabled, collarStyle, frontStyle, backStyle, hemStyle, neckline, trim, motifs, pattern: motifPattern, legStyle, shortsLength, frontPocket, backPocket, beltLoops, fly, trouserWaist, stripe, merch, skirt }}
               onChange={(patch) => {
                 if ("gender" in patch) setGender(patch.gender);
                 if ("dartPosition" in patch) setDartPosition(patch.dartPosition);
                 if ("sleeveStyle" in patch) setSleeveStyle(patch.sleeveStyle);
                 if ("sleeveFabric" in patch) setSleeveFabric(patch.sleeveFabric);
+                if ("colorBlock" in patch) setColorBlock(patch.colorBlock);
                 if ("collarEnabled" in patch) setCollarEnabled(patch.collarEnabled);
                 if ("collarStyle" in patch) setCollarStyle(patch.collarStyle);
                 if ("frontStyle" in patch) setFrontStyle(patch.frontStyle);
@@ -824,27 +857,29 @@ export default function OrderDetailView({ orderId, onBack }) {
               design preview below, once you've generated at least one mockup.
             </p>
           )}
-          <div className="field" style={{ maxWidth: 420 }}>
-            <label>Revision note</label>
-            <input
-              type="text"
-              placeholder="e.g. v2 — lowered collar point per client feedback"
-              value={mockupNote}
-              onChange={(e) => setMockupNote(e.target.value)}
-            />
+          <div className="mockup-actions">
+            <div className="field">
+              <label>Revision note</label>
+              <input
+                type="text"
+                placeholder="e.g. v2 — lowered collar point per client feedback"
+                value={mockupNote}
+                onChange={(e) => setMockupNote(e.target.value)}
+              />
+            </div>
+            <button
+              className="btn-generate btn-inline"
+              onClick={handleGenerate}
+              disabled={generating || (!order.sizes?.length && !isMerchType && !isCustomType)}
+            >
+              {generating ? "Generating…" : "Generate mockup"}
+            </button>
           </div>
-          <button
-            className="btn-generate btn-inline"
-            onClick={handleGenerate}
-            disabled={generating || (!order.sizes?.length && !isMerchType && !isCustomType)}
-          >
-            {generating ? "Generating…" : "Generate mockup"}
-          </button>
 
           {activeMockup && (
             <>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "20px 0 12px" }}>
-                <div className="mono" style={{ fontSize: 12.5, color: "#9aa0a5" }}>
+                <div className="mono" style={{ fontSize: 12.5, color: "var(--text-3)" }}>
                   Revision v{activeMockup.mockup.version}
                   {activeMockup.mockup.note ? ` — ${activeMockup.mockup.note}` : ""}
                 </div>
@@ -856,8 +891,11 @@ export default function OrderDetailView({ orderId, onBack }) {
                   >
                     {sentAll ? "Sent all sizes to layout ✓" : "Send all sizes to cutting layout"}
                   </button>
+                  <span className="mono" style={{ fontSize: 11, color: "var(--text-4)", maxWidth: 320, textAlign: "right" }}>
+                    Sends every garment's pieces one by one. For a whole order, the Cutting plan below is faster and tighter.
+                  </span>
                   {sentFabricCounts && (
-                    <span className="mono" style={{ fontSize: 11.5, color: "#9aa0a5" }}>
+                    <span className="mono" style={{ fontSize: 11.5, color: "var(--text-3)" }}>
                       {sentFabricCounts.main} main-fabric piece{sentFabricCounts.main === 1 ? "" : "s"}
                       {sentFabricCounts.contrast > 0 ? `, ${sentFabricCounts.contrast} contrast-fabric piece${sentFabricCounts.contrast === 1 ? "" : "s"}` : ""} — kept as separate fabrics in the layout
                     </span>
@@ -902,6 +940,10 @@ export default function OrderDetailView({ orderId, onBack }) {
                     collarStyle={activeMockup.mockup.options?.collarStyle}
                     colorHint={colorHint}
                     fabricColors={matchedFabricColors}
+                    fabrics={fabrics}
+                    fabricName={order.fabric?.name}
+                    onFabricPick={(name) => updateFabric("name", name)}
+                    sharedControls={!(isShirtType || isBottomType || isMerchType || isSkirtType)}
                     pattern={activeMockup.mockup.options?.pattern || "solid"}
                     onColorChange={(c) => setColorHint((prev) => ({ ...prev, ...c }))}
                     merchItem={order.garmentType === "other" ? activeMockup.mockup.options?.merch?.item : undefined}
@@ -943,6 +985,21 @@ export default function OrderDetailView({ orderId, onBack }) {
             </>
           )}
         </section>
+
+        {activeMockup && !isCustomType && (
+          <>
+            <div className="divider" />
+            <ErrorBoundary fallback={<p className="empty">The cutting plan couldn't be displayed.</p>}>
+              <CuttingPlan
+                key={`${orderId}-${activeMockup.mockup.version}`}
+                orderId={orderId}
+                version={activeMockup.mockup.version}
+                actualFabric={order.actualFabric}
+                onSaveActual={saveActualFabric}
+              />
+            </ErrorBoundary>
+          </>
+        )}
 
         {order.mockups && order.mockups.length > 0 && (
           <>

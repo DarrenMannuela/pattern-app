@@ -1,9 +1,9 @@
 package handlers
 
 import (
-	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"patternapp/backend/catalog"
 	"patternapp/backend/draft"
@@ -17,8 +17,12 @@ type OrdersAPI struct {
 	store *orders.Store
 }
 
-func NewOrdersAPI(path string) *OrdersAPI {
-	return &OrdersAPI{store: orders.NewStore(path)}
+func NewOrdersAPI(path string) (*OrdersAPI, error) {
+	store, err := orders.NewStore(path)
+	if err != nil {
+		return nil, err
+	}
+	return &OrdersAPI{store: store}, nil
 }
 
 // List handles GET /api/orders and POST /api/orders.
@@ -36,12 +40,11 @@ func (a *OrdersAPI) List(w http.ResponseWriter, r *http.Request) {
 
 	case http.MethodPost:
 		var o orders.Order
-		if err := json.NewDecoder(r.Body).Decode(&o); err != nil {
-			http.Error(w, "invalid order payload", http.StatusBadRequest)
+		if !readJSON(w, r, &o, maxOrderBodyBytes, "order payload") {
 			return
 		}
-		if o.CustomerName == "" || o.GarmentType == "" {
-			http.Error(w, "customerName and garmentType are required", http.StatusBadRequest)
+		if msg := validateOrder(&o); msg != "" {
+			http.Error(w, msg, http.StatusBadRequest)
 			return
 		}
 		created, err := a.store.Create(&o)
@@ -54,6 +57,36 @@ func (a *OrdersAPI) List(w http.ResponseWriter, r *http.Request) {
 	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)
 	}
+}
+
+// validOrderStatuses are the stages an order moves through.
+var validOrderStatuses = map[string]bool{"consultation": true, "mockup": true, "revision": true, "approved": true}
+
+// validateOrder returns what is wrong with an order sent to create or replace
+// one, or "". A replace carries the whole order, so a payload missing its name
+// or garment would blank them.
+func validateOrder(o *orders.Order) string {
+	if strings.TrimSpace(o.CustomerName) == "" || o.GarmentType == "" {
+		return "customerName and garmentType are required"
+	}
+	if o.Status != "" && !validOrderStatuses[o.Status] {
+		return "status must be one of consultation, mockup, revision, approved"
+	}
+	if a := o.ActualFabric; a != nil {
+		if a.Meters < 0 || a.Meters > 100000 || a.Kg < 0 || a.Kg > 100000 || a.WidthCm < 0 || a.WidthCm > maxFabricWidthCm || len(a.Note) > 2000 {
+			return "the fabric actually used is out of range"
+		}
+	}
+	return checkSizes(o.Sizes)
+}
+
+// validateMockupRequest returns what is wrong with the options and sizes sent
+// to draft a preview or a revision, or "".
+func validateMockupRequest(req *mockupRequest) string {
+	if msg := checkSizes(req.Sizes); msg != "" {
+		return msg
+	}
+	return checkNumbers(req)
 }
 
 // ByID handles GET/PUT/DELETE /api/orders/{id}.
@@ -70,8 +103,11 @@ func (a *OrdersAPI) ByID(w http.ResponseWriter, r *http.Request) {
 
 	case http.MethodPut:
 		var patch orders.Order
-		if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
-			http.Error(w, "invalid order payload", http.StatusBadRequest)
+		if !readJSON(w, r, &patch, maxOrderBodyBytes, "order payload") {
+			return
+		}
+		if msg := validateOrder(&patch); msg != "" {
+			http.Error(w, msg, http.StatusBadRequest)
 			return
 		}
 		updated, err, ok := a.store.Update(id, &patch)
@@ -86,8 +122,13 @@ func (a *OrdersAPI) ByID(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, updated)
 
 	case http.MethodDelete:
-		if !a.store.Delete(id) {
+		found, err := a.store.Delete(id)
+		if !found {
 			http.NotFound(w, r)
+			return
+		}
+		if err != nil {
+			http.Error(w, "failed to delete order: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
@@ -115,6 +156,7 @@ type mockupRequest struct {
 	Trim         string               `json:"trim"`
 	Panel        string               `json:"panel"`
 	SleeveFabric string               `json:"sleeveFabric"`
+	ColorBlock   string               `json:"colorBlock"`
 	Motifs       []string             `json:"motifs"`
 	Pattern      string               `json:"pattern"`
 	Trousers     draft.TrouserOptions `json:"trousers"`
@@ -143,6 +185,7 @@ func (req mockupRequest) options() draft.ShirtOptions {
 		Trim:         req.Trim,
 		Panel:        req.Panel,
 		SleeveFabric: req.SleeveFabric,
+		ColorBlock:   req.ColorBlock,
 		Motifs:       req.Motifs,
 		Pattern:      req.Pattern,
 		Trousers:     req.Trousers,
@@ -169,8 +212,11 @@ func (a *OrdersAPI) Preview(w http.ResponseWriter, r *http.Request) {
 	}
 	var req mockupRequest
 	if r.ContentLength != 0 {
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "invalid preview payload", http.StatusBadRequest)
+		if !readJSON(w, r, &req, maxOrderBodyBytes, "preview payload") {
+			return
+		}
+		if msg := validateMockupRequest(&req); msg != "" {
+			http.Error(w, msg, http.StatusBadRequest)
 			return
 		}
 	}
@@ -199,8 +245,11 @@ func (a *OrdersAPI) CreateMockup(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	var req mockupRequest
 	if r.ContentLength != 0 {
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "invalid mockup payload", http.StatusBadRequest)
+		if !readJSON(w, r, &req, maxOrderBodyBytes, "mockup payload") {
+			return
+		}
+		if msg := validateMockupRequest(&req); msg != "" {
+			http.Error(w, msg, http.StatusBadRequest)
 			return
 		}
 	}

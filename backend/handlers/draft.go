@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"encoding/json"
 	"net/http"
 
 	"patternapp/backend/draft"
@@ -25,8 +24,11 @@ func Draft(w http.ResponseWriter, r *http.Request) {
 	// A missing/empty body is fine — DraftBodice fills in sensible
 	// defaults for any zero-valued measurement and dart position.
 	if r.ContentLength != 0 {
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "invalid measurements payload", http.StatusBadRequest)
+		if !readJSON(w, r, &req, maxBodyBytes, "measurements payload") {
+			return
+		}
+		if msg := checkMeasurements(req.Measurements); msg != "" {
+			http.Error(w, msg, http.StatusBadRequest)
 			return
 		}
 	}

@@ -7,9 +7,14 @@
 package orders
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io/fs"
+	"log"
 	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"sync"
@@ -84,6 +89,15 @@ type Mockup struct {
 	CreatedAt time.Time          `json:"createdAt"`
 }
 
+// ActualFabric is what cutting the order really used, recorded afterwards so
+// the cutting plan's estimate can be checked against it.
+type ActualFabric struct {
+	Meters  float64 `json:"meters,omitempty"`
+	Kg      float64 `json:"kg,omitempty"`
+	WidthCm float64 `json:"widthCm,omitempty"`
+	Note    string  `json:"note,omitempty"`
+}
+
 // PreviewColors are the fabric and trim colours the design preview is shown in.
 type PreviewColors struct {
 	Main   string `json:"main,omitempty"`
@@ -109,6 +123,7 @@ type Order struct {
 	// PreviewColors are the colours picked for the preview (from a reference
 	// photo, say), kept so reopening the order shows the same garment.
 	PreviewColors PreviewColors `json:"previewColors,omitempty"`
+	ActualFabric  *ActualFabric `json:"actualFabric,omitempty"`
 	CreatedAt     time.Time     `json:"createdAt"`
 	UpdatedAt     time.Time     `json:"updatedAt"`
 }
@@ -222,38 +237,91 @@ type Store struct {
 }
 
 // NewStore opens (or creates) the JSON file at path as the backing
-// store, loading any orders already in it.
-func NewStore(path string) *Store {
+// store, loading any orders already in it. It fails only when the file
+// exists but can't be read: carrying on with an empty list would let the
+// next save overwrite the orders that are really there.
+func NewStore(path string) (*Store, error) {
 	s := &Store{path: path, orders: make(map[string]*Order), nextID: 1}
-	s.load()
-	return s
+	if err := s.load(); err != nil {
+		return nil, err
+	}
+	return s, nil
 }
 
-func (s *Store) load() {
+// load reads the order file. A missing or empty file is a fresh start. A file
+// that isn't valid JSON (a crash mid-write, a bad hand edit) is moved aside,
+// never overwritten, so its contents can still be recovered, and the store
+// starts empty.
+func (s *Store) load() error {
 	data, err := os.ReadFile(s.path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
 	if err != nil {
-		return // no file yet — fine, we start empty
+		return fmt.Errorf("read orders file: %w", err)
+	}
+	if len(bytes.TrimSpace(data)) == 0 {
+		return nil
 	}
 	var list []*Order
 	if err := json.Unmarshal(data, &list); err != nil {
-		return
+		aside := fmt.Sprintf("%s.corrupt-%s", s.path, time.Now().Format("20060102-150405"))
+		if rerr := os.Rename(s.path, aside); rerr != nil {
+			return fmt.Errorf("orders file is not valid JSON (%v) and could not be moved aside: %w", err, rerr)
+		}
+		log.Printf("orders: %s is not valid JSON (%v); kept as %s and starting with no orders", s.path, err, aside)
+		return nil
 	}
 	for _, o := range list {
+		if o == nil {
+			continue
+		}
 		s.orders[o.ID] = o
 		if n, err := strconv.Atoi(o.ID); err == nil && n >= s.nextID {
 			s.nextID = n + 1
 		}
 	}
+	return nil
 }
 
-// saveLocked writes the current order list to disk. Caller must hold s.mu.
+// saveLocked writes the current order list to disk. It writes a temporary
+// file beside the real one and renames it into place, so a crash or a full
+// disk mid-write leaves the previous file intact instead of a truncated one.
+// Caller must hold s.mu.
 func (s *Store) saveLocked() error {
-	list := s.listLocked()
-	data, err := json.MarshalIndent(list, "", "  ")
+	data, err := json.MarshalIndent(s.listLocked(), "", "  ")
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(s.path, data, 0644)
+	tmp, err := os.CreateTemp(filepath.Dir(s.path), filepath.Base(s.path)+".tmp-*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmp.Name()) // a no-op once the rename has moved it
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Sync(); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := os.Chmod(tmp.Name(), 0o644); err != nil {
+		return err
+	}
+	return os.Rename(tmp.Name(), s.path)
+}
+
+// clone is a shallow copy handed to callers, so a request encoding an order
+// never races another request that is updating it. Updates replace the
+// order's fields wholesale rather than editing them in place, which is what
+// makes a shallow copy enough.
+func (o *Order) clone() *Order {
+	c := *o
+	return &c
 }
 
 func (s *Store) listLocked() []*Order {
@@ -269,7 +337,11 @@ func (s *Store) listLocked() []*Order {
 func (s *Store) List() []*Order {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.listLocked()
+	list := s.listLocked()
+	for i, o := range list {
+		list[i] = o.clone()
+	}
+	return list
 }
 
 // Get returns one order by ID.
@@ -277,10 +349,14 @@ func (s *Store) Get(id string) (*Order, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	o, ok := s.orders[id]
-	return o, ok
+	if !ok {
+		return nil, false
+	}
+	return o.clone(), true
 }
 
-// Create assigns an ID and timestamps, stores, and persists o.
+// Create assigns an ID and timestamps, stores, and persists o. If the save
+// fails the order is not kept, so memory never holds what the disk doesn't.
 func (s *Store) Create(o *Order) (*Order, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -292,11 +368,16 @@ func (s *Store) Create(o *Order) (*Order, error) {
 		o.Status = "consultation"
 	}
 	s.orders[o.ID] = o
-	return o, s.saveLocked()
+	if err := s.saveLocked(); err != nil {
+		delete(s.orders, o.ID)
+		return nil, err
+	}
+	return o.clone(), nil
 }
 
 // Update replaces the editable fields of an existing order (ID,
 // CreatedAt and Mockups are preserved regardless of what patch carries).
+// If the save fails the order goes back to how it was.
 func (s *Store) Update(id string, patch *Order) (*Order, error, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -304,6 +385,7 @@ func (s *Store) Update(id string, patch *Order) (*Order, error, bool) {
 	if !ok {
 		return nil, nil, false
 	}
+	prev := *existing
 	existing.CustomerName = patch.CustomerName
 	existing.ContactInfo = patch.ContactInfo
 	existing.GarmentType = patch.GarmentType
@@ -313,23 +395,33 @@ func (s *Store) Update(id string, patch *Order) (*Order, error, bool) {
 	existing.DesignImage = patch.DesignImage
 	existing.Design = patch.Design
 	existing.PreviewColors = patch.PreviewColors
+	existing.ActualFabric = patch.ActualFabric
 	if patch.Status != "" {
 		existing.Status = patch.Status
 	}
 	existing.UpdatedAt = time.Now()
-	return existing, s.saveLocked(), true
+	if err := s.saveLocked(); err != nil {
+		*existing = prev
+		return nil, err, true
+	}
+	return existing.clone(), nil, true
 }
 
-// Delete removes an order permanently.
-func (s *Store) Delete(id string) bool {
+// Delete removes an order permanently. If the save fails the order is kept
+// and the error returned, so a delete is never reported that the disk lost.
+func (s *Store) Delete(id string) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if _, ok := s.orders[id]; !ok {
-		return false
+	o, ok := s.orders[id]
+	if !ok {
+		return false, nil
 	}
 	delete(s.orders, id)
-	s.saveLocked()
-	return true
+	if err := s.saveLocked(); err != nil {
+		s.orders[id] = o
+		return true, err
+	}
+	return true, nil
 }
 
 // AddMockup snapshots the order's current size chart into a new
@@ -346,6 +438,7 @@ func (s *Store) AddMockup(id, note string, opts draft.ShirtOptions) (*Order, map
 	if err != nil {
 		return nil, nil, err, true
 	}
+	prev := *o
 	mockup := Mockup{
 		Version:   len(o.Mockups) + 1,
 		Note:      note,
@@ -360,7 +453,11 @@ func (s *Store) AddMockup(id, note string, opts draft.ShirtOptions) (*Order, map
 		o.Status = "revision"
 	}
 	o.UpdatedAt = time.Now()
-	return o, pieces, s.saveLocked(), true
+	if err := s.saveLocked(); err != nil {
+		*o = prev
+		return nil, nil, err, true
+	}
+	return o.clone(), pieces, nil, true
 }
 
 // MockupPieces regenerates pieces for a previously saved revision

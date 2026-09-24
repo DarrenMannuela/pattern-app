@@ -3,7 +3,10 @@ package vision
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
+	"strings"
+	"time"
 )
 
 // Status says who would read a photo right now.
@@ -50,10 +53,19 @@ func claudeConfigured() bool {
 	return os.Getenv("ANTHROPIC_API_KEY") != "" || os.Getenv("ANTHROPIC_AUTH_TOKEN") != ""
 }
 
+// designReader is what reads a design: a picture or a written description.
+type designReader interface {
+	Analyze(ctx context.Context, img []byte, mediaType string) (*Design, error)
+	AnalyzeText(ctx context.Context, description string) (*Design, error)
+}
+
+// claudeTimeout bounds one Claude API attempt, so a stalled API hands over to
+// the local model in a reasonable time instead of after the SDK's own, much
+// longer, timeout.
+const claudeTimeout = 90 * time.Second
+
 // reader picks the reader for now.
-func (s *Service) reader(ctx context.Context) (interface {
-	Analyze(context.Context, []byte, string) (*Design, error)
-}, Status) {
+func (s *Service) reader(ctx context.Context) (designReader, Status) {
 	force := os.Getenv("VISION_PROVIDER")
 	if force != "ollama" && claudeConfigured() {
 		return s.claude, Status{Provider: "anthropic", Model: Model}
@@ -61,6 +73,11 @@ func (s *Service) reader(ctx context.Context) (interface {
 	if force == "anthropic" {
 		return nil, Status{Provider: "none", Hint: "VISION_PROVIDER is anthropic but no ANTHROPIC_API_KEY is set."}
 	}
+	return s.localReader(ctx)
+}
+
+// localReader is the vision model found in a running Ollama, if there is one.
+func (s *Service) localReader(ctx context.Context) (designReader, Status) {
 	model, thinking, err := s.ollama.visionModel(ctx, s.OllamaModel)
 	if err != nil {
 		return nil, Status{Provider: "none", Hint: noReaderHint}
@@ -83,13 +100,63 @@ func (s *Service) Status(ctx context.Context) Status {
 	return st
 }
 
-// Analyze reads a photo with the available reader.
-func (s *Service) Analyze(ctx context.Context, img []byte, mediaType string) (*Design, error) {
+// read runs one read with the available reader. When that is the Claude API
+// and it fails (no network, a rate limit, a bad key, a stall), a local model
+// takes over if one is running: it is free and keeps the picture on this
+// computer, so falling back never sends anything anywhere new. Forcing
+// VISION_PROVIDER=anthropic turns the fallback off.
+func (s *Service) read(ctx context.Context, run func(context.Context, designReader) (*Design, error)) (*Design, error) {
 	r, st := s.reader(ctx)
 	if r == nil {
 		return nil, errors.New(st.Hint)
 	}
-	return r.Analyze(ctx, img, mediaType)
+	if st.Provider != "anthropic" {
+		return run(ctx, r)
+	}
+
+	attempt, cancel := context.WithTimeout(ctx, claudeTimeout)
+	defer cancel()
+	design, err := run(attempt, r)
+	if err == nil {
+		return design, nil
+	}
+	if ctx.Err() != nil || os.Getenv("VISION_PROVIDER") == "anthropic" {
+		return nil, err
+	}
+	local, localStatus := s.localReader(ctx)
+	if local == nil {
+		return nil, err
+	}
+	design, localErr := run(ctx, local)
+	if localErr != nil {
+		return nil, fmt.Errorf("%w (the local model was tried next and failed too: %s)", err, brief(localErr))
+	}
+	design.Fallback = fmt.Sprintf("The Claude API couldn't be used (%s), so the local model %s read it instead.", brief(err), localStatus.Model)
+	return design, nil
+}
+
+// brief is an error's first stretch on one line, for showing to a person.
+func brief(err error) string {
+	msg := []rune(strings.Join(strings.Fields(err.Error()), " "))
+	if len(msg) > 120 {
+		return string(msg[:120]) + "…"
+	}
+	return string(msg)
+}
+
+// Analyze reads a photo with the available reader.
+func (s *Service) Analyze(ctx context.Context, img []byte, mediaType string) (*Design, error) {
+	return s.read(ctx, func(ctx context.Context, r designReader) (*Design, error) {
+		return r.Analyze(ctx, img, mediaType)
+	})
+}
+
+// AnalyzeText turns a written description into a first-draft design with the
+// available reader.
+func (s *Service) AnalyzeText(ctx context.Context, description string) (*Design, error) {
+	return s.read(ctx, func(ctx context.Context, r designReader) (*Design, error) {
+		return r.AnalyzeText(ctx, description)
+	})
 }
 
 // Available reports whether any reader is set up.

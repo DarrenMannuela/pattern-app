@@ -596,6 +596,29 @@ func TestSleeveFabricTagsSleeveAndCuffOnly(t *testing.T) {
 	}
 }
 
+func TestPoloTrimTagsTheCollarItselfNotPiping(t *testing.T) {
+	m := Measurements{Bust: 96, Waist: 84, BackWaistLength: 42, Shoulder: 13, Neck: 38, Ease: 6, SleeveLength: 60, UpperArm: 30, Wrist: 18}
+	polo := DraftShirt(m, ShirtOptions{Collar: true, CollarStyle: "polo", SleeveStyle: "half", Trim: "contrast"})
+	collar := pieceNamed(t, polo, "Polo collar")
+	if collar.Fabric != "contrast" {
+		t.Errorf("a polo's Trim:contrast should tag its own collar piece, got Fabric=%q", collar.Fabric)
+	}
+	if hasPiece(polo, "Piping strip") {
+		t.Error("a polo collar is knit, not piped — Trim:contrast shouldn't add a piping strip")
+	}
+
+	// A regular (non-polo) collar keeps its existing piped-trim behaviour —
+	// this option isn't supposed to change what already worked there.
+	convertible := DraftShirt(m, ShirtOptions{Collar: true, CollarStyle: "convertible", Trim: "contrast"})
+	leaf := pieceNamed(t, convertible, "Collar leaf")
+	if leaf.Fabric == "contrast" {
+		t.Error("a non-polo collar leaf shouldn't be retagged contrast — it should still get a piped trim piece instead")
+	}
+	if !hasPiece(convertible, "Piping strip") {
+		t.Error("a non-polo collar with Trim:contrast should still add a piping strip, same as before")
+	}
+}
+
 func TestPullOnTrousers(t *testing.T) {
 	m := Measurements{Waist: 82, Hip: 104, Rise: 28, Inseam: 76, Ease: 4}
 	pull := DraftTrousers(m, "Pants", AddOns{}, TrouserOptions{Waist: "elastic"})

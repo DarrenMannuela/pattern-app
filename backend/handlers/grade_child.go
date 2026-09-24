@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"encoding/json"
 	"net/http"
 
 	"patternapp/backend/draft"
@@ -33,8 +32,11 @@ func GradeChild(w http.ResponseWriter, r *http.Request) {
 	}
 	var req gradeChildRequest
 	if r.ContentLength != 0 {
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "invalid grading payload", http.StatusBadRequest)
+		if !readJSON(w, r, &req, maxBodyBytes, "grading payload") {
+			return
+		}
+		if msg := checkMeasurements(req.Measurements); msg != "" {
+			http.Error(w, msg, http.StatusBadRequest)
 			return
 		}
 	}

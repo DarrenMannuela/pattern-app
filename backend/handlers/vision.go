@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"unicode/utf8"
 
 	"patternapp/backend/vision"
 )
@@ -54,6 +55,53 @@ func AnalyzePhoto(svc *vision.Service) http.HandlerFunc {
 		design, err := svc.Analyze(r.Context(), data, mediaType)
 		if err != nil {
 			http.Error(w, "couldn't read the photo: "+err.Error(), http.StatusBadGateway)
+			return
+		}
+		writeJSON(w, http.StatusOK, design)
+	}
+}
+
+// describeRequest is the body for POST /api/analyze-text: the customer's own
+// words about the uniform they want.
+type describeRequest struct {
+	Description string `json:"description"`
+}
+
+// maxDescriptionChars is generous for a description of one uniform, and small
+// enough that a local model reads it in a moment.
+const maxDescriptionChars = 2000
+
+// AnalyzeText handles POST /api/analyze-text — turns a written description of
+// a uniform ("short-sleeve cream shirt, band collar, chest pocket") into a
+// first-draft design in the pattern maker's terms, the same shape a photo gives.
+func AnalyzeText(svc *vision.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		if st, ok := svc.Available(r.Context()); !ok {
+			http.Error(w, st.Hint, http.StatusNotImplemented)
+			return
+		}
+		r.Body = http.MaxBytesReader(w, r.Body, 16<<10)
+		var req describeRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "invalid description payload", http.StatusBadRequest)
+			return
+		}
+		text := strings.TrimSpace(req.Description)
+		if text == "" {
+			http.Error(w, "describe the uniform first", http.StatusBadRequest)
+			return
+		}
+		if utf8.RuneCountInString(text) > maxDescriptionChars {
+			http.Error(w, "the description is too long (over 2000 characters)", http.StatusBadRequest)
+			return
+		}
+		design, err := svc.AnalyzeText(r.Context(), text)
+		if err != nil {
+			http.Error(w, "couldn't read the description: "+err.Error(), http.StatusBadGateway)
 			return
 		}
 		writeJSON(w, http.StatusOK, design)

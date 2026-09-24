@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { bounds, nearestOnOutline, pointsToPath, splitBetween } from "../lib/customDesign.js";
+import { bounds, nearestOnOutline, splitBetween } from "../lib/customDesign.js";
 import { fileToDataUrl, traceSilhouette } from "../lib/imageTrace.js";
 
 // Draw your own uniform: start from a picture (a photo or flat-lay of the
@@ -7,22 +7,13 @@ import { fileToDataUrl, traceSilhouette } from "../lib/imageTrace.js";
 // outline becomes a cutting piece. Pieces are in cm; the picture's scale is set
 // by telling the editor how long something in it really is.
 
-export const EMPTY_DESIGN = { scale: 0, imgW: 0, imgH: 0, opacity: 0.55, nextId: 1, pieces: [] };
+const EMPTY_DESIGN = { scale: 0, imgW: 0, imgH: 0, opacity: 0.55, nextId: 1, pieces: [] };
 const BLANK = { w: 120, h: 100 };
 const FOLDS = [
   { value: "", label: "Full piece" },
   { value: "left", label: "Half — cut on left fold" },
   { value: "bottom", label: "Half — cut on bottom fold" },
 ];
-
-// The pieces the backend needs, from the working drawing.
-export function customPayload(design) {
-  return {
-    pieces: (design?.pieces || [])
-      .filter((p) => p.points.length >= 3)
-      .map((p) => ({ name: p.name, pathData: pointsToPath(p.points), foldEdge: p.fold || "", qty: Math.max(1, Number(p.qty) || 1) })),
-  };
-}
 
 export default function CustomDesigner({ design, image, onDesign, onImage }) {
   const d = design && Array.isArray(design.pieces) ? design : EMPTY_DESIGN;

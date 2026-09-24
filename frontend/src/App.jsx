@@ -3,8 +3,30 @@ import TopNav from "./components/TopNav";
 import OrdersView from "./components/OrdersView";
 import OrderDetailView from "./components/OrderDetailView";
 import LayoutView from "./components/LayoutView";
+import ErrorBoundary from "./components/ErrorBoundary";
 
 const hashOrderId = () => window.location.hash.match(/^#order-(\w+)$/)?.[1] || null;
+
+// Shown when a screen fails to draw. The rest of the app (the nav, the other
+// tabs) keeps working, and nothing saved is affected.
+function ScreenCrashed({ error, onRetry, onHome }) {
+  return (
+    <div className="tab-body">
+      <main>
+        <div className="empty load-failed" role="alert">
+          <p>
+            This screen ran into a problem and couldn't be shown. Your saved orders are safe.
+          </p>
+          {error?.message && <p className="load-failed-detail">{error.message}</p>}
+          <div className="load-failed-actions">
+            <button className="btn-add btn-inline" onClick={onRetry}>Try again</button>
+            <button className="btn-add btn-inline btn-ghost" onClick={onHome}>Back to orders</button>
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+}
 
 export default function App() {
   const [tab, setTab] = useState("orders");
@@ -40,11 +62,25 @@ export default function App() {
   return (
     <div className="app-shell">
       <TopNav tab={tab} setTab={handleSetTab} />
-      {tab === "orders" && !openOrderId && <OrdersView onOpenOrder={setOpenOrderId} />}
-      {tab === "orders" && openOrderId && (
-        <OrderDetailView orderId={openOrderId} onBack={() => setOpenOrderId(null)} />
-      )}
-      {tab === "layout" && <LayoutView />}
+      <ErrorBoundary
+        key={`${tab}:${openOrderId || ""}`}
+        fallback={(error, retry) => (
+          <ScreenCrashed
+            error={error}
+            onRetry={retry}
+            onHome={() => {
+              setOpenOrderId(null);
+              setTab("orders");
+            }}
+          />
+        )}
+      >
+        {tab === "orders" && !openOrderId && <OrdersView onOpenOrder={setOpenOrderId} />}
+        {tab === "orders" && openOrderId && (
+          <OrderDetailView orderId={openOrderId} onBack={() => setOpenOrderId(null)} />
+        )}
+        {tab === "layout" && <LayoutView />}
+      </ErrorBoundary>
     </div>
   );
 }

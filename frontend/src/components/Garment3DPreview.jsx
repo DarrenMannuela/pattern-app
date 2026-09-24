@@ -175,7 +175,7 @@ export default function Garment3DPreview({ pieces, embroidery }) {
             type="color"
             value={color}
             onChange={(e) => setColor(e.target.value)}
-            style={{ width: 34, height: 26, padding: 0, border: "1px solid #454c51", borderRadius: 4, background: "none" }}
+            style={{ width: 34, height: 26, padding: 0, border: "1px solid var(--border-strong)", borderRadius: 4, background: "none" }}
           />
         </div>
         <label className="check" style={{ margin: 0 }}>
@@ -189,7 +189,7 @@ export default function Garment3DPreview({ pieces, embroidery }) {
               type="color"
               value={secondaryColor}
               onChange={(e) => setSecondaryColor(e.target.value)}
-              style={{ width: 34, height: 26, padding: 0, border: "1px solid #454c51", borderRadius: 4, background: "none" }}
+              style={{ width: 34, height: 26, padding: 0, border: "1px solid var(--border-strong)", borderRadius: 4, background: "none" }}
             />
           </div>
         )}

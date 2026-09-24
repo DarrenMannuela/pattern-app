@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { colorAt, dominantColors, photoCanvas } from "../lib/photoColors.js";
+import { formatElapsed, useElapsed } from "../lib/useElapsed.js";
 
 // A reference photo beside the preview, for matching a uniform by eye: click
 // the photo (or one of its main colours) to set the fabric or trim colour. When
@@ -8,16 +9,8 @@ import { colorAt, dominantColors, photoCanvas } from "../lib/photoColors.js";
 export default function ReferencePhoto({ photo, colors, status, analyzing, result, error, onPick, onMatch, onClose }) {
   const [armed, setArmed] = useState("main"); // which colour the next pick sets
   const [swatches, setSwatches] = useState([]);
-  const [elapsed, setElapsed] = useState(0);
+  const elapsed = useElapsed(analyzing);
   const canvasRef = useRef(null);
-
-  useEffect(() => {
-    if (!analyzing) return;
-    setElapsed(0);
-    const start = Date.now();
-    const id = setInterval(() => setElapsed(Math.floor((Date.now() - start) / 1000)), 1000);
-    return () => clearInterval(id);
-  }, [analyzing]);
 
   useEffect(() => {
     let cancelled = false;
@@ -77,7 +70,7 @@ export default function ReferencePhoto({ photo, colors, status, analyzing, resul
       {provider && provider !== "none" ? (
         <div className="pm-ref-auto">
           <button type="button" className="pm-tool" disabled={analyzing} onClick={onMatch}>
-            {analyzing ? `Reading photo… ${Math.floor(elapsed / 60)}:${String(elapsed % 60).padStart(2, "0")}` : local ? "Match parts with local model" : "Match parts with Claude"}
+            {analyzing ? `Reading photo… ${formatElapsed(elapsed)}` : local ? "Match parts with local model" : "Match parts with Claude"}
           </button>
           <p className="pm-ref-tip">
             {local ? `Runs on this computer with ${status.model}: free, but on a small laptop it can take a few minutes, and it makes more mistakes than Claude, so check each part.` : "Sends the photo to the Claude API (one request)."}

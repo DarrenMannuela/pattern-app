@@ -1,6 +1,7 @@
-// Turns what the vision service read from a photo (backend/vision Design) into
-// pattern-maker choices: the parts to set, the pockets and prints to place,
-// the colours, and plain-language notes about anything that couldn't be matched.
+// Turns what the vision service read from a photo or a written description
+// (backend/vision Design) into pattern-maker choices: the parts to set, the
+// pockets and prints to place, the colours, and plain-language notes about
+// anything that couldn't be matched.
 
 const SHIRT_TYPES = ["school_shirt", "polo_shirt", "pe_shirt", "uniform_shirt"];
 
@@ -30,11 +31,19 @@ function kindOfDesign(garment) {
 
 const isHex = (c) => typeof c === "string" && /^#[0-9a-f]{6}$/i.test(c.trim());
 
-// `design` is the JSON from POST /api/analyze-photo. Returns
+// `design` is the JSON from POST /api/analyze-photo or /api/analyze-text, and
+// `source` says which ("photo" or "description"). Returns
 // { patch, accessories, colors, notes, mismatch } — `patch` is in the shape
 // PatternMaker's onChange takes, `accessories` are { type, segment, extra }.
-export function designToMaker(design, garmentType) {
+//
+// A small local model reading a photo invents pockets, prints and panels, so
+// there they are only suggested. A description is the customer's own words —
+// what it names was asked for — so it is applied whichever model read it.
+export function designToMaker(design, garmentType, source = "photo") {
+  const fromPhoto = source === "photo";
   const notes = [];
+  // The first-choice reader failed and another stepped in; say so first.
+  if (design.fallback) notes.push(design.fallback);
   const patch = {};
   const accessories = [];
   const colors = {};
@@ -49,7 +58,7 @@ export function designToMaker(design, garmentType) {
       accessories,
       colors,
       notes,
-      mismatch: `The photo looks like ${GARMENT_FOR[design.garment] || "another kind of garment"}, but this order is for ${KIND_LABEL[orderKind]}. Only the colours were taken; start an order of the right type to match the pattern.`,
+      mismatch: `${fromPhoto ? "The photo looks like" : "The description sounds like"} ${GARMENT_FOR[design.garment] || "another kind of garment"}, but this order is for ${KIND_LABEL[orderKind]}. Only the colours were taken; start an order of the right type to match the pattern.`,
     };
   }
 
@@ -63,6 +72,9 @@ export function designToMaker(design, garmentType) {
     const sleeve = { short: "half", three_quarter: "three_quarter", long: "full" }[design.sleeve];
     if (sleeve) patch.sleeveStyle = sleeve;
     else if (design.sleeve === "sleeveless") notes.push("Sleeveless isn't in the catalog — the shortest sleeve was kept.");
+
+    // A polo's collar is knit, so a contrast collar there is the whole collar.
+    if (polo) patch.trim = design.trim === "contrast_trim" ? "contrast" : "none";
 
     if (!polo) {
       const collars = { point_collar: "convertible", spread_collar: "spread", peter_pan_collar: "peter_pan", band_collar: "standing", polo_collar: "convertible" };
@@ -91,7 +103,7 @@ export function designToMaker(design, garmentType) {
       const motifName = { centre_streak: "centre", double_streak: "double", chest_band: "chest", shoulder_band: "shoulder", hem_band: "hem", arm_bands: "arms" };
       const bands = [...new Set((design.motifs || []).map((x) => motifName[x]).filter(Boolean))];
       const panel = design.insert_panel === "side_panel";
-      if (design.provider === "ollama") {
+      if (fromPhoto && design.provider === "ollama") {
         // A small local model flags panels and bands that aren't there, so they are
         // suggestions to check rather than choices made for you.
         if (panel) notes.push("The local model thinks there is a contrasting side panel — not added. Pick Side panel under Motif bands if you can see one.");
@@ -115,7 +127,7 @@ export function designToMaker(design, garmentType) {
   const valid = SEGMENTS[orderKind];
   // A small local model often invents pockets and prints, so its are suggestions
   // to check, not things put on the garment.
-  const suggestOnly = design.provider === "ollama";
+  const suggestOnly = fromPhoto && design.provider === "ollama";
   for (const p of design.pockets || []) {
     if (!valid.includes(p.segment)) {
       notes.push(`A ${p.kind} pocket on the ${String(p.segment).replace("_", " ")} can't be placed on this garment.`);

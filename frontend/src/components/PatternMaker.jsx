@@ -6,7 +6,8 @@ import { PartThumb, PocketThumb, ExtraThumb, usePartThumbs } from "./PartThumbs.
 import { POCKET_SHAPES } from "../lib/pocketShapes.js";
 import { designToMaker } from "../lib/photoMatch.js";
 import ReferencePhoto from "./ReferencePhoto.jsx";
-import { MOTIF_PATTERNS } from "./MotifDefs.jsx";
+import DescribeDesign from "./DescribeDesign.jsx";
+import { MOTIF_PATTERNS } from "../lib/motifs.js";
 import { fileToDataUrl, shrinkDataUrl } from "../lib/imageTrace.js";
 import { sleeveAlignment } from "../lib/garmentFlat.js";
 
@@ -40,6 +41,15 @@ const SLOTS = [
     parts: [
       { value: "main", label: "Main", hint: "Same fabric as the torso" },
       { value: "contrast", label: "Contrast", hint: "Cut from the second fabric — cuff too" },
+    ],
+  },
+  {
+    key: "colorBlock",
+    label: "Colour block",
+    parts: [
+      { value: "none", label: "None", hint: "One fabric" },
+      { value: "straight", label: "Straight", hint: "Top of front and back in the contrast fabric, straight across" },
+      { value: "v", label: "V", hint: "Top in the contrast fabric, dipping to a V at centre front" },
     ],
   },
   {
@@ -188,7 +198,15 @@ function slotsFor(garmentType, value) {
       return slot;
     }
     if (slot.key === "front") return (hasCollar || vNeck) && !polo ? slot : null;
-    if (slot.key === "trim") return (hasCollar || vNeck) && !polo ? slot : null;
+    // A polo is knit in one piece; a side insert panel already splits the front.
+    if (slot.key === "colorBlock") return polo || value.motifs?.includes("side") ? null : slot;
+    if (slot.key === "trim") {
+      if (!(hasCollar || vNeck || polo)) return null;
+      // A polo's collar is knit rib, not a bound edge — "contrast" there
+      // recolours the collar (and cuff, via Sleeve fabric) itself.
+      if (!polo) return slot;
+      return { ...slot, parts: slot.parts.map((p) => (p.value === "contrast" ? { ...p, hint: "Collar in an accent colour" } : p)) };
+    }
     if (slot.key === "pattern") return value.motifs.length > 0 ? slot : null;
     if (slot.key === "back" || slot.key === "hem") return polo ? null : slot;
     return slot;
@@ -203,6 +221,7 @@ function currentPart(slotKey, value) {
     case "fit": return value.gender;
     case "sleeve": return value.sleeveStyle;
     case "sleeveFabric": return value.sleeveFabric || "main";
+    case "colorBlock": return value.colorBlock || "none";
     case "collar": return value.collarEnabled ? value.collarStyle : value.neckline === "v_neck" ? "v_neck" : "none";
     case "trim": return value.trim;
     case "bands": return value.motifs;
@@ -230,6 +249,7 @@ function patchFor(slotKey, part) {
     case "fit": return { gender: part };
     case "sleeve": return { sleeveStyle: part };
     case "sleeveFabric": return { sleeveFabric: part };
+    case "colorBlock": return { colorBlock: part };
     case "collar":
       if (part === "none") return { collarEnabled: false, neckline: "round" };
       if (part === "v_neck") return { collarEnabled: false, neckline: "v_neck" };
@@ -264,6 +284,7 @@ function previewPayload(garmentType, value, size, accessories) {
     gender: value.gender,
     sleeveStyle: value.sleeveStyle,
     sleeveFabric: value.sleeveFabric,
+    colorBlock: value.colorBlock === "none" ? "" : value.colorBlock,
     dartPosition: value.dartPosition,
     frontStyle: value.frontStyle,
     backStyle: value.backStyle,
@@ -325,7 +346,7 @@ function startExtraDrag(e, extra) {
   e.dataTransfer.effectAllowed = "copy";
 }
 
-export default function PatternMaker({ orderId, garmentType, sizes, value, onChange, dartPositions, accessories = [], onAddAccessory, onRemoveAccessory, onUpdateAccessory, onMirrorAccessory, onDragAccessory, colorHint, onColorHint, fabricColors, referencePhoto, onReferencePhoto }) {
+export default function PatternMaker({ orderId, garmentType, sizes, value, onChange, dartPositions, accessories = [], onAddAccessory, onRemoveAccessory, onUpdateAccessory, onMirrorAccessory, onDragAccessory, colorHint, onColorHint, fabricColors, fabrics, fabricName, onFabricPick, referencePhoto, onReferencePhoto }) {
   const [pieces, setPieces] = useState(null);
   const [error, setError] = useState(null);
   const [dragging, setDragging] = useState(null); // { slot, value }
@@ -339,6 +360,10 @@ export default function PatternMaker({ orderId, garmentType, sizes, value, onCha
   const [matching, setMatching] = useState(false);
   const [matchError, setMatchError] = useState(null);
   const [readerStatus, setReaderStatus] = useState(null); // who can read photos: { provider, model, hint }
+  const [describeOpen, setDescribeOpen] = useState(false); // the "describe it in words" panel
+  const [describing, setDescribing] = useState(false);
+  const [describeResult, setDescribeResult] = useState(null);
+  const [describeError, setDescribeError] = useState(null);
   const seq = useRef(0);
 
   const hasSleeveViews = !isBottoms(garmentType) && !isSkirt(garmentType) && !isMerch(garmentType);
@@ -418,6 +443,20 @@ export default function PatternMaker({ orderId, garmentType, sizes, value, onCha
     onColorHint?.({ [kind]: color });
   }
 
+  // Puts a read design on the maker: sets the parts, replaces the pockets and
+  // prints, and takes the colours. Returns what to show about it. `source` is
+  // "photo" or "description" — see designToMaker.
+  function applyDesign(design, source) {
+    const result = designToMaker(design, garmentType, source);
+    if (Object.keys(result.patch).length > 0) onChange(result.patch);
+    if (!result.mismatch) {
+      for (const a of accessories) onRemoveAccessory?.(a.id);
+      for (const a of result.accessories) onAddAccessory?.(a.type, a.segment, undefined, a.extra);
+    }
+    if (result.colors.main || result.colors.accent) onColorHint?.({ ...result.colors });
+    return { design, ...result };
+  }
+
   // Has the available reader set the parts, pockets, prints and colours to
   // match photoUrl as closely as the catalog allows.
   async function runMatch(photoUrl, status) {
@@ -426,19 +465,32 @@ export default function PatternMaker({ orderId, garmentType, sizes, value, onCha
     try {
       // A local model reads a smaller picture much faster and about as well.
       const design = await api.analyzePhoto(status?.provider === "ollama" ? await shrinkDataUrl(photoUrl, 768) : photoUrl);
-      const result = designToMaker(design, garmentType);
-      if (Object.keys(result.patch).length > 0) onChange(result.patch);
-      if (!result.mismatch) {
-        for (const a of accessories) onRemoveAccessory?.(a.id);
-        for (const a of result.accessories) onAddAccessory?.(a.type, a.segment, undefined, a.extra);
-      }
-      if (result.colors.main || result.colors.accent) onColorHint?.({ ...result.colors });
-      setPhotoResult({ design, ...result });
+      setPhotoResult(applyDesign(design, "photo"));
     } catch (e) {
       setMatchError(e.message);
     } finally {
       setMatching(false);
     }
+  }
+
+  // Turns a written description into a rough first design and applies it.
+  async function describeDesign(text) {
+    setDescribing(true);
+    setDescribeError(null);
+    try {
+      setDescribeResult(applyDesign(await api.analyzeText(text), "description"));
+    } catch (e) {
+      setDescribeError(e.message);
+    } finally {
+      setDescribing(false);
+    }
+  }
+
+  // Opening the panel finds out who can read a description, if the photo flow
+  // hasn't already.
+  function toggleDescribe() {
+    setDescribeOpen((open) => !open);
+    if (!readerStatus) api.photoStatus().then(setReaderStatus).catch(() => setReaderStatus(null));
   }
 
   // The manual "Match parts" button re-runs the match against whatever
@@ -539,18 +591,23 @@ export default function PatternMaker({ orderId, garmentType, sizes, value, onCha
             ))}
           </div>
           {!isMerch(garmentType) && (
-            <label className={`pm-tool pm-photo-btn${photo ? " pm-tool-on" : ""}`} title="Put a photo of an existing uniform beside the preview to match it by eye, and take its colours">
-              Reference photo
-              <input
-                type="file"
-                accept="image/*"
-                hidden
-                onChange={(e) => {
-                  loadPhoto(e.target.files?.[0]);
-                  e.target.value = "";
-                }}
-              />
-            </label>
+            <div className="pm-starters" role="group" aria-label="Start from something">
+              <button type="button" className={`pm-tool${describeOpen ? " pm-tool-on" : ""}`} onClick={toggleDescribe} aria-expanded={describeOpen} title="Describe the uniform in words and get a rough first design">
+                Describe design
+              </button>
+              <label className={`pm-tool pm-photo-btn${photo ? " pm-tool-on" : ""}`} title="Put a photo of an existing uniform beside the preview to match it by eye, and take its colours">
+                Reference photo
+                <input
+                  type="file"
+                  accept="image/*"
+                  hidden
+                  onChange={(e) => {
+                    loadPhoto(e.target.files?.[0]);
+                    e.target.value = "";
+                  }}
+                />
+              </label>
+            </div>
           )}
           <label className="pm-zoom">
             Size
@@ -664,23 +721,37 @@ export default function PatternMaker({ orderId, garmentType, sizes, value, onCha
           </div>
         )}
 
-        <div className={`pm-compare${photo ? " pm-compare-on" : ""}`}>
-          {photo && (
-            <ReferencePhoto
-              photo={photo}
-              colors={colorHint || {}}
-              status={readerStatus}
-              analyzing={matching}
-              result={photoResult}
-              error={matchError}
-              onPick={pickColor}
-              onMatch={matchPhoto}
-              onClose={() => {
-                setPhoto(null);
-                setPhotoResult(null);
-                onReferencePhoto?.("");
-              }}
-            />
+        <div className={`pm-compare${photo || describeOpen ? " pm-compare-on" : ""}`}>
+          {(photo || describeOpen) && (
+            <div className="pm-side">
+              {describeOpen && (
+                <DescribeDesign
+                  status={readerStatus}
+                  busy={describing}
+                  result={describeResult}
+                  error={describeError}
+                  onGenerate={describeDesign}
+                  onClose={() => setDescribeOpen(false)}
+                />
+              )}
+              {photo && (
+                <ReferencePhoto
+                  photo={photo}
+                  colors={colorHint || {}}
+                  status={readerStatus}
+                  analyzing={matching}
+                  result={photoResult}
+                  error={matchError}
+                  onPick={pickColor}
+                  onMatch={matchPhoto}
+                  onClose={() => {
+                    setPhoto(null);
+                    setPhotoResult(null);
+                    onReferencePhoto?.("");
+                  }}
+                />
+              )}
+            </div>
           )}
           <div className="pm-compare-main">
             {!photo && matchError && <p className="error">{matchError}</p>}
@@ -701,6 +772,10 @@ export default function PatternMaker({ orderId, garmentType, sizes, value, onCha
                   accessories={accessories}
                   colorHint={colorHint}
                   fabricColors={fabricColors}
+                  fabrics={fabrics}
+                  fabricName={fabricName}
+                  onFabricPick={onFabricPick}
+                  onColorChange={onColorHint}
                   pattern={value.pattern}
                   onAddAccessory={onAddAccessory}
                   onDragAccessory={onDragAccessory}

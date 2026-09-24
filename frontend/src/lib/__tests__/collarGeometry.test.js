@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { collarDims, frontLeaf, frontBand, backBand, backArch, vNeckBand, backNeckStrip } from "../collarGeometry.js";
+import { collarDims, flatCollarLeaf, standingCollar, backBand, vNeckBand, backNeckStrip, turnDownCollar, backCollar } from "../collarGeometry.js";
 import { bodySilhouette } from "../torsoGeometry.js";
 import { FIXTURES } from "./fixtures.js";
 
@@ -29,40 +29,44 @@ describe("collarDims", () => {
   });
 });
 
-describe("frontLeaf / frontBand / backBand / backArch on a real neckline", () => {
+describe("collars on a real neckline", () => {
   const front = bodySilhouette(FIXTURES.collarShirt["Shirt front"].pathData);
   const dims = collarDims([FIXTURES.collarShirt["Collar stand"], FIXTURES.collarShirt["Collar leaf"]], "convertible");
 
-  it("draws a point-collar leaf as a real, closed SVG path sitting on the actual neckline", () => {
-    const leaf = frontLeaf("convertible", front.neckCurve, dims);
-    expect(leaf).not.toBeNull();
-    expect(leaf.d.startsWith("M ")).toBe(true);
-    expect(leaf.d.trim().endsWith("Z")).toBe(true);
-    expect(leaf.edge.length).toBeGreaterThan(0);
+  it("draws a point collar as band, inside and leaf, all closed paths on the actual neckline", () => {
+    const c = turnDownCollar(front.neckCurve, front.shoulder, dims);
+    for (const d of [c.band, c.inner, c.leaf]) {
+      expect(d.startsWith("M ")).toBe(true);
+      expect(d.trim().endsWith("Z")).toBe(true);
+    }
+    // The leaves meet at centre front, at the neckline's own depth.
+    expect(c.edge[c.edge.length - 1]).toEqual([0, front.neckCurve[0][1]]);
   });
 
   it("returns null rather than a bogus shape when there's no neckline curve to sit on (a V-neck)", () => {
-    expect(frontLeaf("convertible", null, dims)).toBeNull();
+    expect(turnDownCollar(null, front.shoulder, dims)).toBeNull();
+    expect(flatCollarLeaf(null, dims)).toBeNull();
   });
 
-  it("draws a Peter Pan collar as a distinctly different (rounder) shape than a point collar", () => {
+  it("draws a Peter Pan collar as a flat band lying on the body, with a piped edge", () => {
     const peterPanDims = collarDims([FIXTURES.collarShirt["Collar leaf"]], "peter_pan");
-    const point = frontLeaf("convertible", front.neckCurve, dims);
-    const peterPan = frontLeaf("peter_pan", front.neckCurve, peterPanDims);
-    expect(peterPan.d).not.toBe(point.d);
-    expect(peterPan.roll).toEqual([]); // no roll line on a flat collar — nothing to fold
+    const leaf = flatCollarLeaf(front.neckCurve, peterPanDims);
+    expect(leaf.d.trim().endsWith("Z")).toBe(true);
+    expect(leaf.edge.length).toBeGreaterThan(10);
   });
 
-  it("draws a standing-collar band that grows from the neckline outward", () => {
-    const band = frontBand(front.neckCurve, dims.thick);
-    expect(band.startsWith("M ")).toBe(true);
-    expect(band.trim().endsWith("Z")).toBe(true);
+  it("stands a band collar up from the neckline: its top edge is the neckline raised by the band", () => {
+    const c = standingCollar(front.neckCurve, dims.thick);
+    expect(c.front.trim().endsWith("Z")).toBe(true);
+    const neckY = front.neckCurve[0][1];
+    const frontTop = c.edge[c.edge.length - 1]; // the band's top at centre front
+    expect(frontTop[0]).toBeCloseTo(0, 1);
+    expect(neckY - frontTop[1]).toBeGreaterThan(dims.thick * 0.8);
   });
 
-  it("returns null for the band/arch helpers when given no curve, instead of throwing", () => {
-    expect(frontBand(null, dims.thick)).toBeNull();
+  it("returns null for the band helpers when given no curve, instead of throwing", () => {
+    expect(standingCollar(null, dims.thick)).toBeNull();
     expect(backBand(null, 3)).toBeNull();
-    expect(backArch(null, 2)).toBeNull();
   });
 });
 
@@ -78,5 +82,37 @@ describe("vNeckBand / backNeckStrip on a real V-neck", () => {
 
   it("returns an empty back-neck strip when there's no back neckline curve", () => {
     expect(backNeckStrip(null, 1.2)).toBeNull();
+  });
+});
+
+describe("turn-down collars drawn the way technical flats draw them", () => {
+  const front = bodySilhouette(FIXTURES.collarShirt["Shirt front"].pathData);
+  const dims = collarDims([FIXTURES.collarShirt["Collar stand"], FIXTURES.collarShirt["Collar leaf"]], "convertible");
+
+  it("stands the collar above the neck point, arched up to centre back", () => {
+    const c = turnDownCollar(front.neckCurve, front.shoulder, dims);
+    const peakY = Number(c.band.match(/-?\d+\.?\d*/g)[1]);
+    expect(c.rise).toBeCloseTo(dims.standH + 1);
+    expect(peakY).toBeLessThan(front.neckCurve[3][1] - c.rise); // centre back higher than the corners
+  });
+
+  it("keeps the whole collar on its own side of the centre line", () => {
+    const c = turnDownCollar(front.neckCurve, front.shoulder, dims);
+    for (const [x] of c.edge) expect(x).toBeGreaterThanOrEqual(-0.01);
+  });
+
+  it("spreads a spread collar's points further apart than a point collar's", () => {
+    const tip = (edge) => edge[edge.length - 2];
+    const point = turnDownCollar(front.neckCurve, front.shoulder, dims).edge;
+    const spread = turnDownCollar(front.neckCurve, front.shoulder, { ...dims, alpha: (55 * Math.PI) / 180 }).edge;
+    expect(tip(spread)[0]).toBeGreaterThan(tip(point)[0]);
+  });
+
+  it("draws the back view as a band with only its sides and top outlined", () => {
+    const back = [[0, 2.2], [4, 2.2], [7.2, 1], [7.2, 0]];
+    const c = backCollar(back, 4);
+    expect(c.edge.startsWith("M 7.20 0.00")).toBe(true);
+    expect(c.edge).not.toContain("Z");
+    expect(backCollar(null, 4)).toBeNull();
   });
 });

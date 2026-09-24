@@ -69,6 +69,8 @@ func cutQty(p Piece) int {
 func hemAllowanceFor(name string) float64 {
 	n := strings.ToLower(name)
 	switch {
+	case strings.HasPrefix(n, "upper "):
+		return seamAllowance // a colour block's lower edge is a seam, not a hem
 	case strings.Contains(n, "pants"), strings.Contains(n, "shorts"), strings.Contains(n, "skirt"):
 		return longHemAllow
 	case n == "sleeve":

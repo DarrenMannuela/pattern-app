@@ -1,8 +1,10 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { layoutGarmentViews, isSideSegment } from "../lib/garmentFlat";
 import { pocketPath } from "../lib/pocketShapes";
-import { MotifDefs, motifFill } from "./MotifDefs.jsx";
+import { MotifDefs } from "./MotifDefs.jsx";
+import { motifFill } from "../lib/motifs.js";
 import FabricColorPicker from "./FabricColorPicker.jsx";
+import FabricPicker from "./FabricPicker.jsx";
 
 // Darkens a #rrggbb hex color by the given fraction, for seam-line
 // strokes that read as "the same fabric, one shade darker" rather
@@ -301,7 +303,7 @@ function ViewPanel({ title, viewKey, layout, color, secondaryColor, accent, patt
   );
 }
 
-export default function GarmentFlatPreview({ pieces, accessories = [], gender, dartPosition, sleeveStyle, collarStyle, onAddAccessory, onRemoveAccessory, onDragAccessory, onDropAccessory, merchItem, compact = false, views = "both", zoom, colorHint, onColorChange, fabricColors, pattern = "solid" }) {
+export default function GarmentFlatPreview({ pieces, accessories = [], gender, dartPosition, sleeveStyle, collarStyle, onAddAccessory, onRemoveAccessory, onDragAccessory, onDropAccessory, merchItem, compact = false, views = "both", zoom, colorHint, onColorChange, fabricColors, fabrics, fabricName, onFabricPick, pattern = "solid", sharedControls = true }) {
   const uid = useId().replace(/[^a-zA-Z0-9]/g, "");
   const [sidesOn, setSidesOn] = useState(false);
   const [color, setColor] = useState("#33475B");
@@ -309,6 +311,7 @@ export default function GarmentFlatPreview({ pieces, accessories = [], gender, d
   const [secondaryColor, setSecondaryColor] = useState("#c0392b");
   const [accentColor, setAccentColor] = useState("#c0392b");
   const [pendingAdd, setPendingAdd] = useState(null); // { view, segment, label, allowsPocket, localX, localY, width, height, screenX, screenY }
+  const [fabricPickerOpen, setFabricPickerOpen] = useState(false);
   const popoverRef = useRef(null);
 
   // Colours read off a reference photo replace the picked ones when they change.
@@ -381,21 +384,23 @@ export default function GarmentFlatPreview({ pieces, accessories = [], gender, d
         <h2 style={{ margin: 0, fontSize: 15 }}>Design preview</h2>
       </div>
       <div className="preview-controls">
-        <div className="field" style={{ margin: 0, display: "flex", alignItems: "center", gap: 8 }}>
-          <label style={{ margin: 0 }} title="A free-pick preview colour — it isn't checked against any real fabric. For an order using a cataloged fabric, pick its actual colour from the swatches in the Fabric section above instead.">
-            Preview color (free pick)
-          </label>
-          <input
-            type="color"
-            value={color}
-            onChange={(e) => {
-              setColor(e.target.value);
-              onColorChange?.({ main: e.target.value });
-            }}
-            style={{ width: 34, height: 26, padding: 0, border: "1px solid #454c51", borderRadius: 4, background: "none" }}
-          />
-        </div>
-        {hasAccent && (
+        {sharedControls && (
+          <div className="field" style={{ margin: 0, display: "flex", alignItems: "center", gap: 8 }}>
+            <label style={{ margin: 0 }} title="A free-pick preview colour — it isn't checked against any real fabric. For an order using a cataloged fabric, pick its actual colour from the swatches in the Fabric section above instead.">
+              Preview color (free pick)
+            </label>
+            <input
+              type="color"
+              value={color}
+              onChange={(e) => {
+                setColor(e.target.value);
+                onColorChange?.({ main: e.target.value });
+              }}
+              style={{ width: 34, height: 26, padding: 0, border: "1px solid var(--border-strong)", borderRadius: 4, background: "none" }}
+            />
+          </div>
+        )}
+        {sharedControls && hasAccent && (
           <div className="field" style={{ margin: 0, display: "flex", alignItems: "center", gap: 8 }}>
             <label style={{ margin: 0 }} title="A free-pick preview colour — it isn't checked against any real fabric.">Trim / panel color</label>
             <input
@@ -405,7 +410,7 @@ export default function GarmentFlatPreview({ pieces, accessories = [], gender, d
                 setAccentColor(e.target.value);
                 onColorChange?.({ accent: e.target.value });
               }}
-              style={{ width: 34, height: 26, padding: 0, border: "1px solid #454c51", borderRadius: 4, background: "none" }}
+              style={{ width: 34, height: 26, padding: 0, border: "1px solid var(--border-strong)", borderRadius: 4, background: "none" }}
             />
           </div>
         )}
@@ -426,12 +431,30 @@ export default function GarmentFlatPreview({ pieces, accessories = [], gender, d
               type="color"
               value={secondaryColor}
               onChange={(e) => setSecondaryColor(e.target.value)}
-              style={{ width: 34, height: 26, padding: 0, border: "1px solid #454c51", borderRadius: 4, background: "none" }}
+              style={{ width: 34, height: 26, padding: 0, border: "1px solid var(--border-strong)", borderRadius: 4, background: "none" }}
             />
           </div>
         )}
       </div>
-      {fabricColors?.length > 0 ? (
+      {sharedControls && fabrics?.length > 0 && (
+        <div className="fabric-inline-picker">
+          <button type="button" className="fabric-inline-picker-toggle" onClick={() => setFabricPickerOpen((o) => !o)}>
+            {fabricName ? `Fabric: ${fabricName}` : "Pick a fabric"}
+            <span className="fabric-inline-picker-caret">{fabricPickerOpen ? "▲" : "▼"}</span>
+          </button>
+          {fabricPickerOpen && (
+            <FabricPicker
+              fabrics={fabrics}
+              currentName={fabricName}
+              onPick={(name) => {
+                onFabricPick?.(name);
+                setFabricPickerOpen(false);
+              }}
+            />
+          )}
+        </div>
+      )}
+      {!sharedControls ? null : fabricColors?.length > 0 ? (
         <div className="fabric-colors-inline">
           <label style={{ margin: "0 0 4px", display: "block" }}>
             {fabricColors.length} real colours for this fabric
@@ -439,20 +462,13 @@ export default function GarmentFlatPreview({ pieces, accessories = [], gender, d
           <FabricColorPicker colors={fabricColors} colorHint={colorHint} onPick={(slot, hex) => onColorChange?.({ [slot]: hex })} />
         </div>
       ) : (
-        <p className="fabric-colors-hint">
-          No catalog fabric picked yet — "Preview color" above is a free-pick guess, not a real fabric colour.{" "}
-          <a
-            href="#fabric-picker"
-            onClick={(e) => {
-              e.preventDefault();
-              document.getElementById("fabric-picker")?.scrollIntoView({ behavior: "smooth", block: "start" });
-            }}
-          >
-            Pick a fabric ↑
-          </a>{" "}
-          to see its real colours here.
-        </p>
+        !fabricName && (
+          <p className="fabric-colors-hint">
+            No catalog fabric picked yet — "Preview color" above is a free-pick guess, not a real fabric colour. Pick one above to see its real colours here.
+          </p>
+        )
       )}
+      {!sharedControls && <p className="fabric-colors-hint">Colour and fabric follow the preview above.</p>}
       <div className="garment-preview-body">
         <div className="flat-views">
           {(views === "both" || views === "front" || views === "all") && (

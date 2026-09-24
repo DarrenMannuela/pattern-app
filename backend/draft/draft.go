@@ -138,6 +138,10 @@ type Piece struct {
 	CutHeight   float64     `json:"cutHeight,omitempty"`
 	CutOffset   *Point      `json:"cutOffset,omitempty"`
 	Grainline   *[4]float64 `json:"grainline,omitempty"` // x1,y1,x2,y2 in sewing-line coordinates
+	// Outline, when set, is the whole panel's sewing line before it was cut
+	// into parts (a colour block splits the front). Drawings use it; cutting
+	// uses PathData.
+	Outline string `json:"outline,omitempty"`
 	// Qty is how many copies of this piece as drawn one garment needs.
 	// A half piece on a fold counts both halves. Set by FinishAll.
 	Qty int `json:"qty,omitempty"`
@@ -368,8 +372,7 @@ func draftFront(qBust, qWaist, scye, neckW, shoulderLen, backWaistLen float64, d
 	cfBottom := point{0, round1(height)}
 
 	// Neckline curve control points (cfTop -> neckPoint).
-	nc1 := point{round1(cfTop.x), round1(neckDrop * 0.4)}
-	nc2 := point{round1(neckW * 0.55), round1(neckDrop * 0.12)}
+	nc1, nc2 := neckControls(cfTop, neckPoint)
 	// Armhole curve control points (shoulderTip -> underarm).
 	ac1 := point{round1(shoulderTip.x + (underarm.x-shoulderTip.x)*0.25 + 1.5), round1(shoulderTip.y + (underarm.y-shoulderTip.y)*0.15)}
 	ac2 := point{round1(underarm.x + 1.2), round1(underarm.y - (underarm.y-shoulderTip.y)*0.3)}
@@ -452,6 +455,18 @@ func draftFront(qBust, qWaist, scye, neckW, shoulderLen, backWaistLen float64, d
 	}, armholeLen, neckLen
 }
 
+// neckControls are the bezier controls for a neckline from the centre line
+// (centre front or back) up to the side neck point: a quarter ellipse that
+// leaves the centre line square (so the two mirrored halves join in one smooth
+// curve, not a notch) and reaches the neck point square to the shoulder, as
+// every block-drafting method prescribes. 0.552 is the usual constant that
+// makes a cubic bezier match a quarter circle.
+func neckControls(centre, neck point) (point, point) {
+	const k = 0.552
+	return point{round1(centre.x + (neck.x-centre.x)*k), centre.y},
+		point{neck.x, round1(neck.y + (centre.y-neck.y)*k)}
+}
+
 // draftBack mirrors draftFront's doc comment: returns the Piece plus
 // its armhole and neckline curve lengths.
 func draftBack(qBust, qWaist, scye, neckW, shoulderLen, backWaistLen float64) (Piece, float64, float64) {
@@ -478,8 +493,7 @@ func draftBack(qBust, qWaist, scye, neckW, shoulderLen, backWaistLen float64) (P
 	dartLeft := point{round1(apexX - dartIntake/2), round1(height)}
 	cbBottom := point{0, round1(height)}
 
-	nc1 := point{round1(cbTop.x), round1(neckDrop * 0.3)}
-	nc2 := point{round1(neckW * 0.5), 0}
+	nc1, nc2 := neckControls(cbTop, neckPoint)
 	ac1 := point{round1(shoulderTip.x + (underarm.x-shoulderTip.x)*0.25 + 1.2), round1(shoulderTip.y + (underarm.y-shoulderTip.y)*0.15)}
 	ac2 := point{round1(underarm.x + 1.0), round1(underarm.y - (underarm.y-shoulderTip.y)*0.3)}
 

@@ -2,7 +2,8 @@ import { useEffect, useId, useState } from "react";
 import { api } from "../api.js";
 import { layoutGarmentViews } from "../lib/garmentFlat.js";
 import { pocketPath } from "../lib/pocketShapes.js";
-import { MotifDefs, motifFill } from "./MotifDefs.jsx";
+import { MotifDefs } from "./MotifDefs.jsx";
+import { motifFill } from "../lib/motifs.js";
 
 // Picture tiles for the pattern maker. Each shirt part is shown as a small
 // drawing of that part on a shirt, produced by the same pattern drafting and
@@ -46,6 +47,7 @@ function optionsFor(slot, part, base) {
   if (slot === "back") o.backStyle = part;
   if (slot === "hem") o.hemStyle = part;
   if (slot === "trim") o.trim = part;
+  if (slot === "colorBlock") o.colorBlock = part === "none" ? "" : part;
   if (slot === "bands") o.motifs = [part];
   if (slot === "pattern") {
     o.motifs = ["centre"];
@@ -70,6 +72,7 @@ function payloadFor(o, size, garmentType) {
     hemStyle: o.hemStyle,
     neckline: o.neckline,
     trim: o.trim,
+    colorBlock: o.colorBlock || "",
     panel: o.motifs.includes("side") ? "side" : "none",
     motifs: o.motifs.filter((x) => x !== "side"),
     pattern: o.pattern,
@@ -170,7 +173,7 @@ export function PartThumb({ slot, thumb }) {
         let el = null;
         if (it.kind === "path") {
           const patterned = (it.category === "motif" || it.category === "panel") && motifFill(`mo${uid}`, o.pattern, it.orient);
-          el = <path key={it.key} d={it.d} transform={it.transform} fill={it.noFill ? "none" : patterned || (it.category === "collar" ? COLLAR : it.category === "trim" || it.category === "panel" || it.category === "motif" ? ACCENT : FABRIC)} stroke={it.noStroke ? "none" : LINE} strokeWidth={sw} />;
+          el = <path key={it.key} d={it.d} transform={it.transform} fill={it.noFill ? "none" : patterned || (it.fabric === "contrast" ? ACCENT : it.category === "collar" ? COLLAR : it.category === "trim" || it.category === "panel" || it.category === "motif" ? ACCENT : FABRIC)} stroke={it.noStroke ? "none" : LINE} strokeWidth={sw} />;
         } else if (it.kind === "line" && it.category === "trim") {
           el = <line key={it.key} x1={it.x1} y1={it.y1} x2={it.x2} y2={it.y2} stroke={ACCENT} strokeWidth={Math.max(0.6, w / 60)} strokeLinecap="round" />;
         } else if (it.kind === "line") {

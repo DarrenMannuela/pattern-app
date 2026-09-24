@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
-import GarmentTypePicker, { GARMENT_LABELS } from "./GarmentTypePicker";
+import GarmentTypePicker from "./GarmentTypePicker";
+import { GARMENT_LABELS } from "../lib/garmentTypes.js";
 
 const STATUS_LABELS = {
   consultation: "Consultation",
@@ -9,12 +10,7 @@ const STATUS_LABELS = {
   approved: "Approved",
 };
 
-const STATUS_COLORS = {
-  consultation: "#7A5B9C",
-  mockup: "#5B6E9C",
-  revision: "#B5453D",
-  approved: "#4B8C5A",
-};
+const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
 export default function OrdersView({ onOpenOrder }) {
   const [orders, setOrders] = useState(null);
@@ -80,7 +76,7 @@ export default function OrdersView({ onOpenOrder }) {
             onChange={(e) => setName(e.target.value)}
           />
         </div>
-        <label style={{ display: "block", fontSize: "11.5px", color: "#9aa0a5", marginBottom: 8 }}>
+        <label style={{ display: "block", fontSize: "11.5px", color: "var(--text-3)", marginBottom: 8 }}>
           Garment type
         </label>
         <GarmentTypePicker value={garmentType} onChange={setGarmentType} />
@@ -104,6 +100,23 @@ export default function OrdersView({ onOpenOrder }) {
 
       <main>
         {!orders && !error && <p className="empty">Loading orders…</p>}
+        {!orders && error && (
+          <div className="empty load-failed" role="alert">
+            <p>Couldn't load your orders.</p>
+            <p className="load-failed-detail">{error}</p>
+            <div className="load-failed-actions">
+              <button
+                className="btn-add btn-inline"
+                onClick={() => {
+                  setError(null);
+                  reload();
+                }}
+              >
+                Try again
+              </button>
+            </div>
+          </div>
+        )}
         {orders && orders.length === 0 && (
           <p className="empty">
             No orders yet — create one on the left to get started.
@@ -129,14 +142,11 @@ export default function OrdersView({ onOpenOrder }) {
                     </span>
                   </div>
                   <div className="order-row-meta">
-                    <span
-                      className="order-status"
-                      style={{ background: STATUS_COLORS[o.status] || "#787e82" }}
-                    >
+                    <span className="order-status" data-status={o.status}>
                       {STATUS_LABELS[o.status] || o.status}
                     </span>
                     <span className="mono order-row-count">
-                      {o.sizes?.length || 0} sizes · {o.mockups?.length || 0} revisions
+                      {plural(o.sizes?.length || 0, "size")} · {plural(o.mockups?.length || 0, "revision")}
                     </span>
                     <button
                       className="order-row-delete"

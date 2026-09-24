@@ -8,7 +8,7 @@
 // directly, in the browser or from a plain Node script.
 
 import { layoutMerchView } from "./merchFlat.js";
-import { collarDims, frontLeaf, frontBand, backBand, backBandLine, backArch, frontBandEdge, backBandTop, vNeckBand, backNeckStrip } from "./collarGeometry.js";
+import { collarDims, flatCollarLeaf, standingCollar, backBand, backBandTop, vNeckBand, backNeckStrip, turnDownCollar, backCollar, collarRise } from "./collarGeometry.js";
 import { bodySilhouette, sleeveTube, sleeveGeoFromPiece, SLEEVE_ANGLE } from "./torsoGeometry.js";
 import { sideStrip, wrapMatrix, rectCorners, overlaps, svgMatrix } from "./sleeveWrap.js";
 
@@ -179,14 +179,40 @@ function segmentItems(segments, view) {
 // center line), the sleeve hangs from the real shoulder and underarm
 // points, and the collar is fitted to the real neckline. Coordinates are
 // pattern cm with y = 0 at the neck point.
-function torsoFrame(pieces, opts) {
-  const front = findPiece(pieces, /front/i);
-  const back = findPiece(pieces, /back/i);
+// A half piece cut on the fold starts and ends on the centre line (x = 0), and
+// its closing edge runs down that line. Drawn as-is, each mirrored half outlines
+// that edge and the garment gets a centre seam it doesn't have. This is the
+// outline without the closing edge, or null when the path isn't a fold half.
+export function foldOutline(d) {
+  const cmds = [...d.matchAll(/([MLCZ])([^MLCZ]*)/gi)].map((m) => ({
+    c: m[1].toUpperCase(),
+    n: (m[2].match(/-?\d*\.?\d+(?:e-?\d+)?/gi) || []).map(Number),
+  }));
+  if (cmds.length < 3 || cmds[0].c !== "M" || cmds[cmds.length - 1].c !== "Z") return null;
+  const onLine = (x) => Math.abs(x) < 0.05;
+  const endX = (cmd) => cmd.n[cmd.n.length - 2];
+  // A command list is [M, ...segments, Z]; points come in pairs, so a segment's
+  // end is its last pair.
+  const body = cmds.slice(0, -1);
+  if (!onLine(body[0].n[0])) return null;
+  // Drop straight runs along the fold at the end...
+  while (body.length > 2 && body[body.length - 1].c === "L" && onLine(endX(body[body.length - 1])) && onLine(endX(body[body.length - 2]))) body.pop();
+  if (!onLine(endX(body[body.length - 1]))) return null;
+  // ...and at the start, by starting where the run along the fold ends.
+  while (body.length > 2 && body[1].c === "L" && onLine(body[1].n[0])) body.splice(0, 2, { c: "M", n: body[1].n.slice(-2) });
+  return body.map((cmd) => `${cmd.c} ${cmd.n.join(" ")}`).join(" ");
+}
+
+function torsoFrame(pieces) {
+  // The panel itself, not a colour block's upper part.
+  const front = findPiece(pieces, /^(?!upper ).*front/i);
+  const back = findPiece(pieces, /^(?!upper ).*back/i);
   const yoke = findPiece(pieces, /^yoke$/i);
   const sleeve = findPiece(pieces, /sleeve/i);
-  const frontSil = front && bodySilhouette(front.pathData);
+  // A colour-blocked panel is cut in two; its outline is the whole panel's.
+  const frontSil = front && bodySilhouette(front.outline || front.pathData);
   if (!frontSil || !frontSil.neck) return null;
-  const backSil = back && bodySilhouette(back.pathData);
+  const backSil = back && bodySilhouette(back.outline || back.pathData);
   const sleeveGeo = sleeveGeoFromPiece(sleeve);
   const tube = sleeveTube(frontSil.shoulder, frontSil.underarm, sleeveGeo, frontSil.neck);
   // The back's shoulder point comes from the yoke (the back panel starts below it).
@@ -219,7 +245,7 @@ function torsoFrame(pieces, opts) {
 
 function layoutTorsoView(pieces, view, opts) {
   const { accessories = [], sleeveStyle, collarStyle } = opts;
-  const g = torsoFrame(pieces, opts);
+  const g = torsoFrame(pieces);
   if (!g) return null;
   const body = view === "front" ? g.front : g.back;
   if (!body) return null;
@@ -248,6 +274,13 @@ function layoutTorsoView(pieces, view, opts) {
     items.push({ key: `${key}-main`, kind: "path", d, transform: main, category, half: "main", ...extra });
     items.push({ key: `${key}-mirror`, kind: "path", d, transform: mirror, category, half: "mirror", ...extra });
   };
+  // A panel cut on the fold: filled whole, outlined everywhere but the fold.
+  const onFold = (key, d, category = "body", extra = {}) => {
+    const edge = foldOutline(d);
+    if (!edge) return both(key, d, category, extra);
+    both(key, d, category, { ...extra, noStroke: true });
+    both(`${key}-edge`, edge, category, { ...extra, noFill: true });
+  };
   const line = (key, x1, y1, x2, y2, category = "seam") => {
     items.push({ key: `${key}-main`, kind: "line", x1, y1, x2, y2, category });
     items.push({ key: `${key}-mirror`, kind: "line", x1: -x1, y1, x2: -x2, y2, category });
@@ -267,24 +300,36 @@ function layoutTorsoView(pieces, view, opts) {
     if (!collar) both("neck-inner-edge", `M ${f(bc[3])} C ${f(bc[2])} ${f(bc[1])} ${f(bc[0])}`, "inner", { noFill: true });
   }
 
-  // The back of the collar rising behind the neck opening — drawn first so
-  // the body's neckline cuts it.
-  if (collar && view === "front") {
-    const rise = isStanding ? dims.thick : isPolo ? dims.fall * 0.85 : styleKey === "peter_pan" ? 1.6 : dims.standH + dims.fall * 0.35;
-    const arch = backArch(backNeckCurve, rise);
-    if (arch) both("collar-arch", arch, "collar");
-  }
+  // A turn-down collar (point, spread, polo) is drawn whole after the body;
+  // a standing or Peter Pan collar shows its back rising behind the neck
+  // opening, drawn first so the body's neckline cuts it.
+  const turnDown = !!collar && !isStanding && styleKey !== "peter_pan";
 
   // The sleeve: from the shoulder point of THIS view's panel. Carries the
   // real sleeve piece's own fabric tag, so a sleeve cut from the contrast
   // fabric (opts.SleeveFabric) is filled with that colour, not the torso's.
   const tube = g.tubes[view];
-  const S = tube.shoulder;
   both("sleeve", tube.d, "body", { fabric: g.sleeve?.fabric });
 
   // Body: the back is the yoke above the back panel.
-  if (view === "back" && g.yoke) both("yoke", g.yoke.pathData, "body");
-  both("body", sil.d, "body");
+  if (view === "back" && g.yoke) onFold("yoke", g.yoke.pathData, "body", { fabric: g.yoke.fabric });
+  onFold("body", sil.d, "body");
+
+  // A colour block: the top of the panel in the contrast fabric, above a seam
+  // straight across or dipping to a V at the centre line (landmarks from the
+  // pattern's own block line).
+  {
+    const bcf = body.landmarks?.blockCF;
+    const barm = body.landmarks?.blockArm;
+    if (bcf && barm && barm.x > 0) {
+      const at = (x) => bcf.y + ((barm.y - bcf.y) * Math.abs(x)) / barm.x;
+      const d = `M -60 -20 L 60 -20 L 60 ${at(60).toFixed(2)} L 0 ${bcf.y.toFixed(2)} L -60 ${at(60).toFixed(2)} Z`;
+      for (const [half, transform] of [["main", main], ["mirror", mirror]]) {
+        items.push({ key: `color-block-${half}`, kind: "path", d, transform: "", category: "panel", half, clipPath: { d: sil.d, transform } });
+      }
+      line("color-block-seam", 0, bcf.y, barm.x + 1, at(barm.x + 1), "seam");
+    }
+  }
 
   // A polo's side seam is left open below this point as a vent — marked with
   // a short tick crossing the seam, at the real cut height the piece itself
@@ -365,7 +410,7 @@ function layoutTorsoView(pieces, view, opts) {
   }
   if (isV && !collar && neckTrim && backNeckCurve) {
     const back = view === "front" ? backNeckStrip(backNeckCurve, 1.2) : backBand(backNeckCurve, 2.8);
-    if (back) both("neck-trim-back", back, "trim");
+    if (back) onFold("neck-trim-back", back, "trim");
   }
 
   // Points along the sleeve's own axis: `back` cm up the arm from a hem point.
@@ -389,9 +434,6 @@ function layoutTorsoView(pieces, view, opts) {
     const button = up(tube.center, g.cuffH / 2);
     for (const sign of [1, -1]) items.push({ key: `cuff-button-${sign}`, kind: "circle", cx: sign * button[0], cy: button[1], r: 0.8, category: "button" });
   }
-
-  // The armhole seam where the sleeve is sewn on.
-  line("armhole", S[0] - 1, S[1] + 0.8, sil.underarm[0] - 0.6, sil.underarm[1], "seam");
 
   // Back yoke seam: the seam between the yoke and the back panel.
   if (view === "back" && g.yoke) {
@@ -434,25 +476,56 @@ function layoutTorsoView(pieces, view, opts) {
   if (collar) {
     if (view === "front") {
       if (isStanding) {
-        const band = frontBand(g.frontSil.neckCurve, dims.thick);
-        if (band) both("collar-band", band, "collar");
-        if (piping) polyline("collar-pipe", frontBandEdge(g.frontSil.neckCurve, dims.thick), "trim");
+        const c = standingCollar(g.frontSil.neckCurve, dims.thick);
+        if (c) {
+          onFold("collar-band-inside", c.back, "inner");
+          both("collar-band", c.front, "collar");
+          if (piping) {
+            polyline("collar-pipe", c.edge, "trim");
+            polyline("collar-pipe-back", c.top, "trim");
+          }
+        }
+      } else if (turnDown) {
+        const c = turnDownCollar(g.frontSil.neckCurve, g.frontSil.shoulder, dims, isPolo ? "polo" : "point");
+        if (c) {
+          // A polo's own collar piece carries its real fabric tag (see
+          // SleeveFabric's own pattern): its knit collar is what goes
+          // contrast, not a piped edge.
+          const fabric = isPolo ? collar.fabric : undefined;
+          onFold("collar-inner", c.inner, "inner");
+          onFold("collar-band", c.band, "collar", { fabric });
+          both("collar-leaf", c.leaf, "collar", { fabric });
+          polyline("collar-seam", c.seam);
+          if (piping) polyline("collar-pipe", c.edge, "trim");
+        }
       } else {
-        const leaf = frontLeaf(styleKey, g.frontSil.neckCurve, dims);
+        const leaf = flatCollarLeaf(g.frontSil.neckCurve, dims);
         if (leaf) {
-          both("collar-leaf", leaf.d, "collar");
-          polyline("collar-roll", leaf.roll);
+          // A polo's own collar piece carries its real fabric tag (see
+          // SleeveFabric's own pattern) — its knit collar is what actually
+          // goes contrast, not a piped edge.
+          both("collar-leaf", leaf.d, "collar", { fabric: isPolo ? collar.fabric : undefined });
           if (piping) polyline("collar-pipe", leaf.edge || [], "trim");
         }
       }
     } else {
       // From behind: a flat Peter Pan collar lies on the back; the others
-      // stand up (stand plus the fall over it), with the seam between them.
-      const dist = styleKey === "peter_pan" ? dims.width * 0.9 : -(isStanding ? dims.thick * 1.1 : isPolo ? dims.fall * 0.9 : dims.standH + dims.fall * 0.7);
-      const band = backBand(backNeckCurve, dist);
-      if (band) both("collar-back", band, "collar");
-      if (dist < 0 && !isStanding && !isPolo) polyline("collar-stand-seam", backBandLine(backNeckCurve, dims.standH));
-      if (piping) polyline("collar-pipe", backBandTop(backNeckCurve, dist), "trim");
+      // stand up as a band arched along the top (the stand is hidden under
+      // the fall, so no seam shows).
+      if (styleKey === "peter_pan") {
+        const dist = dims.width * 0.9;
+        const band = backBand(backNeckCurve, dist);
+        if (band) onFold("collar-back", band, "collar");
+        if (piping) polyline("collar-pipe", backBandTop(backNeckCurve, dist), "trim");
+      } else {
+        const c = backCollar(backNeckCurve, collarRise(isStanding ? "standing" : isPolo ? "polo" : "point", dims));
+        if (c) {
+          const fabric = isPolo ? collar.fabric : undefined;
+          both("collar-back", c.d, "collar", { fabric, noStroke: true });
+          both("collar-back-edge", c.edge, "collar", { fabric, noFill: true });
+          if (piping) polyline("collar-pipe", c.top, "trim");
+        }
+      }
     }
   }
 
@@ -556,7 +629,7 @@ function sleeveExtraItems(acc, viewKey, g, pieces, frame) {
 // One sleeve seen from the outside, for the wearer's left or right arm.
 function layoutSleeveView(pieces, side, opts) {
   const { accessories = [], sleeveStyle, collarStyle } = opts;
-  const g = torsoFrame(pieces, opts);
+  const g = torsoFrame(pieces);
   if (!g) return null;
   const st = sideStrip(g.tubes.front);
   const sign = side === "left" ? 1 : -1;
@@ -885,8 +958,13 @@ function layoutSkirtView(pieces, view, opts) {
   const items = [];
   // The panel is one half on the fold (x = 0 is center front/back), mirrored.
   const { main, mirror } = templateHalves();
-  items.push({ key: "skirt-main", kind: "path", d: body.pathData, transform: main, category: "body", half: "main" });
-  items.push({ key: "skirt-mirror", kind: "path", d: body.pathData, transform: mirror, category: "body", half: "mirror" });
+  // The front is cut on the fold (no centre seam); the back has a centre-back
+  // seam below its zip, so its centre edge stays.
+  const skirtEdge = view === "front" ? foldOutline(body.pathData) : null;
+  for (const [half, transform] of [["main", main], ["mirror", mirror]]) {
+    items.push({ key: `skirt-${half}`, kind: "path", d: body.pathData, transform, category: "body", half, ...(skirtEdge ? { noStroke: true } : {}) });
+    if (skirtEdge) items.push({ key: `skirt-edge-${half}`, kind: "path", d: skirtEdge, transform, category: "body", half, noFill: true });
+  }
 
   const both = (key, x1, y1, x2, y2, category = "seam") => {
     items.push({ key: `${key}-main`, kind: "line", x1, y1, x2, y2, category });

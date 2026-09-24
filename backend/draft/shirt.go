@@ -72,6 +72,11 @@ type ShirtOptions struct {
 	// Trim: "none" (default) or "contrast" — a contrast-fabric binding round a
 	// V-neck, or piping along the collar edge.
 	Trim string `json:"trim"`
+	// ColorBlock cuts the top of the front and back from the contrast fabric:
+	// "" (none), "straight" (across, at mid-armhole) or "v" (dipping to a V at
+	// centre front). The back takes its yoke, or a straight block if it has
+	// none. Not combined with an insert panel.
+	ColorBlock string `json:"colorBlock"`
 	// SleeveFabric: "main" (default) or "contrast" — cuts the sleeve (and its
 	// cuff, on a long sleeve) from the garment's second fabric instead of the
 	// torso's, so the cutting layout nests and quantifies it separately.
@@ -203,7 +208,14 @@ func DraftShirt(m Measurements, opts ShirtOptions) []Piece {
 		var collarPieces []Piece
 		switch opts.CollarStyle {
 		case "polo":
-			collarPieces = []Piece{draftPoloCollar(frontNeck + backNeck)}
+			collar := draftPoloCollar(frontNeck + backNeck)
+			if opts.Trim == "contrast" {
+				// A real pique polo's contrast almost always sits in its knit
+				// collar (and cuffs — see SleeveFabric), not a piped edge, which
+				// isn't how a polo's collar is finished at all.
+				collar.Fabric = "contrast"
+			}
+			collarPieces = []Piece{collar}
 		case "standing":
 			collarPieces = []Piece{draftStandingCollar(frontNeck + backNeck)}
 		case "spread":
@@ -214,7 +226,7 @@ func DraftShirt(m Measurements, opts ShirtOptions) []Piece {
 			collarPieces = []Piece{draftCollarStand(frontNeck + backNeck), draftCollarLeaf(frontNeck + backNeck)}
 		}
 		pieces = append(pieces, collarPieces...)
-		if opts.Trim == "contrast" {
+		if opts.Trim == "contrast" && opts.CollarStyle != "polo" {
 			pieces = append(pieces, neckTrimPieces(false, "contrast", neckW, vDepth, (frontNeck+backNeck)*1.1+16)...)
 		}
 	}
@@ -237,6 +249,15 @@ func DraftShirt(m Measurements, opts ShirtOptions) []Piece {
 		default:
 			pieces = append(pieces, draftPlacket(placketLen))
 		}
+		// A front that opens all the way down is a left and a right front, not
+		// a half on the fold: its centre-front edge needs a seam allowance for
+		// the placket (or facing) to be sewn to. A pullover front (plain, half
+		// placket, polo) stays one piece cut on the fold.
+		if !isPolo && opts.FrontStyle != "plain" && opts.FrontStyle != "half_placket" {
+			pieces[0].FoldEdge = ""
+			pieces[0].Qty = 2
+			pieces[0].Notes = strings.Replace(pieces[0].Notes, "Half front, center front (left edge) on fold", "Front, cut 2 (left and right, mirror images); the centre-front edge (left) is sewn to the placket", 1)
+		}
 	}
 	if vNeck {
 		pieces = append(pieces, neckTrimPieces(true, opts.Trim, neckW, vDepth, 0)...)
@@ -250,6 +271,10 @@ func DraftShirt(m Measurements, opts ShirtOptions) []Piece {
 				}
 			}
 		}
+	}
+
+	if (opts.ColorBlock == "straight" || opts.ColorBlock == "v") && opts.Panel != "side" && !isPolo {
+		pieces = colorBlock(pieces, back, opts.ColorBlock)
 	}
 
 	pieces = append(pieces, motifPieces(front, back, sleeve, opts.Motifs, opts.Pattern)...)
@@ -442,8 +467,7 @@ func draftRelaxedBackWithYoke(qChest, scye, neckW, shoulderLen, backWaistLen flo
 	hemSide := point{round1(hemWidth), round1(height)}
 	cbBottom := point{0, round1(height)}
 
-	nc1 := point{round1(cbTop.x), round1(neckDrop * 0.3)}
-	nc2 := point{round1(neckW * 0.5), 0}
+	nc1, nc2 := neckControls(cbTop, neckPoint)
 	ac1 := point{round1(shoulderTip.x + (underarm.x-shoulderTip.x)*0.25 + 1.0), round1(shoulderTip.y + (underarm.y-shoulderTip.y)*0.15)}
 	ac2 := point{round1(underarm.x + 1.0), round1(underarm.y - (underarm.y-shoulderTip.y)*0.3)}
 
@@ -519,8 +543,7 @@ func draftBackWithYoke(qBust, qWaist, scye, neckW, shoulderLen, backWaistLen flo
 	dartLeft := point{round1(apexX - dartIntake/2), round1(height)}
 	cbBottom := point{0, round1(height)}
 
-	nc1 := point{round1(cbTop.x), round1(neckDrop * 0.3)}
-	nc2 := point{round1(neckW * 0.5), 0}
+	nc1, nc2 := neckControls(cbTop, neckPoint)
 	ac1 := point{round1(shoulderTip.x + (underarm.x-shoulderTip.x)*0.25 + 1.2), round1(shoulderTip.y + (underarm.y-shoulderTip.y)*0.15)}
 	ac2 := point{round1(underarm.x + 1.0), round1(underarm.y - (underarm.y-shoulderTip.y)*0.3)}
 

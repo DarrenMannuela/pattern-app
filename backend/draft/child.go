@@ -85,8 +85,7 @@ func draftRelaxedFront(qChest, scye, neckW, shoulderLen, backWaistLen float64, n
 	hemSide := point{round1(hemWidth), round1(height)}
 	cfBottom := point{0, round1(height)}
 
-	nc1 := point{round1(cfTop.x), round1(neckDrop * 0.4)}
-	nc2 := point{round1(neckW * 0.55), round1(neckDrop * 0.12)}
+	nc1, nc2 := neckControls(cfTop, neckPoint)
 	ac1 := point{round1(shoulderTip.x + (underarm.x-shoulderTip.x)*0.25 + 1.0), round1(shoulderTip.y + (underarm.y-shoulderTip.y)*0.15)}
 	ac2 := point{round1(underarm.x + 1.0), round1(underarm.y - (underarm.y-shoulderTip.y)*0.3)}
 
@@ -133,8 +132,7 @@ func draftRelaxedBack(qChest, scye, neckW, shoulderLen, backWaistLen float64, na
 	hemSide := point{round1(hemWidth), round1(height)}
 	cbBottom := point{0, round1(height)}
 
-	nc1 := point{round1(cbTop.x), round1(neckDrop * 0.3)}
-	nc2 := point{round1(neckW * 0.5), 0}
+	nc1, nc2 := neckControls(cbTop, neckPoint)
 	ac1 := point{round1(shoulderTip.x + (underarm.x-shoulderTip.x)*0.25 + 0.8), round1(shoulderTip.y + (underarm.y-shoulderTip.y)*0.15)}
 	ac2 := point{round1(underarm.x + 0.8), round1(underarm.y - (underarm.y-shoulderTip.y)*0.3)}
 

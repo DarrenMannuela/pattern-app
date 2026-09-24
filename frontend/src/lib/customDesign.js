@@ -124,3 +124,12 @@ export function nearestOnOutline(points, p) {
   }
   return best;
 }
+
+// The pieces the backend needs, from the working drawing.
+export function customPayload(design) {
+  return {
+    pieces: (design?.pieces || [])
+      .filter((p) => p.points.length >= 3)
+      .map((p) => ({ name: p.name, pathData: pointsToPath(p.points), foldEdge: p.fold || "", qty: Math.max(1, Number(p.qty) || 1) })),
+  };
+}

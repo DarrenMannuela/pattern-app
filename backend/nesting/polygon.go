@@ -60,6 +60,99 @@ func ParsePath(d string) []Point {
 	return points
 }
 
+// ScalePath scales an absolute M/L/C/Z path by sx across and sy down. Every
+// command this project emits takes coordinate pairs, so numbers alternate x, y.
+// It is how a piece is enlarged to allow for fabric that shrinks.
+func ScalePath(d string, sx, sy float64) string {
+	var out strings.Builder
+	i, n := 0, 0
+	runes := []rune(d)
+	for i < len(runes) {
+		c := runes[i]
+		if strings.ContainsRune("MLCZ", c) {
+			out.WriteRune(c)
+			i++
+			continue
+		}
+		if c == '-' || c == '.' || (c >= '0' && c <= '9') {
+			j := i + 1
+			for j < len(runes) && (runes[j] == '.' || (runes[j] >= '0' && runes[j] <= '9')) {
+				j++
+			}
+			v, err := strconv.ParseFloat(string(runes[i:j]), 64)
+			if err != nil {
+				out.WriteString(string(runes[i:j]))
+			} else {
+				if n%2 == 0 {
+					v *= sx
+				} else {
+					v *= sy
+				}
+				out.WriteString(strconv.FormatFloat(v, 'f', 2, 64))
+				n++
+			}
+			i = j
+			continue
+		}
+		out.WriteRune(c)
+		i++
+	}
+	return out.String()
+}
+
+// MirrorPath flips a piece left to right, keeping its left edge at x = 0: the
+// other piece of a left/right pair (a right front from a left front).
+func MirrorPath(d string) string {
+	pts := ParsePath(d)
+	if len(pts) < 3 {
+		return d
+	}
+	_, _, maxX, _ := BoundingBox(pts)
+	var b strings.Builder
+	for i := len(pts) - 1; i >= 0; i-- { // reversed, to keep one winding
+		if i == len(pts)-1 {
+			b.WriteString("M")
+		} else {
+			b.WriteString(" L")
+		}
+		b.WriteString(strconv.FormatFloat(maxX-pts[i].X, 'f', 2, 64) + "," + strconv.FormatFloat(pts[i].Y, 'f', 2, 64))
+	}
+	b.WriteString(" Z")
+	return b.String()
+}
+
+// UnfoldPath turns a half piece drawn against a fold on its left edge (x = 0)
+// into the whole piece: the half mirrored across the fold, joined to itself.
+// It returns the whole outline as a polygon path, shifted so its own left edge
+// is at x = 0, and the whole width.
+func UnfoldPath(d string) (string, float64) {
+	pts := ParsePath(d)
+	if len(pts) < 3 {
+		return d, 0
+	}
+	_, _, maxX, _ := BoundingBox(pts)
+	var b strings.Builder
+	write := func(i int, p Point) {
+		if i == 0 {
+			b.WriteString("M")
+		} else {
+			b.WriteString(" L")
+		}
+		b.WriteString(strconv.FormatFloat(p.X, 'f', 2, 64) + "," + strconv.FormatFloat(p.Y, 'f', 2, 64))
+	}
+	n := 0
+	for i := len(pts) - 1; i >= 0; i-- { // the mirrored half, reversed to keep one winding
+		write(n, Point{maxX - pts[i].X, pts[i].Y})
+		n++
+	}
+	for _, p := range pts {
+		write(n, Point{maxX + p.X, p.Y})
+		n++
+	}
+	b.WriteString(" Z")
+	return b.String(), 2 * maxX
+}
+
 func parseNums(s string) []float64 {
 	fields := strings.FieldsFunc(s, func(r rune) bool {
 		return r == ',' || r == ' '
@@ -241,40 +334,41 @@ func scanlineFill(points []Point, resolution float64, cols, rows int) mask {
 	return m
 }
 
-// dilate grows every true cell outward by radiusCells (a square
-// dilation — a reasonable, cheap approximation of a true offset
-// curve for the purpose of leaving seam-allowance breathing room
-// between pieces).
+// dilate grows every true cell outward by radiusCells (a square dilation — a
+// reasonable, cheap approximation of a true offset curve for the purpose of
+// leaving breathing room between pieces). A square grows in two straight
+// passes, first along each row and then down each column.
 func dilate(m mask, radiusCells int) mask {
-	if radiusCells <= 0 {
+	if radiusCells <= 0 || len(m) == 0 {
 		return m
 	}
-	rows := len(m)
-	if rows == 0 {
-		return m
+	rows, cols := len(m), len(m[0])
+	newMask := func() mask {
+		out := make(mask, rows)
+		for r := range out {
+			out[r] = make([]bool, cols)
+		}
+		return out
 	}
-	cols := len(m[0])
-	out := make(mask, rows)
-	for r := range out {
-		out[r] = make([]bool, cols)
-	}
+	across := newMask()
 	for r := 0; r < rows; r++ {
 		for c := 0; c < cols; c++ {
 			if !m[r][c] {
 				continue
 			}
-			for dr := -radiusCells; dr <= radiusCells; dr++ {
-				nr := r + dr
-				if nr < 0 || nr >= rows {
-					continue
-				}
-				for dc := -radiusCells; dc <= radiusCells; dc++ {
-					nc := c + dc
-					if nc < 0 || nc >= cols {
-						continue
-					}
-					out[nr][nc] = true
-				}
+			for nc := max(0, c-radiusCells); nc <= min(cols-1, c+radiusCells); nc++ {
+				across[r][nc] = true
+			}
+		}
+	}
+	out := newMask()
+	for r := 0; r < rows; r++ {
+		for c := 0; c < cols; c++ {
+			if !across[r][c] {
+				continue
+			}
+			for nr := max(0, r-radiusCells); nr <= min(rows-1, r+radiusCells); nr++ {
+				out[nr][c] = true
 			}
 		}
 	}

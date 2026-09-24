@@ -77,6 +77,18 @@ func (o *Ollama) Analyze(ctx context.Context, img []byte, mediaType string) (*De
 	default:
 		return nil, fmt.Errorf("unsupported picture type %q (use JPEG, PNG, GIF or WebP)", mediaType)
 	}
+	return o.describe(ctx, systemPrompt, "Describe this uniform in the catalog's terms.", []string{base64.StdEncoding.EncodeToString(img)})
+}
+
+// AnalyzeText turns a customer's written description into a first-draft design
+// with the local model — no picture, so it runs faster than reading a photo.
+func (o *Ollama) AnalyzeText(ctx context.Context, description string) (*Design, error) {
+	return o.describe(ctx, textSystemPrompt, description, nil)
+}
+
+// describe sends one chat — the system prompt and the user's words (plus any
+// pictures) — and reads the design back.
+func (o *Ollama) describe(ctx context.Context, system, user string, images []string) (*Design, error) {
 	var res struct {
 		Message struct {
 			Content string `json:"content"`
@@ -85,16 +97,17 @@ func (o *Ollama) Analyze(ctx context.Context, img []byte, mediaType string) (*De
 		} `json:"message"`
 		DoneReason string `json:"done_reason"`
 	}
+	userMsg := map[string]any{"role": "user", "content": user}
+	if len(images) > 0 {
+		userMsg["images"] = images
+	}
 	body := map[string]any{
 		"model":  o.Model,
 		"stream": false,
 		"format": Schema(),
 		// Deterministic, and a context big enough for the picture and the answer.
-		"options": map[string]any{"temperature": 0, "num_ctx": 4096, "num_predict": 900},
-		"messages": []map[string]any{
-			{"role": "system", "content": systemPrompt},
-			{"role": "user", "content": "Describe this uniform in the catalog's terms.", "images": []string{base64.StdEncoding.EncodeToString(img)}},
-		},
+		"options":  map[string]any{"temperature": 0, "num_ctx": 4096, "num_predict": 900},
+		"messages": []map[string]any{{"role": "system", "content": system}, userMsg},
 	}
 	if o.Thinking {
 		body["think"] = false
