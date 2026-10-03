@@ -10,6 +10,7 @@ export default function Sidebar({
   pieces,
   onAddPiece,
   onRemovePiece,
+  onClearPieces,
   onGenerate,
   generating,
   error,
@@ -136,6 +137,18 @@ export default function Sidebar({
       </button>
 
       <div className="divider" />
+
+      {pieces.length > 1 && onClearPieces && (
+        <button
+          type="button"
+          className="link-btn link-btn-danger"
+          onClick={() => {
+            if (confirm(`Remove all ${pieces.length} pieces from the layout? Orders aren't affected.`)) onClearPieces();
+          }}
+        >
+          Clear all pieces
+        </button>
+      )}
 
       <ul className="piece-list">
         {pieces.map((p) => (

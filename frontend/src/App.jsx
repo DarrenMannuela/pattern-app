@@ -4,8 +4,14 @@ import OrdersView from "./components/OrdersView";
 import OrderDetailView from "./components/OrderDetailView";
 import LayoutView from "./components/LayoutView";
 import ErrorBoundary from "./components/ErrorBoundary";
+import PatternSheet from "./components/PatternSheet.jsx";
 
 const hashOrderId = () => window.location.hash.match(/^#order-(\w+)$/)?.[1] || null;
+// A pattern sheet opens in its own tab: #sheet-12-v3 is order 12, revision 3.
+const hashSheet = () => {
+  const m = window.location.hash.match(/^#sheet-(\w+)-v(\d+)$/);
+  return m ? { orderId: m[1], version: Number(m[2]) } : null;
+};
 
 // Shown when a screen fails to draw. The rest of the app (the nav, the other
 // tabs) keeps working, and nothing saved is affected.
@@ -29,6 +35,29 @@ function ScreenCrashed({ error, onRetry, onHome }) {
 }
 
 export default function App() {
+  const [sheet, setSheet] = useState(hashSheet);
+  useEffect(() => {
+    const onHash = () => setSheet(hashSheet());
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
+  if (sheet) {
+    return (
+      <ErrorBoundary fallback={<p className="empty">The pattern sheet couldn't be shown.</p>}>
+        <PatternSheet
+          orderId={sheet.orderId}
+          version={sheet.version}
+          onBack={() => {
+            window.location.hash = `#order-${sheet.orderId}`;
+          }}
+        />
+      </ErrorBoundary>
+    );
+  }
+  return <Studio />;
+}
+
+function Studio() {
   const [tab, setTab] = useState("orders");
   // An order can be opened by link: http://localhost:5175/#order-12
   const [openOrderId, setOpenOrderIdState] = useState(hashOrderId);

@@ -139,8 +139,16 @@ func TestShrinkageNeedsMoreFabric(t *testing.T) {
 	plain := Build(s, "main", p)
 	p.ShrinkLength, p.ShrinkWidth = 3, 2
 	shrunk := Build(s, "main", p)
-	if shrunk.Meters <= plain.Meters {
-		t.Errorf("3%% shrinkage should need more cloth: %.2f vs %.2f", shrunk.Meters, plain.Meters)
+	// Shrinkage makes every piece bigger: the pieces take about 1/(0.97 x
+	// 0.98) = 5.2% more cloth. The spread itself comes from a greedy,
+	// time-limited search, which can pack a bigger set better, so it is only
+	// held to the bound the other planner tests use.
+	pieceArea := func(pl Plan) float64 { return pl.AreaM2 * pl.Efficiency / 100 }
+	if g := pieceArea(shrunk)/pieceArea(plain) - 1; g < 0.045 || g > 0.06 {
+		t.Errorf("3%% x 2%% shrinkage should grow the pieces about 5.2%%, got %.1f%%", g*100)
+	}
+	if shrunk.Meters < plain.Meters*0.95 {
+		t.Errorf("shrinkage shouldn't need much less cloth: %.2f vs %.2f", shrunk.Meters, plain.Meters)
 	}
 }
 
@@ -207,7 +215,10 @@ func TestFabricsListsContrastOnlyWhenUsed(t *testing.T) {
 // is greedy and time-limited, so more freedom doesn't guarantee a better result.)
 func TestOneWayFabricNeverTurnsAPiece(t *testing.T) {
 	s := shirtOrder(t, map[string]int{"M": 12, "L": 12})
-	p := Params{FabricWidth: 150, MaxPlies: 40, Budget: 400 * time.Millisecond}
+	// Long enough for both searches to try every piece order: under a short
+	// time limit the one-way search, having less to try per order, gets
+	// through more of them and can come out ahead.
+	p := Params{FabricWidth: 150, MaxPlies: 40, Budget: 8 * time.Second}
 	two := Build(s, "main", p)
 	p.OneWay = true
 	one := Build(s, "main", p)
@@ -400,5 +411,39 @@ func TestBuildBestTriesOneSizePerLay(t *testing.T) {
 	p.LayWidths = nil
 	if a, b := BuildBest(s, "main", p), Build(s, "main", p); a.AreaM2 != b.AreaM2 {
 		t.Errorf("BuildBest changed a single-width plan: %.2f vs %.2f", a.AreaM2, b.AreaM2)
+	}
+}
+
+// Each motif is its own cloth: a batik band and a striped band are planned
+// separately, and a plain contrast piece is the plain contrast fabric.
+func TestEachMotifIsItsOwnFabric(t *testing.T) {
+	m := draft.Measurements{Bust: 92, Waist: 80, Neck: 37, Shoulder: 13, BackWaistLength: 41, SleeveLength: 58, UpperArm: 29, Wrist: 17}
+	opts := draft.ShirtOptions{Collar: true, SleeveStyle: "half", Motifs: []string{"chest", "arms"}, Pattern: "batik", MotifPatterns: map[string]string{"arms": "stripes"}, SleeveFabric: "main"}
+	pieces, err := orders.GeneratePieces(orders.GarmentUniformShirt, []orders.OrderSize{{Label: "M", Quantity: 10, Measurements: m}}, opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := Sizes{Order: []string{"M"}, Demand: map[string]int{"M": 10}, Pieces: pieces}
+	if got := s.Fabrics(); !reflect.DeepEqual(got, []string{"main", "contrast/batik", "contrast/stripes"}) {
+		t.Fatalf("fabrics = %v", got)
+	}
+	batik := Build(s, "contrast/batik", Params{FabricWidth: 110, Budget: 200 * time.Millisecond})
+	stripes := Build(s, "contrast/stripes", Params{FabricWidth: 110, Budget: 200 * time.Millisecond})
+	for _, lay := range batik.Lays {
+		for _, pl := range lay.Marker.Placed {
+			if !strings.HasPrefix(pl.Name, "Chest band") {
+				t.Errorf("%s is on the batik layout", pl.Name)
+			}
+		}
+	}
+	for _, lay := range stripes.Lays {
+		for _, pl := range lay.Marker.Placed {
+			if !strings.HasPrefix(pl.Name, "Arm motif band") {
+				t.Errorf("%s is on the striped layout", pl.Name)
+			}
+		}
+	}
+	if batik.Meters <= 0 || stripes.Meters <= 0 {
+		t.Errorf("both motifs need cloth: %.2f, %.2f", batik.Meters, stripes.Meters)
 	}
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parsePath, bodySilhouette, sleeveGeoFromPiece, sleeveTube, SLEEVE_ANGLE } from "../torsoGeometry.js";
+import { parsePath, bodySilhouette, sleeveGeoFromPiece, sleeveTube, sleeveAngle } from "../torsoGeometry.js";
 import { FIXTURES } from "./fixtures.js";
 
 describe("parsePath", () => {
@@ -89,11 +89,15 @@ describe("sleeveTube", () => {
     expect(tube.cuffInnerX).toBeLessThan(tube.cuffOuterX);
   });
 
-  it("swings out by SLEEVE_ANGLE from vertical, not straight down", () => {
+  it("swings out from vertical by its sleeve's angle, not straight down", () => {
     // axis is the unit vector down the arm; a sleeve hanging exactly
     // vertical would have axis = [0, 1].
-    expect(tube.axis[0]).toBeCloseTo(Math.sin(SLEEVE_ANGLE), 6);
-    expect(tube.axis[1]).toBeCloseTo(Math.cos(SLEEVE_ANGLE), 6);
+    expect(tube.axis[0]).toBeCloseTo(Math.sin(sleeveAngle(geo.length)), 6);
+    expect(tube.axis[1]).toBeCloseTo(Math.cos(sleeveAngle(geo.length)), 6);
+  });
+
+  it("stands a short sleeve further out than a long one, as flats draw it", () => {
+    expect(sleeveAngle(24)).toBeGreaterThan(sleeveAngle(58));
   });
 
   it("produces a closed path: shoulder, one cap curve, four straight edges down and back", () => {
@@ -104,16 +108,12 @@ describe("sleeveTube", () => {
     expect(cmds.at(-1).c).toBe("Z");
   });
 
-  it("draws the sleeve at roughly a quarter of the arm's round, not half of it", () => {
-    // geo.halfBicep is HALF the sleeve piece's own flat width, because the
-    // piece is cut in one go all the way around the arm (unlike the body,
-    // drafted and drawn as a half panel). Using that full value as the
-    // front-view half-width read as a puffed/bishop sleeve instead of a
-    // set-in one — see sleeveTube's own comment. This pins the visible
-    // bicep offset to well under half of geo.halfBicep, so a regression
-    // back toward the old, too-wide silhouette fails loudly.
+  it("draws the sleeve between a round tube's width and a fully flattened one", () => {
+    // Flattened, a sleeve shows geo.halfBicep (half the round); as a tube seen
+    // from the front, about the round / pi (0.64 of that). Flats draw it in
+    // between: too narrow looked shrunken, full width fanned out too big.
     const bicepOffset = Math.hypot(tube.bicepOuter[0] - front.underarm[0], tube.bicepOuter[1] - front.underarm[1]);
-    expect(bicepOffset).toBeLessThan(geo.halfBicep * 0.6);
-    expect(bicepOffset).toBeGreaterThan(geo.halfBicep * 0.3);
+    expect(bicepOffset).toBeGreaterThan(geo.halfBicep * 0.64);
+    expect(bicepOffset).toBeLessThan(geo.halfBicep * 0.9);
   });
 });

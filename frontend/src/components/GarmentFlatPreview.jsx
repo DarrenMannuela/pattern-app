@@ -18,6 +18,22 @@ function darken(hex, amount) {
   return `rgb(${r},${g},${b})`;
 }
 
+// The line colour: technical flats are line drawings, so the outline has to
+// read on any fabric. On a light fabric that means a near-black line, not one
+// shade darker than the fabric (which all but vanishes on white).
+function lineInk(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  const lum = (0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
+  return darken(hex, lum > 0.5 ? 0.78 : 0.5);
+}
+
+// Line weights, as flats use them: the silhouette heaviest, seams lighter,
+// topstitching a fine dashed line.
+const OUTLINE_W = 0.42;
+const SEAM_W = 0.3;
+const STITCH_W = 0.2;
+const STITCH_DASH = "0.65,0.45";
+
 function lighten(hex, amount) {
   const n = parseInt(hex.slice(1), 16);
   const mix = (c) => Math.round(c + (255 - c) * amount);
@@ -101,7 +117,7 @@ function ViewPanel({ title, viewKey, layout, color, secondaryColor, accent, patt
   const viewH = height + marginTop + marginBottom;
   const originX = viewW / 2;
   const originY = marginTop;
-  const stroke = darken(color, 0.35);
+  const stroke = lineInk(color);
 
   // Screen px -> this view's own template units. Distinct views use
   // different real-world scales for the same "1 unit" (the hand-drawn
@@ -241,7 +257,8 @@ function ViewPanel({ title, viewKey, layout, color, secondaryColor, accent, patt
     }
     if (item.kind === "line") {
       if (item.category === "trim") return <line key={item.key} x1={item.x1} y1={item.y1} x2={item.x2} y2={item.y2} stroke={accent} strokeWidth={0.65} strokeLinecap="round" />;
-      return <line key={item.key} x1={item.x1} y1={item.y1} x2={item.x2} y2={item.y2} stroke={stroke} strokeWidth={0.35} />;
+      if (item.category === "stitch") return <line key={item.key} x1={item.x1} y1={item.y1} x2={item.x2} y2={item.y2} stroke={stroke} strokeWidth={STITCH_W} strokeDasharray={STITCH_DASH} />;
+      return <line key={item.key} x1={item.x1} y1={item.y1} x2={item.x2} y2={item.y2} stroke={stroke} strokeWidth={SEAM_W} />;
     }
     if (item.kind === "circle") {
       return <circle key={item.key} cx={item.cx} cy={item.cy} r={item.r} fill="none" stroke={stroke} strokeWidth={0.3} />;
@@ -257,9 +274,10 @@ function ViewPanel({ title, viewKey, layout, color, secondaryColor, accent, patt
         <path
           d={item.d}
           transform={item.transform}
-          fill={item.noFill ? "none" : (item.category === "motif" || item.category === "panel" || (item.category === "pocket" && item.fabric === "contrast")) && motifFill(patternPrefix, pattern, item.orient) || fill}
+          fill={item.noFill ? "none" : (item.category === "motif" || item.category === "panel" || (item.category === "pocket" && item.fabric === "contrast")) && motifFill(patternPrefix, item.pattern || pattern, item.orient) || fill}
           stroke={item.noStroke ? "none" : stroke}
-          strokeWidth={0.3}
+          strokeWidth={item.category === "stitch" ? STITCH_W : item.category === "body" || item.category === "collar" ? OUTLINE_W : SEAM_W}
+          strokeDasharray={item.category === "stitch" ? STITCH_DASH : undefined}
           clipPath={clipId ? `url(#${clipId})` : undefined}
         />
       </g>
@@ -279,7 +297,7 @@ function ViewPanel({ title, viewKey, layout, color, secondaryColor, accent, patt
         onDragOver={onCanvasDrop ? (e) => e.preventDefault() : undefined}
         onDrop={onCanvasDrop ? handleCanvasDrop : undefined}
       >
-        {pattern && pattern !== "solid" && items.some((i) => i.category === "motif" || i.category === "panel" || (i.category === "pocket" && i.fabric === "contrast")) && <MotifDefs prefix={patternPrefix} base={accent} />}
+        {items.some((i) => (i.category === "motif" || i.category === "panel" || (i.category === "pocket" && i.fabric === "contrast")) && (i.pattern || pattern) && (i.pattern || pattern) !== "solid") && <MotifDefs prefix={patternPrefix} base={accent} />}
         <g transform={`translate(${originX} ${originY})`}>
           {items.map((item) => {
             const el = renderItem(item);

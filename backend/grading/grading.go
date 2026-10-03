@@ -34,10 +34,11 @@ type GradeRule struct {
 	SleeveLength    float64 `json:"sleeveLength"`
 	UpperArm        float64 `json:"upperArm"`
 	Wrist           float64 `json:"wrist"`
+	Hip             float64 `json:"hip"`
 }
 
 // DefaultAdultGradeRule is a standard adult uniform/ready-to-wear
-// grade: chest and waist grow 4cm per size step, shoulder and neck
+// grade: chest, waist and hip grow 4cm per size step, shoulder and neck
 // 1cm, and torso length 1.5cm — the increments commonly used for
 // men's/unisex woven-shirt size runs. Override it if your supplier
 // or spec sheet uses a different grade.
@@ -50,6 +51,10 @@ var DefaultAdultGradeRule = GradeRule{
 	SleeveLength:    1.0,
 	UpperArm:        1.5,
 	Wrist:           0.5,
+	// The hip grows with the chest. It wasn't graded at all before, so every
+	// size had the base size's hip — and a shirt's hem, which has to go over
+	// the hip, was sized from the wrong hip on every size but the base.
+	Hip: 4,
 }
 
 func sizeIndex(sizes []string, label string) int {
@@ -90,6 +95,7 @@ func GradeMeasurements(base draft.Measurements, sizeOrder []string, baseSize str
 		m.SleeveLength += steps * rule.SleeveLength
 		m.UpperArm += steps * rule.UpperArm
 		m.Wrist += steps * rule.Wrist
+		m.Hip += steps * rule.Hip
 		out[sz] = m
 	}
 	return out, nil

@@ -9,7 +9,7 @@
 
 import { layoutMerchView } from "./merchFlat.js";
 import { collarDims, flatCollarLeaf, standingCollar, backBand, backBandTop, vNeckBand, backNeckStrip, turnDownCollar, backCollar, collarRise } from "./collarGeometry.js";
-import { bodySilhouette, sleeveTube, sleeveGeoFromPiece, SLEEVE_ANGLE } from "./torsoGeometry.js";
+import { armholeCurves, bodySilhouette, sleeveTube, sleeveGeoFromPiece, SLEEVE_ANGLE, SHORT_SLEEVE_ANGLE } from "./torsoGeometry.js";
 import { sideStrip, wrapMatrix, rectCorners, overlaps, svgMatrix } from "./sleeveWrap.js";
 
 function findPiece(pieces, re) {
@@ -44,11 +44,11 @@ const DEFAULT_POCKET_FRACTION = {
 // Segments whose accessories render on the mirrored (negative-x) half
 // of the illustration — everything else renders on the main half.
 // The angle (degrees clockwise on the drawing) that makes an extra follow the
-// arm: the sleeves hang SLEEVE_ANGLE away from vertical, the wearer's left one
-// on the right of the front view.
-export function sleeveAlignment(segment, view) {
+// arm: the sleeves hang SLEEVE_ANGLE away from vertical (a short sleeve
+// SHORT_SLEEVE_ANGLE), the wearer's left one on the right of the front view.
+export function sleeveAlignment(segment, view, sleeveStyle) {
   if (view === "left" || view === "right") return 0; // the side drawing hangs the arm straight
-  const deg = Math.round((SLEEVE_ANGLE * 180) / Math.PI);
+  const deg = Math.round(((sleeveStyle === "half" ? SHORT_SLEEVE_ANGLE : SLEEVE_ANGLE) * 180) / Math.PI);
   if (segment === "left_sleeve") return -deg;
   if (segment === "right_sleeve") return deg;
   return 0;
@@ -210,14 +210,22 @@ function torsoFrame(pieces) {
   const yoke = findPiece(pieces, /^yoke$/i);
   const sleeve = findPiece(pieces, /sleeve/i);
   // A colour-blocked panel is cut in two; its outline is the whole panel's.
-  const frontSil = front && bodySilhouette(front.outline || front.pathData);
+  const frontSil = front && bodySilhouette(front.outline || front.pathData, front.landmarks);
   if (!frontSil || !frontSil.neck) return null;
-  const backSil = back && bodySilhouette(back.outline || back.pathData);
+  const backSil = back && bodySilhouette(back.outline || back.pathData, back.landmarks);
   const sleeveGeo = sleeveGeoFromPiece(sleeve);
-  const tube = sleeveTube(frontSil.shoulder, frontSil.underarm, sleeveGeo, frontSil.neck);
+  const frontArm = armholeCurves(front.outline || front.pathData, front.landmarks?.shoulderTip, front.landmarks?.underarm);
+  const tube = sleeveTube(frontSil.shoulder, frontSil.underarm, sleeveGeo, frontSil.neck, frontArm);
   // The back's shoulder point comes from the yoke (the back panel starts below it).
-  const yokeSil = yoke && bodySilhouette(yoke.pathData);
-  const backTube = backSil ? sleeveTube(yokeSil ? yokeSil.shoulder : backSil.shoulder, backSil.underarm, sleeveGeo, backSil.neck || frontSil.neck) : tube;
+  const yokeSil = yoke && bodySilhouette(yoke.pathData, yoke.landmarks);
+  // The back armhole runs down the yoke to the yoke seam, then down the back.
+  const backArm =
+    back && yoke
+      ? [...armholeCurves(yoke.pathData, yoke.landmarks?.shoulderTip, yoke.landmarks?.yokeArm), ...armholeCurves(back.pathData, back.landmarks?.yokeArm, back.landmarks?.underarm)]
+      : back
+        ? armholeCurves(back.outline || back.pathData, back.landmarks?.shoulderTip, back.landmarks?.underarm)
+        : [];
+  const backTube = backSil ? sleeveTube(yokeSil ? yokeSil.shoulder : backSil.shoulder, backSil.underarm, sleeveGeo, backSil.neck || frontSil.neck, backArm) : tube;
   const cuff = findPiece(pieces, /^cuff$/i);
   const slit = findPiece(pieces, /cuff slit/i);
   const cuffH = cuff ? cuff.height : 6;
@@ -258,7 +266,7 @@ function layoutTorsoView(pieces, view, opts) {
   const piping = !!findPiece(pieces, /piping strip/i);
   const styleKey = isPolo ? "polo" : collarStyle || "convertible";
   const dims = collar ? collarDims(pieces, styleKey) : null;
-  const backNeckCurve = (g.yoke ? bodySilhouette(g.yoke.pathData) : g.backSil)?.neckCurve;
+  const backNeckCurve = (g.yoke ? bodySilhouette(g.yoke.pathData, g.yoke.landmarks) : g.backSil)?.neckCurve;
   const polyline = (key, pts, category = "collar") => {
     for (let i = 1; i < pts.length; i++) {
       items.push({ key: `${key}-a-${i}`, kind: "line", x1: pts[i - 1][0], y1: pts[i - 1][1], x2: pts[i][0], y2: pts[i][1], category });
@@ -346,7 +354,7 @@ function layoutTorsoView(pieces, view, opts) {
   const panelPiece = findPiece(pieces, /^insert panel$/i);
   if (panelPiece && view === "front") {
     const off = panelPiece.landmarks?.offset || { x: 0, y: 0 };
-    items.push({ key: "insert-panel", kind: "path", d: panelPiece.pathData, transform: `scale(-1 1) translate(${off.x} ${off.y})`, category: "panel", half: "mirror" });
+    items.push({ key: "insert-panel", kind: "path", d: panelPiece.pathData, transform: `scale(-1 1) translate(${off.x} ${off.y})`, category: "panel", half: "mirror", pattern: panelPiece.motif });
   }
 
   // Motif bands, from the motif pieces the pattern carries: laid over the body
@@ -359,27 +367,29 @@ function layoutTorsoView(pieces, view, opts) {
     const arms = findPiece(pieces, /^arm motif band$/i);
     const rect = (x0, y0, x1, y1) => `M ${x0} ${y0} L ${x1} ${y0} L ${x1} ${y1} L ${x0} ${y1} Z`;
     // A shape drawn over the whole width, shown on each half of the body.
-    const onBody = (key, d, orient) => {
+    // Each band is filled with its own piece's motif (a batik chest band,
+    // striped arm bands...).
+    const onBody = (key, d, orient, pattern) => {
       for (const [half, transform] of [["main", main], ["mirror", mirror]]) {
-        items.push({ key: `${key}-${half}`, kind: "path", d, transform: "", category: "motif", orient, half, clipPath: { d: sil.d, transform } });
+        items.push({ key: `${key}-${half}`, kind: "path", d, transform: "", category: "motif", orient, half, pattern, clipPath: { d: sil.d, transform } });
       }
     };
     const hemY = sil.hemY;
     if (streak && view === "front") {
       const start = sil.start[1];
       if (streak.qty === 2) {
-        for (const sign of [1, -1]) onBody(`motif-streak${sign}`, rect(sign > 0 ? 3.2 : -6.8, -3, sign > 0 ? 6.8 : -3.2, hemY + 2), "v");
+        for (const sign of [1, -1]) onBody(`motif-streak${sign}`, rect(sign > 0 ? 3.2 : -6.8, -3, sign > 0 ? 6.8 : -3.2, hemY + 2), "v", streak.motif);
       } else {
-        onBody("motif-streak", rect(-2.5, start - 0.5, 2.5, hemY + 2), "v");
+        onBody("motif-streak", rect(-2.5, start - 0.5, 2.5, hemY + 2), "v", streak.motif);
       }
     }
     // Each band's drawn height comes straight from its own cutting piece
     // (not a guessed span), so the illustration can't drift from the pattern
     // the way a hand-tuned constant would if the draft's own height changed.
-    const around = (name, y1, height) => onBody(name, rect(-60, y1 - height, 60, y1), "h");
-    if (chest) around("motif-chest", sil.underarm[1] - 3, chest.height);
-    if (shoulder) around("motif-shoulder", -4 + shoulder.height, shoulder.height);
-    if (hem) around("motif-hem", hemY + 2, hem.height);
+    const around = (name, y1, piece) => onBody(name, rect(-60, y1 - piece.height, 60, y1), "h", piece.motif);
+    if (chest) around("motif-chest", sil.underarm[1] - 3, chest);
+    if (shoulder) around("motif-shoulder", -4 + shoulder.height, shoulder);
+    if (hem) around("motif-hem", hemY + 2, hem);
     if (arms) {
       const M = [(tube.underarm[0] + tube.bicepOuter[0]) / 2, (tube.underarm[1] + tube.bicepOuter[1]) / 2];
       const p = [M[0] + (tube.center[0] - M[0]) * 0.55, M[1] + (tube.center[1] - M[1]) * 0.55];
@@ -388,7 +398,7 @@ function layoutTorsoView(pieces, view, opts) {
       const corner = (s, t) => `${(p[0] + cx * s + ax * t).toFixed(2)} ${(p[1] + cy * s + ay * t).toFixed(2)}`;
       const d = `M ${corner(-16, -2.5)} L ${corner(16, -2.5)} L ${corner(16, 2.5)} L ${corner(-16, 2.5)} Z`;
       for (const [half, transform] of [["main", main], ["mirror", mirror]]) {
-        items.push({ key: `motif-arms-${half}`, kind: "path", d, transform, category: "motif", orient: "h", half, clipPath: { d: tube.d, transform } });
+        items.push({ key: `motif-arms-${half}`, kind: "path", d, transform, category: "motif", orient: "h", half, pattern: arms.motif, clipPath: { d: tube.d, transform } });
       }
     }
   }
@@ -416,35 +426,74 @@ function layoutTorsoView(pieces, view, opts) {
   // Points along the sleeve's own axis: `back` cm up the arm from a hem point.
   const up = (p, back) => [p[0] - tube.axis[0] * back, p[1] - tube.axis[1] * back];
   const lerp = (p, q, t) => [p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t];
-  const cuffLine = (key, back, inset = 0.15) => {
+  const cuffLine = (key, back, inset = 0.15, category = "seam") => {
     const p = up(lerp(tube.hemInner, tube.hemOuter, inset / 10), back);
     const q = up(lerp(tube.hemOuter, tube.hemInner, inset / 10), back);
-    line(key, p[0], p[1], q[0], q[1], "seam");
+    line(key, p[0], p[1], q[0], q[1], category);
   };
   if (isPolo && sleeveStyle === "half") {
     cuffLine("rib", 3.2, 0);
   }
+  // Topstitching, as flats draw it: the hem of a short sleeve turned up and
+  // stitched, a cuff edge-stitched below its seam.
+  if (sleeveStyle === "half" && !isPolo) cuffLine("sleeve-hem-stitch", 1.8, 0.4, "stitch");
   if (sleeveStyle !== "half" && !isPolo) {
     cuffLine("cuff-line", g.cuffH);
+    cuffLine("cuff-stitch", g.cuffH - 0.5, 0.4, "stitch");
     // The slit above the cuff, near the back edge of the sleeve, and the button.
     const slitLen = g.slit ? g.slit.height : 10;
     const base = up(lerp(tube.hemInner, tube.hemOuter, 0.7), g.cuffH);
     const top = up(base, slitLen);
-    line("cuff-slit", base[0], base[1], top[0], top[1], "seam");
+    if (g.slit && /tower/i.test(g.slit.name)) {
+      // A tower placket: a narrow band up from the cuff ending in a point.
+      const half = 1.25;
+      const side = (p, s) => [p[0] + tube.across[0] * half * s, p[1] + tube.across[1] * half * s];
+      const shoulder = up(base, slitLen - 2);
+      const pts = [side(base, -1), side(shoulder, -1), top, side(shoulder, 1), side(base, 1)];
+      for (let i = 1; i < pts.length; i++) line(`cuff-tower-${i}`, pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1], "seam");
+    } else {
+      line("cuff-slit", base[0], base[1], top[0], top[1], "seam");
+    }
     const button = up(tube.center, g.cuffH / 2);
     for (const sign of [1, -1]) items.push({ key: `cuff-button-${sign}`, kind: "circle", cx: sign * button[0], cy: button[1], r: 0.8, category: "button" });
   }
 
-  // Back yoke seam: the seam between the yoke and the back panel.
+  // Back yoke seam: the seam between the yoke and the back panel, topstitched
+  // just below.
   if (view === "back" && g.yoke) {
     const topY = sil.start[1];
     line("yoke-seam", 0, topY, g.backSil.underarm[0] - 0.8, topY, "seam");
+    line("yoke-stitch", 0, topY + 0.6, g.backSil.underarm[0] - 0.9, topY + 0.6, "stitch");
+    // A box pleat at centre back: its two folds run down from the yoke seam
+    // (drawn mirrored, one each side of centre back) for the part that hangs closed.
+    if (g.back?.landmarks?.pleat) {
+      const pleatW = Math.max(1, g.back.landmarks.pleat.x / 2);
+      const drop = Math.max(8, (sil.hemY - topY) * 0.3);
+      line("pleat-fold", pleatW / 2, topY, pleatW / 2, topY + drop, "seam");
+    }
+  }
+
+  // The hem, turned up and topstitched: the hemline lifted by the hem depth.
+  {
+    const lift = 1.8;
+    const f2 = (p) => `${p[0].toFixed(2)} ${(p[1] - lift).toFixed(2)}`;
+    const start = [sil.hemSide[0] - 0.5, sil.hemSide[1]];
+    const end = sil.hemCF || [0, sil.hemY];
+    const d = sil.hemCurve ? `M ${f2(start)} C ${sil.hemCurve.map(f2).join(" ")}` : `M ${f2(start)} L ${f2(end)}`;
+    both("hem-stitch", d, "stitch", { noFill: true });
   }
 
   // Darts, drawn as the two legs of each wedge cut out of the panel.
   for (const [a, apex, b] of sil.darts) {
     line(`dart-a-${a[0]}-${a[1]}`, a[0], a[1], apex[0], apex[1], "dart");
     line(`dart-b-${b[0]}-${b[1]}`, apex[0], apex[1], b[0], b[1], "dart");
+  }
+  // Darts the draft marks on the piece: a wedge's legs, or a fish-eye
+  // (double-pointed) waist dart's closed outline.
+  for (const [i, dart] of (body.darts || []).entries()) {
+    for (let k = 1; k < dart.length; k++) {
+      line(`piece-dart-${i}-${k}`, dart[k - 1].x, dart[k - 1].y, dart[k].x, dart[k].y, "dart");
+    }
   }
 
   if (hasPlacket && view === "front") {
@@ -453,7 +502,9 @@ function layoutTorsoView(pieces, view, opts) {
     // A normal placket is measured from the neck point; a V-neck's starts at the V.
     const bottom = isPolo ? cfY + 17 : isV ? Math.min(cfY + placketPiece.height, g.frontSil.hemY) : Math.min(placketPiece.height, g.frontSil.hemY);
     const top = isPolo ? cfY - 2 : cfY;
-    items.push({ key: "placket", kind: "line", x1: 0, y1: top, x2: 0, y2: bottom, category: "placket" });
+    // A polo or hidden placket shows its front edge down the centre; a
+    // button placket is a band with an edge each side, the buttons between.
+    if (isPolo || hidden) items.push({ key: "placket", kind: "line", x1: 0, y1: top, x2: 0, y2: bottom, category: "placket" });
     if (isPolo) {
       items.push({ key: "placket-edge-a", kind: "line", x1: -3.2, y1: cfY - 2, x2: -3.2, y2: bottom, category: "placket" });
       items.push({ key: "placket-edge-b", kind: "line", x1: 3.2, y1: cfY - 2, x2: 3.2, y2: bottom, category: "placket" });
@@ -462,8 +513,10 @@ function layoutTorsoView(pieces, view, opts) {
       // The front edge lapping over a concealed closure: one stitched edge, no buttons.
       items.push({ key: "placket-edge", kind: "line", x1: 2.4, y1: cfY, x2: 2.4, y2: bottom, category: "placket" });
     } else {
-      // The placket band (its piece is 3.5 wide), centered on the buttons.
+      // The placket band (its piece is 3.5 wide), centered on the buttons,
+      // edge-stitched along both sides.
       line("placket-edge", 1.75, cfY, 1.75, bottom, "placket");
+      line("placket-stitch", 1.35, cfY, 1.35, bottom, "stitch");
     }
     const first = cfY + 3.5;
     const count = hidden ? 0 : isPolo ? 2 : Math.max(3, Math.round((bottom - 4 - first) / 8.5) + 1);
@@ -874,7 +927,7 @@ function layoutLegsView(pieces, view, opts) {
         // beside it curling back to meet it at the bottom of the zip.
         const fb = Math.min(geo.crotchStart.y - 1, 17);
         items.push({ key: "fly", kind: "line", x1: 0, y1: 0, x2: 0, y2: fb + 1.2, category: "placket" });
-        items.push({ key: "fly-stitch", kind: "path", d: `M 3.2 0 L 3.2 ${fb - 4} C 3.2 ${fb - 1} 2.2 ${fb + 0.7} 0 ${fb + 1.2}`, transform: main, category: "placket", noFill: true });
+        items.push({ key: "fly-stitch", kind: "path", d: `M 3.2 0 L 3.2 ${fb - 4} C 3.2 ${fb - 1} 2.2 ${fb + 0.7} 0 ${fb + 1.2}`, transform: main, category: "stitch", noFill: true });
       } else {
         // A plain front: just the center seam.
         items.push({ key: "cf-seam", kind: "line", x1: 0, y1: 0, x2: 0, y2: geo.crotchStart.y, category: "seam" });
@@ -911,14 +964,14 @@ function layoutLegsView(pieces, view, opts) {
       }
     }
 
-    // The hem: a stitch line 3.2cm up, both views, kept on the leg edges (which
+    // The hem: topstitched 3.2cm up, both views, kept on the leg edges (which
     // run from the knee to the hem, or from the crotch and hip on shorts).
     const hy = hemIn.y - 3.2;
     const along = (from, to) => from.x + ((to.x - from.x) * (hy - from.y)) / Math.max(1, to.y - from.y);
     const hx0 = along(flat ? geo.crotch : geo.kneeIn, hemIn);
     const hx1 = along(flat ? hipSide : geo.kneeSide, hemSide);
-    items.push({ key: "hem-stitch-main", kind: "line", x1: hx0, y1: hy, x2: hx1, y2: hy, category: "seam" });
-    items.push({ key: "hem-stitch-mirror", kind: "line", x1: -hx0, y1: hy, x2: -hx1, y2: hy, category: "seam" });
+    items.push({ key: "hem-stitch-main", kind: "line", x1: hx0, y1: hy, x2: hx1, y2: hy, category: "stitch" });
+    items.push({ key: "hem-stitch-mirror", kind: "line", x1: -hx0, y1: hy, x2: -hx1, y2: hy, category: "stitch" });
   }
 
   // Segments a print, pocket or embroidery can go on. Legs are front-only (the
@@ -1012,7 +1065,7 @@ function layoutSkirtView(pieces, view, opts) {
       items.push({ key: "zip", kind: "line", x1: 0, y1: lm.waistCF.y, x2: 0, y2: lm.waistCF.y + 18, category: "placket" });
       items.push({ key: "zip-pull", kind: "circle", cx: 0, cy: lm.waistCF.y + 3, r: 0.8, category: "button" });
     }
-    both("hem-stitch", lm.hemSide.x - 0.6, lm.hemSide.y - 3, 0, lm.hemCF.y - 3);
+    both("hem-stitch", lm.hemSide.x - 0.6, lm.hemSide.y - 3, 0, lm.hemCF.y - 3, "stitch");
 
     // Side pockets: the mouth of each, parallel to and just inside the side seam.
     if (hasPocket && view === "front") {
@@ -1050,6 +1103,11 @@ function layoutSkirtView(pieces, view, opts) {
 // position yet fall back to the real generated anchor or segment
 // default.
 export function layoutGarmentViews(pieces, opts = {}) {
+  // Drawn items are keyed by their extra's id; one without (made outside the
+  // editor, say) gets one from its place in the list.
+  if (opts.accessories?.some((a) => !a.id)) {
+    opts = { ...opts, accessories: opts.accessories.map((a, i) => (a.id ? a : { ...a, id: `acc-${i}-${a.type}-${a.segment}` })) };
+  }
   if (opts.merchItem) {
     return { kind: "merch", front: layoutMerchView(pieces, "front", opts), back: layoutMerchView(pieces, "back", opts) };
   }

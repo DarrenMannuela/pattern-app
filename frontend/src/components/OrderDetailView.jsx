@@ -6,11 +6,16 @@ import { customPayload } from "../lib/customDesign.js";
 import GarmentFlatPreview from "./GarmentFlatPreview";
 import ErrorBoundary from "./ErrorBoundary";
 import CuttingPlan from "./CuttingPlan.jsx";
+import PatternSummary from "./PatternSummary.jsx";
+import SizeChartTable from "./SizeChartTable.jsx";
 import GarmentTypePicker from "./GarmentTypePicker";
 import FabricColorPicker from "./FabricColorPicker.jsx";
 import FabricPicker, { FabricImage } from "./FabricPicker.jsx";
 import { sleeveAlignment } from "../lib/garmentFlat.js";
 import { fabricLabel, fabricSlug } from "../lib/fabricCatalog.js";
+import { measurementFieldsFor } from "../lib/measurementFields.js";
+import { fabricKey } from "../lib/fabricKeys.js";
+import { GARMENT_LABELS } from "../lib/garmentTypes.js";
 
 const STATUS_OPTIONS = ["consultation", "mockup", "revision", "approved"];
 
@@ -25,55 +30,8 @@ const DART_POSITIONS = [
   { key: "neckline", label: "Neckline" },
 ];
 
-const SHIRT_FIELDS = [
-  { key: "bust", label: "Bust/chest (cm)" },
-  { key: "waist", label: "Waist (cm)" },
-  { key: "backWaistLength", label: "Back length, nape to waist (cm)" },
-  { key: "shirtLength", label: "Shirt length, nape to hem (cm, 0 = auto)" },
-  { key: "shoulder", label: "Shoulder seam (cm)" },
-  { key: "neck", label: "Neck circumference (cm)" },
-  { key: "ease", label: "Wearing ease (cm)" },
-  { key: "sleeveLength", label: "Sleeve length (cm)" },
-  { key: "upperArm", label: "Upper arm (cm)" },
-  { key: "wrist", label: "Wrist (cm)" },
-];
-
-const PANTS_FIELDS = [
-  { key: "waist", label: "Waist (cm)" },
-  { key: "hip", label: "Hip (cm)" },
-  { key: "rise", label: "Rise / crotch depth (cm)" },
-  { key: "inseam", label: "Inseam (cm)" },
-  { key: "hemWidth", label: "Leg opening, half (cm) — optional" },
-  { key: "ease", label: "Wearing ease (cm)" },
-];
-
-const SKIRT_FIELDS = [
-  { key: "waist", label: "Waist (cm)" },
-  { key: "hip", label: "Hip (cm)" },
-  { key: "skirtLength", label: "Skirt length (cm)" },
-  { key: "ease", label: "Wearing ease (cm)" },
-];
-
-// Which measurement fields make sense depends on what's being made —
-// a shirt doesn't need a rise/inseam, pants don't need a neckline.
-function measurementFieldsFor(garmentType) {
-  switch (garmentType) {
-    case "pants":
-    case "shorts":
-      return PANTS_FIELDS;
-    case "skirt":
-      return SKIRT_FIELDS;
-    case "custom":
-    case "other":
-      return []; // sized by the drawing / the item's own dimensions, not body measurements
-    default:
-      return SHIRT_FIELDS;
-  }
-}
-
 const MARGIN = 24;
 const PX_PER_CM = 6;
-const FOCUS_PX_PER_CM = 8;
 
 function PiecePreview({ piece, pxPerCm = PX_PER_CM }) {
   // A finished piece has a cutting line (sewing line + allowances) and a
@@ -122,55 +80,33 @@ function PiecePreview({ piece, pxPerCm = PX_PER_CM }) {
   );
 }
 
-function emptySizeRow() {
-  return { label: "", quantity: 1, measurements: {} };
+const STEPS = [
+  { key: "sizes", label: "Sizes" },
+  { key: "design", label: "Design" },
+  { key: "pattern", label: "Pattern" },
+  { key: "cutting", label: "Cutting" },
+];
+
+// One scale for every piece in the grid, so sizes compare, and small enough
+// that the biggest piece fits a card.
+function pieceScale(pieces) {
+  const biggest = Math.max(...pieces.map((p) => Math.max(p.cutWidth || p.width, p.cutHeight || p.height)));
+  return Math.max(1.2, Math.min(3, 210 / biggest));
 }
 
-function SizeRow({ size, idx, fields, onChange, onMeasurement, onRemove }) {
-  const [expanded, setExpanded] = useState(false);
+function StepEmpty({ text, onGo }) {
   return (
-    <div className="size-row">
-      <div className="size-row-main">
-        <input
-          type="text"
-          className="size-row-label"
-          placeholder="Label (e.g. M, 28, Kelas 3)"
-          value={size.label}
-          onChange={(e) => onChange(idx, { label: e.target.value })}
-        />
-        <input
-          type="number"
-          min="0"
-          className="size-row-qty"
-          placeholder="Qty"
-          value={size.quantity}
-          onChange={(e) => onChange(idx, { quantity: Number(e.target.value) })}
-        />
-        {fields.length > 0 && (
-          <button className="link-btn" onClick={() => setExpanded((v) => !v)}>
-            {expanded ? "Hide measurements" : "Edit measurements"}
-          </button>
-        )}
-        <button className="link-btn link-btn-danger" onClick={() => onRemove(idx)}>
-          Remove
-        </button>
-      </div>
-      {expanded && (
-        <div className="size-row-measurements">
-          {fields.map((f) => (
-            <div className="field" key={f.key}>
-              <label>{f.label}</label>
-              <input
-                type="number"
-                value={size.measurements?.[f.key] ?? ""}
-                onChange={(e) => onMeasurement(idx, f.key, e.target.value)}
-              />
-            </div>
-          ))}
-        </div>
-      )}
+    <div className="step-empty">
+      <p>{text}</p>
+      <button type="button" className="btn-add btn-inline" onClick={onGo}>
+        Go to Design
+      </button>
     </div>
   );
+}
+
+function emptySizeRow() {
+  return { label: "", quantity: 1, measurements: {} };
 }
 
 export default function OrderDetailView({ orderId, onBack }) {
@@ -190,9 +126,14 @@ export default function OrderDetailView({ orderId, onBack }) {
   // orders.GeneratePieces). Default "unisex" so a new order doesn't
   // silently read as gendered either way until someone picks one.
   const [gender, setGender] = useState("unisex");
+  // How roomy a shirt is: "" keeps only the size chart's ease (how older
+  // revisions were made), "regular" and "loose" add the usual shirt ease.
+  const [fit, setFit] = useState("regular");
+  const [sleevePlacket, setSleevePlacket] = useState(""); // "" = the pointed tower placket
   const [sleeveStyle, setSleeveStyle] = useState("full");
   const [sleeveFabric, setSleeveFabric] = useState("main");
   const [colorBlock, setColorBlock] = useState("none");
+  const [motifPatterns, setMotifPatterns] = useState({});
   const [collarEnabled, setCollarEnabled] = useState(false); // uniform_shirt only
   const [collarStyle, setCollarStyle] = useState("convertible");
   // Premade construction options (see draft.ShirtOptions): the pattern is
@@ -228,6 +169,15 @@ export default function OrderDetailView({ orderId, onBack }) {
   const [activeSizeLabel, setActiveSizeLabel] = useState(null);
   const [focusIdx, setFocusIdx] = useState(0);
   const [sentAll, setSentAll] = useState(false);
+  // Which step of the order is open: the size chart, the design, the drafted
+  // pattern, or the cutting plan. Opens on Design once there are sizes.
+  const [step, setStep] = useState("design");
+  const [justSaved, setJustSaved] = useState(false); // a mockup was just generated from the Design step
+  const [typeOpen, setTypeOpen] = useState(false); // the garment-type picker, folded away once chosen
+  // Each step opens at its top, not wherever the last one was scrolled to.
+  useEffect(() => {
+    window.scrollTo({ top: 0 });
+  }, [step]);
   const [sentFabricCounts, setSentFabricCounts] = useState(null); // { main, contrast } piece counts, once sent
 
   // Loads the order and, if it has one, its latest revision. A slower answer for
@@ -243,6 +193,8 @@ export default function OrderDetailView({ orderId, onBack }) {
       const o = await api.getOrder(orderId);
       if (stale()) return;
       setOrder(o);
+      setStep(o.sizes?.length || o.garmentType === "other" || o.garmentType === "custom" ? "design" : "sizes");
+      setJustSaved(false);
       setColorHint(o.previewColors?.main || o.previewColors?.accent ? { ...o.previewColors } : null);
       // Jump straight to the latest revision instead of leaving the
       // mockup section blank when reopening an order that already
@@ -253,7 +205,7 @@ export default function OrderDetailView({ orderId, onBack }) {
           const res = await api.getMockup(orderId, latest);
           if (stale()) return;
           setActiveMockup(res);
-          setActiveSizeLabel(Object.keys(res.pieces)[0] || null);
+          setActiveSizeLabel(res.mockup?.sizes?.find((sz) => res.pieces[sz.label])?.label || Object.keys(res.pieces)[0] || null);
           setAccessories(res.mockup.options?.addOns?.accessories || []);
           restoreOptions(res.mockup.options || {});
         } catch (e) {
@@ -295,10 +247,13 @@ export default function OrderDetailView({ orderId, onBack }) {
   // reopening an order shows the garment that was built, not the defaults.
   function restoreOptions(opt) {
     setGender(opt.gender || "unisex");
+    setFit(opt.fit || "");
+    setSleevePlacket(opt.sleevePlacket || "");
     setDartPosition(opt.dartPosition || "waist");
     setSleeveStyle(opt.sleeveStyle || "full");
     setSleeveFabric(opt.sleeveFabric || "main");
     setColorBlock(opt.colorBlock || "none");
+    setMotifPatterns(opt.motifPatterns || {});
     setCollarEnabled(!!opt.collar);
     if (opt.collarStyle) setCollarStyle(opt.collarStyle);
     setFrontStyle(opt.frontStyle || "placket");
@@ -416,6 +371,8 @@ export default function OrderDetailView({ orderId, onBack }) {
       const payload = { note: mockupNote, accessories };
       if (isShirtType) {
         payload.gender = gender;
+        payload.fit = fit;
+        payload.sleevePlacket = sleevePlacket;
         payload.sleeveStyle = sleeveStyle;
         payload.sleeveFabric = sleeveFabric;
         payload.colorBlock = colorBlock === "none" ? "" : colorBlock;
@@ -428,6 +385,7 @@ export default function OrderDetailView({ orderId, onBack }) {
         payload.panel = motifs.includes("side") ? "side" : "none";
         payload.motifs = motifs.filter((m) => m !== "side");
         payload.pattern = motifPattern;
+        payload.motifPatterns = Object.fromEntries(Object.entries(motifPatterns).filter(([band]) => motifs.includes(band)));
       }
       if (order.garmentType === "other") {
         payload.merch = merch;
@@ -453,8 +411,9 @@ export default function OrderDetailView({ orderId, onBack }) {
       }
       const res = await api.createMockup(orderId, payload);
       setOrder(res.order);
-      setActiveMockup({ mockup: res.mockup, pieces: res.pieces });
-      setActiveSizeLabel(Object.keys(res.pieces)[0] || null);
+      setActiveMockup({ mockup: res.mockup, pieces: res.pieces, summaries: res.summaries });
+      setJustSaved(true);
+      setActiveSizeLabel(res.mockup?.sizes?.find((sz) => res.pieces[sz.label])?.label || Object.keys(res.pieces)[0] || null);
       setFocusIdx(0);
       setSentAll(false);
       setMockupNote("");
@@ -470,7 +429,7 @@ export default function OrderDetailView({ orderId, onBack }) {
     try {
       const res = await api.getMockup(orderId, version);
       setActiveMockup(res);
-      setActiveSizeLabel(Object.keys(res.pieces)[0] || null);
+      setActiveSizeLabel(res.mockup?.sizes?.find((sz) => res.pieces[sz.label])?.label || Object.keys(res.pieces)[0] || null);
       setFocusIdx(0);
       setSentAll(false);
       setAccessories(res.mockup.options?.addOns?.accessories || []);
@@ -483,7 +442,7 @@ export default function OrderDetailView({ orderId, onBack }) {
     const id = `acc-${Date.now()}-${Math.round(Math.random() * 1e6)}`;
     const base = { id, type, segment, ...extra };
     // On a sleeve an extra follows the arm unless a specific angle is given.
-    if (base.rotation === undefined && sleeveAlignment(segment, base.view)) base.rotation = sleeveAlignment(segment, base.view);
+    if (base.rotation === undefined && sleeveAlignment(segment, base.view, sleeveStyle)) base.rotation = sleeveAlignment(segment, base.view, sleeveStyle);
     if (position) base.position = position;
     if (type !== "pocket") {
       base.width = extra?.width ?? 6;
@@ -531,14 +490,14 @@ export default function OrderDetailView({ orderId, onBack }) {
   // fabric means a different bolt of cloth, so the cutting layout has to nest
   // and count yardage for each one separately rather than as one length.
   function fabricOf(piece) {
-    return piece.fabric === "contrast" ? "contrast" : "main";
+    return fabricKey(piece); // each motif is its own cloth
   }
 
   function colorFor(piece) {
     // Prefer the colour actually picked for this fabric in the preview
     // (colorHint), so the cutting layout's swatches match what's on screen —
     // fall back to a per-part heuristic only when nothing was picked.
-    if (fabricOf(piece) === "contrast" && colorHint?.accent) return colorHint.accent;
+    if (fabricOf(piece) !== "main" && colorHint?.accent) return colorHint.accent;
     if (fabricOf(piece) === "main" && colorHint?.main) return colorHint.main;
     const n = piece.name.toLowerCase();
     if (n.includes("sleeve")) return "#C79A3E";
@@ -561,20 +520,22 @@ export default function OrderDetailView({ orderId, onBack }) {
       color: colorFor(piece),
       grainLocked: true,
       pathData: piece.cutPathData || piece.pathData,
-      ...(fabric === "contrast" ? { fabric } : {}),
+      // A half drawn against a fold is laid out and cut as the whole piece.
+      ...(piece.foldEdge === "left" ? { foldEdge: "left" } : {}),
+      ...(fabric !== "main" ? { fabric } : {}),
     });
   }
 
   async function handleSendAllSizes() {
     if (!activeMockup) return;
     setError(null);
-    const counts = { main: 0, contrast: 0 };
+    const counts = { main: 0 };
     try {
       for (const sz of order.sizes) {
         const pieces = activeMockup.pieces[sz.label];
         if (!pieces) continue;
         for (const piece of pieces) {
-          counts[fabricOf(piece)]++;
+          counts[fabricOf(piece)] = (counts[fabricOf(piece)] || 0) + 1;
           await sendPiece(piece, sz.label, sz.quantity);
         }
       }
@@ -606,7 +567,10 @@ export default function OrderDetailView({ orderId, onBack }) {
     );
   }
 
-  const sizeLabels = activeMockup ? Object.keys(activeMockup.pieces) : [];
+  // In the size chart's order (S, M, L…), not the alphabetical order the pieces come keyed in.
+  const sizeLabels = activeMockup
+    ? [...new Set([...(activeMockup.mockup.sizes || []).map((sz) => sz.label), ...Object.keys(activeMockup.pieces)])].filter((l) => activeMockup.pieces[l])
+    : [];
   const activePieces = activeMockup && activeSizeLabel ? activeMockup.pieces[activeSizeLabel] : null;
   // Two catalog entries can share a plain name across brands (both Verlando
   // and Maryland sell a "Tropical Deluxe"), so the stored/matched value is
@@ -615,6 +579,25 @@ export default function OrderDetailView({ orderId, onBack }) {
   const matchedFabricColors = matchedFabric ? fabricColors[fabricSlug(matchedFabric)] || [] : [];
   const pickedFabricColor = matchedFabricColors.find((c) => c.hex === colorHint?.main);
   const fields = measurementFieldsFor(order.garmentType);
+
+  // The one-line state shown under each step's name.
+  function stepStatus(key) {
+    if (key === "sizes") {
+      const n = order.sizes?.length || 0;
+      const pcs = (order.sizes || []).reduce((t, sz) => t + (Number(sz.quantity) || 0), 0);
+      return n ? `${n} size${n === 1 ? "" : "s"} · ${pcs} pcs` : "add sizes";
+    }
+    if (key === "design") return activeMockup ? `v${activeMockup.mockup.version} saved` : "not saved yet";
+    if (key === "pattern") {
+      if (!activeMockup) return "—";
+      const checks = Object.values(activeMockup.summaries || {}).flatMap((sm) => sm.checks || []);
+      if (!checks.length) return `v${activeMockup.mockup.version}`;
+      const bad = checks.filter((c) => !c.ok).length;
+      return bad ? `${bad} check${bad === 1 ? "" : "s"} to fix` : "all seam checks pass";
+    }
+    if (key === "cutting") return order.actualFabric?.meters ? `${order.actualFabric.meters} m used` : activeMockup ? "plan the fabric" : "—";
+    return "";
+  }
   const isBottomType = order.garmentType === "pants" || order.garmentType === "shorts";
   const isMerchType = order.garmentType === "other";
   const isSkirtType = order.garmentType === "skirt";
@@ -656,13 +639,25 @@ export default function OrderDetailView({ orderId, onBack }) {
             onChange={(e) => updateField("contactInfo", e.target.value)}
           />
         </div>
-        <label style={{ display: "block", fontSize: "11.5px", color: "var(--text-3)", marginBottom: 8 }}>
-          Garment type
-        </label>
-        <GarmentTypePicker
-          value={order.garmentType}
-          onChange={(v) => updateField("garmentType", v)}
-        />
+        <div className="field">
+          <label id="garment-type-label">Garment type</label>
+          {typeOpen ? (
+            <GarmentTypePicker
+              value={order.garmentType}
+              onChange={(v) => {
+                updateField("garmentType", v);
+                setTypeOpen(false);
+              }}
+            />
+          ) : (
+            <div className="type-current" aria-labelledby="garment-type-label">
+              <span>{GARMENT_LABELS[order.garmentType] || order.garmentType}</span>
+              <button type="button" className="link-btn" onClick={() => setTypeOpen(true)}>
+                Change
+              </button>
+            </div>
+          )}
+        </div>
         <div className="field">
           <label>Status</label>
           <select
@@ -739,6 +734,25 @@ export default function OrderDetailView({ orderId, onBack }) {
       </aside>
 
       <main className="order-main">
+        <nav className="order-steps" aria-label="Order steps">
+          {STEPS.map((st, i) => (
+            <button
+              type="button"
+              key={st.key}
+              className={`order-step${step === st.key ? " is-current" : ""}`}
+              aria-current={step === st.key ? "step" : undefined}
+              onClick={() => setStep(st.key)}
+            >
+              <span className="order-step-num">{i + 1}</span>
+              <span className="order-step-text">
+                <span className="order-step-label">{st.label}</span>
+                <span className="order-step-status">{stepStatus(st.key)}</span>
+              </span>
+            </button>
+          ))}
+        </nav>
+
+        {step === "sizes" && (
         <section>
           <div className="section-head">
             <h2>Size chart</h2>
@@ -774,26 +788,18 @@ export default function OrderDetailView({ orderId, onBack }) {
             </p>
           )}
 
-          <div className="size-chart">
-            {(order.sizes || []).map((sz, idx) => (
-              <SizeRow
-                key={idx}
-                size={sz}
-                idx={idx}
-                fields={fields}
-                onChange={updateSizeRow}
-                onMeasurement={updateSizeMeasurement}
-                onRemove={removeSizeRow}
-              />
-            ))}
-          </div>
+          <SizeChartTable
+            sizes={order.sizes || []}
+            fields={fields}
+            onSize={updateSizeRow}
+            onMeasurement={updateSizeMeasurement}
+            onRemove={removeSizeRow}
+          />
         </section>
+        )}
 
-        <div className="divider" />
-
-        <section>
-          <h2 style={{ fontSize: 15, margin: "0 0 12px" }}>Mockup</h2>
-
+        {step === "design" && (
+          <section>
           {isCustomType && (
             <CustomDesigner
               design={order.design}
@@ -822,13 +828,16 @@ export default function OrderDetailView({ orderId, onBack }) {
               onFabricPick={(name) => updateFabric("name", name)}
               referencePhoto={order.designImage}
               onReferencePhoto={(url) => setOrder((prev) => ({ ...prev, designImage: url }))}
-              value={{ gender, dartPosition, sleeveStyle, sleeveFabric, colorBlock, collarEnabled, collarStyle, frontStyle, backStyle, hemStyle, neckline, trim, motifs, pattern: motifPattern, legStyle, shortsLength, frontPocket, backPocket, beltLoops, fly, trouserWaist, stripe, merch, skirt }}
+              value={{ gender, fit, sleevePlacket, dartPosition, sleeveStyle, sleeveFabric, colorBlock, motifPatterns, collarEnabled, collarStyle, frontStyle, backStyle, hemStyle, neckline, trim, motifs, pattern: motifPattern, legStyle, shortsLength, frontPocket, backPocket, beltLoops, fly, trouserWaist, stripe, merch, skirt }}
               onChange={(patch) => {
                 if ("gender" in patch) setGender(patch.gender);
+                if ("fit" in patch) setFit(patch.fit);
+                if ("sleevePlacket" in patch) setSleevePlacket(patch.sleevePlacket);
                 if ("dartPosition" in patch) setDartPosition(patch.dartPosition);
                 if ("sleeveStyle" in patch) setSleeveStyle(patch.sleeveStyle);
                 if ("sleeveFabric" in patch) setSleeveFabric(patch.sleeveFabric);
                 if ("colorBlock" in patch) setColorBlock(patch.colorBlock);
+                if ("motifPatterns" in patch) setMotifPatterns(patch.motifPatterns);
                 if ("collarEnabled" in patch) setCollarEnabled(patch.collarEnabled);
                 if ("collarStyle" in patch) setCollarStyle(patch.collarStyle);
                 if ("frontStyle" in patch) setFrontStyle(patch.frontStyle);
@@ -851,12 +860,6 @@ export default function OrderDetailView({ orderId, onBack }) {
               }}
             />
           )}
-          {!isCustomType && (
-          <p className="note" style={{ marginTop: 0 }}>
-              Pockets, embroidery, and sablon are added by clicking directly on the
-              design preview below, once you've generated at least one mockup.
-            </p>
-          )}
           <div className="mockup-actions">
             <div className="field">
               <label>Revision note</label>
@@ -875,52 +878,46 @@ export default function OrderDetailView({ orderId, onBack }) {
               {generating ? "Generating…" : "Generate mockup"}
             </button>
           </div>
+            {justSaved && activeMockup && (
+              <p className="saved-line" role="status">
+                Saved as v{activeMockup.mockup.version}.{" "}
+                <button type="button" className="link-btn" onClick={() => setStep("pattern")}>
+                  See its pattern and measurements →
+                </button>
+              </p>
+            )}
+          </section>
+        )}
 
-          {activeMockup && (
-            <>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "20px 0 12px" }}>
-                <div className="mono" style={{ fontSize: 12.5, color: "var(--text-3)" }}>
-                  Revision v{activeMockup.mockup.version}
-                  {activeMockup.mockup.note ? ` — ${activeMockup.mockup.note}` : ""}
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
-                  <button
-                    className="btn-add btn-inline"
-                    onClick={handleSendAllSizes}
-                    disabled={sentAll}
-                  >
-                    {sentAll ? "Sent all sizes to layout ✓" : "Send all sizes to cutting layout"}
-                  </button>
-                  <span className="mono" style={{ fontSize: 11, color: "var(--text-4)", maxWidth: 320, textAlign: "right" }}>
-                    Sends every garment's pieces one by one. For a whole order, the Cutting plan below is faster and tighter.
-                  </span>
-                  {sentFabricCounts && (
-                    <span className="mono" style={{ fontSize: 11.5, color: "var(--text-3)" }}>
-                      {sentFabricCounts.main} main-fabric piece{sentFabricCounts.main === 1 ? "" : "s"}
-                      {sentFabricCounts.contrast > 0 ? `, ${sentFabricCounts.contrast} contrast-fabric piece${sentFabricCounts.contrast === 1 ? "" : "s"}` : ""} — kept as separate fabrics in the layout
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {sizeLabels.length > 1 && (
-                <div className="field" style={{ maxWidth: 200, marginBottom: 16 }}>
-                  <label>Preview size</label>
-                  <select
-                    className="select"
-                    value={activeSizeLabel}
-                    onChange={(e) => {
-                      setActiveSizeLabel(e.target.value);
-                      setFocusIdx(0);
-                    }}
-                  >
-                    {sizeLabels.map((l) => (
-                      <option key={l} value={l}>{l}</option>
+        {step === "pattern" && !activeMockup && (
+          <StepEmpty onGo={() => setStep("design")} text="There's no pattern yet: build the garment in Design and generate a mockup, and its pieces, finished measurements and seam check appear here." />
+        )}
+        {step === "pattern" && activeMockup && (
+          <section className="pattern-step">
+            <div className="pattern-step-head">
+              <div className="field" style={{ margin: 0, minWidth: 240 }}>
+                <label htmlFor="revision-pick">Revision</label>
+                <select id="revision-pick" className="select" value={activeMockup.mockup.version} onChange={(e) => viewRevision(Number(e.target.value))}>
+                  {(order.mockups || [])
+                    .slice()
+                    .reverse()
+                    .map((m) => (
+                      <option key={m.version} value={m.version}>
+                        v{m.version}
+                        {m.note ? ` — ${m.note}` : ""} · {new Date(m.createdAt).toLocaleDateString()}
+                      </option>
                     ))}
-                  </select>
-                </div>
+                </select>
+              </div>
+              {!isCustomType && (
+                <a className="btn-add btn-inline btn-ghost" href={`#sheet-${orderId}-v${activeMockup.mockup.version}`} target="_blank" rel="noreferrer">
+                  Pattern sheet ↗
+                </a>
               )}
+            </div>
 
+            <div className={`pattern-step-grid${activeMockup.summaries ? "" : " is-single"}`}>
+              <div>
               {activePieces && !isCustomType && (
                 <ErrorBoundary
                   fallback={
@@ -953,42 +950,51 @@ export default function OrderDetailView({ orderId, onBack }) {
                   />
                 </ErrorBoundary>
               )}
-
-              {activePieces && (
-                <>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-                    <h3 style={{ fontSize: 14, margin: 0 }}>Cutting piece</h3>
-                    <div className="field" style={{ margin: 0, display: "flex", alignItems: "center", gap: 8 }}>
-                      <label style={{ margin: 0 }}>Piece</label>
-                      <select
-                        className="select"
-                        style={{ width: "auto" }}
-                        value={focusIdx}
-                        onChange={(e) => setFocusIdx(Number(e.target.value))}
-                      >
-                        {activePieces.map((p, i) => (
-                          <option key={i} value={i}>{p.name}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                  <div className="draft-grid">
-                    <div className="draft-card">
-                      <PiecePreview piece={activePieces[focusIdx]} pxPerCm={FOCUS_PX_PER_CM} />
-                      <p className="draft-piece-notes" style={{ maxWidth: "none" }}>
-                        {activePieces[focusIdx].notes}
-                      </p>
-                    </div>
-                  </div>
-                </>
+              </div>
+              {activeMockup.summaries && (
+                <ErrorBoundary fallback={<p className="empty">The measurements couldn't be displayed.</p>}>
+                  <PatternSummary
+                    summaries={activeMockup.summaries}
+                    sizeOrder={sizeLabels}
+                    activeSize={activeSizeLabel}
+                    onSize={(l) => {
+                      setActiveSizeLabel(l);
+                      setFocusIdx(0);
+                    }}
+                  />
+                </ErrorBoundary>
               )}
-            </>
-          )}
-        </section>
+            </div>
 
-        {activeMockup && !isCustomType && (
-          <>
-            <div className="divider" />
+            {activePieces && (
+              <section aria-labelledby="pieces-heading">
+                <h3 id="pieces-heading" className="ps-heading">
+                  Pieces, size {activeSizeLabel} <span className="ps-local">{activePieces.length} pieces · pick one for its cutting notes</span>
+                </h3>
+                <div className="piece-grid">
+                  {activePieces.map((p, i) => (
+                    <button type="button" key={`${p.name}-${i}`} className={`piece-card${i === focusIdx ? " is-current" : ""}`} onClick={() => setFocusIdx(i)} aria-pressed={i === focusIdx}>
+                      <PiecePreview piece={p} pxPerCm={pieceScale(activePieces)} />
+                    </button>
+                  ))}
+                </div>
+                {activePieces[focusIdx] && (
+                  <p className="draft-piece-notes piece-notes">
+                    <b>{activePieces[focusIdx].name}.</b> {activePieces[focusIdx].notes}
+                  </p>
+                )}
+              </section>
+            )}
+          </section>
+        )}
+
+        {step === "cutting" && !activeMockup && (
+          <StepEmpty onGo={() => setStep("design")} text="There's nothing to cut yet: generate a mockup in Design first." />
+        )}
+        {step === "cutting" && activeMockup && (
+          <section>
+            {!isCustomType && (
+              <>
             <ErrorBoundary fallback={<p className="empty">The cutting plan couldn't be displayed.</p>}>
               <CuttingPlan
                 key={`${orderId}-${activeMockup.mockup.version}`}
@@ -998,30 +1004,29 @@ export default function OrderDetailView({ orderId, onBack }) {
                 onSaveActual={saveActualFabric}
               />
             </ErrorBoundary>
-          </>
-        )}
-
-        {order.mockups && order.mockups.length > 0 && (
-          <>
-            <div className="divider" />
-            <section>
-              <h2 style={{ fontSize: 15, margin: "0 0 12px" }}>Revision history</h2>
-              <div className="revision-list">
-                {order.mockups
-                  .slice()
-                  .reverse()
-                  .map((m) => (
-                    <div className="revision-row" key={m.version} onClick={() => viewRevision(m.version)}>
-                      <span className="mono">v{m.version}</span>
-                      <span className="revision-note">{m.note || "—"}</span>
-                      <span className="mono revision-date">
-                        {new Date(m.createdAt).toLocaleString()}
-                      </span>
-                    </div>
-                  ))}
+              </>
+            )}
+            <div className="cutting-send">
+              <div>
+                <h3 className="ps-heading">Cut one garment at a time instead</h3>
+                <p className="note" style={{ margin: 0 }}>
+                  Sends every garment's pieces, one by one, to the Cutting Layout to arrange by hand. For a whole order the cutting plan above is faster and wastes less.
+                </p>
+                {sentFabricCounts && (
+                  <p className="mono" style={{ fontSize: 11.5, color: "var(--text-3)", margin: "6px 0 0" }}>
+                    Sent {sentFabricCounts.main} main-fabric piece{sentFabricCounts.main === 1 ? "" : "s"}
+                    {Object.keys(sentFabricCounts).length > 1
+                      ? `, and ${Object.entries(sentFabricCounts).filter(([k]) => k !== "main").reduce((n, [, v]) => n + v, 0)} in ${Object.keys(sentFabricCounts).length - 1} other fabric${Object.keys(sentFabricCounts).length > 2 ? "s" : ""}`
+                      : ""}{" "}
+                    — each fabric laid out separately
+                  </p>
+                )}
               </div>
-            </section>
-          </>
+              <button className="btn-add btn-inline btn-ghost" onClick={handleSendAllSizes} disabled={sentAll}>
+                {sentAll ? "Sent all sizes ✓" : "Send all sizes to cutting layout"}
+              </button>
+            </div>
+          </section>
         )}
       </main>
     </div>

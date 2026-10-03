@@ -23,9 +23,9 @@ func DraftChildBodice(m Measurements) []Piece {
 	scye := shirtScye(m.Bust)
 	neckW := m.Neck / 5
 
-	front, frontArmhole, _ := draftRelaxedFront(qChest, scye, neckW, m.Shoulder, m.BackWaistLength, "Child bodice front")
-	back, backArmhole, _ := draftRelaxedBack(qChest, scye, neckW, m.Shoulder, m.BackWaistLength, "Child bodice back")
-	sleeve := draftSleeve(frontArmhole+backArmhole, m.SleeveLength, m.UpperArm, m.Wrist, m.Ease, "full", "Child sleeve")
+	front, frontArmhole, _ := draftRelaxedFront(m.Bust, qChest, scye, neckW, m.Shoulder, m.BackWaistLength, 0, "Child bodice front")
+	back, backArmhole, _ := draftRelaxedBack(m.Bust, qChest, scye, neckW, m.Shoulder, m.BackWaistLength, 0, "Child bodice back")
+	sleeve := draftSleeve(frontArmhole+backArmhole, m.SleeveLength, m.UpperArm, m.Wrist, m.Ease, 2*(neckW+m.Shoulder), "full", "Child sleeve")
 	return []Piece{front, back, sleeve}
 }
 
@@ -69,95 +69,72 @@ func childDefaults(m Measurements) Measurements {
 // child bodice and the adult PE/relaxed-fit shirt, since both want
 // the same comfort-first construction (no bust dart, straight side) just at different scales. name becomes the returned Piece's
 // Name so each caller's pieces stay distinguishable.
-func draftRelaxedFront(qChest, scye, neckW, shoulderLen, backWaistLen float64, name string) (Piece, float64, float64) {
-	height := backWaistLen // no bust-curve allowance needed — the front and back run the same length
-	neckDrop := neckW + 1.0
-	shoulderDrop := 1.5 // less slope than the adult's 2.0 — a child's shoulder line sits squarer
-	shoulderTipX := neckW + shoulderLen*0.96
-	hemWidth := qChest // straight side: every reference shirt chart has hem width equal to chest width
-
-	width := max2(qChest, hemWidth, shoulderTipX)
-
-	cfTop := point{0, round1(neckDrop)}
-	neckPoint := point{round1(neckW), 0}
-	shoulderTip := point{round1(shoulderTipX), round1(shoulderDrop)}
-	underarm := point{round1(qChest), round1(scye)}
-	hemSide := point{round1(hemWidth), round1(height)}
-	cfBottom := point{0, round1(height)}
-
-	nc1, nc2 := neckControls(cfTop, neckPoint)
-	ac1 := point{round1(shoulderTip.x + (underarm.x-shoulderTip.x)*0.25 + 1.0), round1(shoulderTip.y + (underarm.y-shoulderTip.y)*0.15)}
-	ac2 := point{round1(underarm.x + 1.0), round1(underarm.y - (underarm.y-shoulderTip.y)*0.3)}
-
-	pb := &pathBuilder{}
-	pb.moveTo(cfTop).
-		curveTo(nc1, nc2, neckPoint).
-		lineTo(shoulderTip).
-		curveTo(ac1, ac2, underarm).
-		lineTo(hemSide). // straight taper from underarm to a slightly flared hem, no dart
-		lineTo(cfBottom).
-		lineTo(cfTop).
-		close()
-
-	armholeLen := cubicLength(shoulderTip, ac1, ac2, underarm)
-	neckLen := cubicLength(cfTop, nc1, nc2, neckPoint)
-
-	return Piece{
-		Name:        name,
-		PathData:    pb.String(),
-		Width:       round1(width),
-		Height:      round1(height),
-		FoldEdge:    "left",
-		Notes:       "Half front, center front (left edge) on fold. Dartless (no bust curve to shape for) with a straight side seam. Waist measurement not used by this block.",
-		ShoulderTip: &Point{X: shoulderTip.x, Y: shoulderTip.y},
-	}, armholeLen, neckLen
+// qHem is the least the hem may be (a quarter of it); 0 for a block that
+// stops at the waist.
+func draftRelaxedFront(bust, qChest, scye, neckW, shoulderLen, backWaistLen, qHem float64, name string) (Piece, float64, float64) {
+	p, armholeLen, neckLen := relaxedPanel(bust, qChest, scye, neckW, shoulderLen, backWaistLen, max2(qChest, qHem), false)
+	p.Name = name
+	p.Notes = "Half front, center front (left edge) on fold. Dartless (no bust curve to shape for) with a straight side seam. Waist measurement not used by this block."
+	return p, armholeLen, neckLen
 }
 
 // draftRelaxedBack is draftRelaxedFront's back-piece counterpart —
 // see that function's doc comment.
-func draftRelaxedBack(qChest, scye, neckW, shoulderLen, backWaistLen float64, name string) (Piece, float64, float64) {
-	height := backWaistLen
-	neckDrop := neckW * 0.3 // shallower still than the front, same relationship as the adult block
-	shoulderDrop := 1.0
-	shoulderTipX := neckW + shoulderLen*1.0
-	backScye := scye // same bust line front and back, so the side seams true
-	hemWidth := qChest
+func draftRelaxedBack(bust, qChest, scye, neckW, shoulderLen, backWaistLen, qHem float64, name string) (Piece, float64, float64) {
+	p, armholeLen, neckLen := relaxedPanel(bust, qChest, scye, neckW, shoulderLen, backWaistLen, max2(qChest, qHem), true)
+	p.Name = name
+	p.Notes = "Half back, center back (left edge) on fold. Dartless, matching straight side seam to the front."
+	return p, armholeLen, neckLen
+}
 
-	width := max2(qChest, hemWidth, shoulderTipX)
-
-	cbTop := point{0, round1(neckDrop)}
+// relaxedPanel is the dartless half front or back both relaxed blocks
+// share: neckline, shoulder, armhole, a straight side seam down to the hem
+// (every reference shirt chart has the hem as wide as the chest) and the
+// centre line. The front's neck is deeper and its shoulder drops more.
+func relaxedPanel(bust, qChest, scye, neckW, shoulderLen, length, hemWidth float64, back bool) (Piece, float64, float64) {
+	neckDrop := frontNeckDepth(neckW)
+	seam, slope := shoulderLen-shoulderEase/2, frontShoulderSlope*shoulderSlopeScale(bust)
+	if back {
+		neckDrop = neckW * 0.3 // shallower than the front, as in the adult block
+		seam, slope = shoulderLen+shoulderEase/2, backShoulderSlope*shoulderSlopeScale(bust)
+	}
+	centreTop := point{0, round1(neckDrop)}
 	neckPoint := point{round1(neckW), 0}
-	shoulderTip := point{round1(shoulderTipX), round1(shoulderDrop)}
-	underarm := point{round1(qChest), round1(backScye)}
-	hemSide := point{round1(hemWidth), round1(height)}
-	cbBottom := point{0, round1(height)}
+	shoulderTip := shoulderTipAt(neckPoint, seam, slope)
+	shoulderTipX := shoulderTip.x
+	underarm := point{round1(qChest), round1(scye)} // same bust line front and back, so the side seams true
+	hemSide := point{round1(hemWidth), round1(length)}
+	centreBottom := point{0, round1(length)}
 
-	nc1, nc2 := neckControls(cbTop, neckPoint)
-	ac1 := point{round1(shoulderTip.x + (underarm.x-shoulderTip.x)*0.25 + 0.8), round1(shoulderTip.y + (underarm.y-shoulderTip.y)*0.15)}
-	ac2 := point{round1(underarm.x + 0.8), round1(underarm.y - (underarm.y-shoulderTip.y)*0.3)}
+	nc1, nc2 := neckControls(centreTop, neckPoint, shoulderTip)
+	armhole := draftArmhole(neckPoint, shoulderTip, underarm, hemSide, back)
 
-	pb := &pathBuilder{}
-	pb.moveTo(cbTop).
-		curveTo(nc1, nc2, neckPoint).
-		lineTo(shoulderTip).
-		curveTo(ac1, ac2, underarm).
-		lineTo(hemSide).
-		lineTo(cbBottom).
-		lineTo(cbTop).
-		close()
-
-	armholeLen := cubicLength(shoulderTip, ac1, ac2, underarm)
-	neckLen := cubicLength(cbTop, nc1, nc2, neckPoint)
+	o := outline{start: centreTop}
+	o.curveTo(nc1, nc2, neckPoint).lineTo(shoulderTip).add(armhole...)
+	o.lineTo(hemSide).lineTo(centreBottom).lineTo(centreTop)
 
 	return Piece{
-		Name:        name,
-		PathData:    pb.String(),
-		Width:       round1(width),
-		Height:      round1(height),
+		PathData:    o.path(),
+		Width:       round1(max2(qChest, hemWidth, shoulderTipX)),
+		Height:      round1(length),
 		FoldEdge:    "left",
-		Notes:       "Half back, center back (left edge) on fold. Dartless, matching straight side seam to the front.",
 		ShoulderTip: &Point{X: shoulderTip.x, Y: shoulderTip.y},
-	}, armholeLen, neckLen
+		Landmarks:   panelLandmarks(neckPoint, shoulderTip, underarm, hemSide, centreBottom),
+	}, lengthOf(shoulderTip, armhole), cubicLength(centreTop, nc1, nc2, neckPoint)
+}
+
+// panelLandmarks names the points a drawing needs to find its way round a
+// torso panel's outline: where the neckline, shoulder, armhole, side seam
+// and hem each end.
+func panelLandmarks(neckPoint, shoulderTip, underarm, hemSide, hemCentre point) map[string]Point {
+	pt := func(p point) Point { return Point{X: round1(p.x), Y: round1(p.y)} }
+	return map[string]Point{
+		"neckPoint":   pt(neckPoint),
+		"shoulderTip": pt(shoulderTip),
+		"underarm":    pt(underarm),
+		"hemSide":     pt(hemSide),
+		"hemCentre":   pt(hemCentre),
+	}
 }
 
 func max2(vals ...float64) float64 {

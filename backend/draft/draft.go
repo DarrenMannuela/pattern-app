@@ -138,6 +138,10 @@ type Piece struct {
 	CutHeight   float64     `json:"cutHeight,omitempty"`
 	CutOffset   *Point      `json:"cutOffset,omitempty"`
 	Grainline   *[4]float64 `json:"grainline,omitempty"` // x1,y1,x2,y2 in sewing-line coordinates
+	// Motif is the pattern a contrast piece is cut in ("batik", "stripes", ...;
+	// "" or "solid" for a plain contrast fabric). Different motifs are
+	// different cloth, bought and laid out separately.
+	Motif string `json:"motif,omitempty"`
 	// Outline, when set, is the whole panel's sewing line before it was cut
 	// into parts (a colour block splits the front). Drawings use it; cutting
 	// uses PathData.
@@ -145,6 +149,10 @@ type Piece struct {
 	// Qty is how many copies of this piece as drawn one garment needs.
 	// A half piece on a fold counts both halves. Set by FinishAll.
 	Qty int `json:"qty,omitempty"`
+	// Darts are the darts to mark on the piece, in sewing-line coordinates:
+	// a dart cut into an edge as [leg, tip, leg], a fish-eye dart inside the
+	// piece as a closed loop [top, side, bottom, side, top].
+	Darts [][]Point `json:"darts,omitempty"`
 }
 
 type point struct{ x, y float64 }
@@ -213,13 +221,15 @@ func DraftBodice(m Measurements, dartPosition string) []Piece {
 
 	ease := m.Ease
 	qBust := m.Bust/4 + ease/4   // quarter-bust, the classic drafting unit
-	qWaist := m.Waist/4 + ease/4 // quarter-waist
+	qWaist := m.Waist/4 + ease/8 // quarter-waist: half the chest's ease, as in the Bunka block (W/2 + 3 against B/2 + 6)
 	scye := shirtScye(m.Bust)    // armhole depth below the neck/shoulder line — see shirtScye's own chart citation
 	neckW := m.Neck / 5
 
-	front, frontArmhole, _ := draftFront(qBust, qWaist, scye, neckW, m.Shoulder, m.BackWaistLength, dartPosition)
-	back, backArmhole, _ := draftBack(qBust, qWaist, scye, neckW, m.Shoulder, m.BackWaistLength)
-	sleeve := draftSleeve(frontArmhole+backArmhole, m.SleeveLength, m.UpperArm, m.Wrist, ease, "full", "Sleeve")
+	spec := fittedSpec{bust: m.Bust, qBust: qBust, qWaist: qWaist, qHip: m.Hip/4 + ease/4, scye: scye, neckW: neckW, shoulderLen: m.Shoulder,
+		waistLen: m.BackWaistLength, length: m.BackWaistLength, dartPosition: dartPosition}
+	front, frontArmhole, _ := draftFittedFront(spec)
+	_, back, backArmhole, _ := draftFittedBack(spec, false)
+	sleeve := draftSleeve(frontArmhole+backArmhole, m.SleeveLength, m.UpperArm, m.Wrist, ease, 0, "full", "Sleeve")
 	return []Piece{front, back, sleeve}
 }
 
@@ -237,52 +247,6 @@ func dot(a, b point) float64 { return a.x*b.x + a.y*b.y }
 func rotate(v point, angle float64) point {
 	s, c := math.Sin(angle), math.Cos(angle)
 	return point{v.x*c - v.y*s, v.x*s + v.y*c}
-}
-
-// dartLegsAt computes the two dart-leg endpoints for a dart pivoting
-// at apex A, centered on target point T, with total wedge angle theta.
-// Both legs sit at distance |T-A| from A (a "true" dart with equal
-// leg lengths) — this is the actual mechanic of dart rotation: cut
-// from T to the apex, and the same angle that used to be at the old
-// dart position opens up here.
-func dartLegsAt(apex, target point, theta float64) (point, point) {
-	v := sub(target, apex)
-	leg1 := add(apex, rotate(v, theta/2))
-	leg2 := add(apex, rotate(v, -theta/2))
-	return leg1, leg2
-}
-
-// dartPointToward returns the actual point a rotated dart should
-// converge to: `length` away from target, heading toward trueApex,
-// clamped so it never overshoots trueApex itself. A real dart's legs
-// aren't drawn all the way to the true bust point except when it's
-// already close (as the default waist position happens to be) —
-// doing that for a position far from the bust (shoulder, neckline,
-// armhole, a low side dart) would produce a dart many times deeper
-// than intended, since leg length grows with distance from trueApex.
-// Keeping every rotated dart the same length as the original instead
-// gives a consistently sized notch regardless of where it lands.
-func dartPointToward(target, trueApex point, length float64) point {
-	v := sub(trueApex, target)
-	dist := math.Hypot(v.x, v.y)
-	if dist < 1e-9 {
-		return trueApex
-	}
-	if length > dist {
-		length = dist
-	}
-	return add(target, scale(v, length/dist))
-}
-
-// orderAlong returns (p1,p2) reordered so the first point is the one
-// that comes first when travelling in direction dir — needed because
-// a dart's two legs must be spliced into the boundary in the correct
-// order regardless of which edge (and which direction) they sit on.
-func orderAlong(p1, p2, dir point) (point, point) {
-	if dot(p1, dir) <= dot(p2, dir) {
-		return p1, p2
-	}
-	return p2, p1
 }
 
 // splitCubic performs an exact De Casteljau subdivision of a cubic
@@ -343,185 +307,63 @@ func cubicLength(p0, c1, c2, p3 point) float64 {
 	return total
 }
 
-// draftFront returns the drafted front Piece plus its armhole and
-// neckline curve lengths — the neckline length feeds a collar draft
-// (frontNeckLen+backNeckLen gives the collar its neck-edge length),
-// the same way armhole length already feeds the sleeve cap.
-func draftFront(qBust, qWaist, scye, neckW, shoulderLen, backWaistLen float64, dartPosition string) (Piece, float64, float64) {
-	height := backWaistLen + 1.5 // front block runs slightly longer than back, for the bust curve
-	neckDrop := neckW + 1.5
-	shoulderDrop := 2.0
-	shoulderTipX := neckW + shoulderLen*0.96
+// Shoulder slope, kept as a drop over 15cm of shoulder so a child's shorter
+// shoulder drops less than an adult's. Men's shirt drafts slope 5.5 over 15
+// at the front and 4.5 at the back (a Chinese men's shirt draft states
+// exactly these; Bunka blocks slope 22 and 18 degrees, about 6 and 5 over 15;
+// the jarumjahit kemeja drops the front 1/10 of the shoulder width, about
+// 4.6). The 4 and 2 used before were credited to So-en, but no source for
+// them could be found again, and a back that flat (8 degrees) is far
+// flatter than any shirt draft.
+const (
+	frontShoulderSlope = 5.5 / 15
+	backShoulderSlope  = 4.5 / 15
+)
 
-	width := math.Max(qBust, shoulderTipX)
-
-	// The dart's angular "value" is derived once from the bust/waist
-	// difference (unchanged regardless of where the dart ends up) —
-	// rotating it elsewhere doesn't change how much fabric it takes in.
-	dartIntake := clamp(qBust-qWaist-1.5, 0.5, 4)
-	apexX := clamp(qBust*0.55, 0, qWaist*0.9)
-	apex := point{round1(apexX), round1(scye + (height-scye)*0.42)}
-	refDist := height - apex.y // original apex-to-waistline distance, used as the angle's reference arm
-	theta := 2 * math.Atan((dartIntake/2)/refDist)
-
-	cfTop := point{0, round1(neckDrop)}
-	neckPoint := point{round1(neckW), 0}
-	shoulderTip := point{round1(shoulderTipX), round1(shoulderDrop)}
-	underarm := point{round1(qBust), round1(scye)}
-	sideWaist := point{round1(qWaist), round1(height)}
-	cfBottom := point{0, round1(height)}
-
-	// Neckline curve control points (cfTop -> neckPoint).
-	nc1, nc2 := neckControls(cfTop, neckPoint)
-	// Armhole curve control points (shoulderTip -> underarm).
-	ac1 := point{round1(shoulderTip.x + (underarm.x-shoulderTip.x)*0.25 + 1.5), round1(shoulderTip.y + (underarm.y-shoulderTip.y)*0.15)}
-	ac2 := point{round1(underarm.x + 1.2), round1(underarm.y - (underarm.y-shoulderTip.y)*0.3)}
-
-	pb := &pathBuilder{}
-	pb.moveTo(cfTop)
-
-	// --- neckline segment ---
-	if dartPosition == "neckline" {
-		a, d, f, e, c := splitCubic(cfTop, nc1, nc2, neckPoint, 0.5)
-		dartPoint := dartPointToward(f, apex, refDist)
-		leg1, leg2 := dartLegsAt(dartPoint, f, theta)
-		first, second := orderAlong(leg1, leg2, sub(neckPoint, cfTop))
-		pb.curveTo(a, d, first).lineTo(dartPoint).lineTo(second).curveTo(e, c, neckPoint)
-	} else {
-		pb.curveTo(nc1, nc2, neckPoint)
-	}
-
-	// --- shoulder segment ---
-	if dartPosition == "shoulder" {
-		target := lerp(neckPoint, shoulderTip, 0.4) // typical shoulder-dart placement, closer to the neck
-		dartPoint := dartPointToward(target, apex, refDist)
-		leg1, leg2 := dartLegsAt(dartPoint, target, theta)
-		first, second := orderAlong(leg1, leg2, sub(shoulderTip, neckPoint))
-		pb.lineTo(first).lineTo(dartPoint).lineTo(second).lineTo(shoulderTip)
-	} else {
-		pb.lineTo(shoulderTip)
-	}
-
-	// --- armhole segment ---
-	if dartPosition == "armhole" {
-		a, d, f, e, c := splitCubic(shoulderTip, ac1, ac2, underarm, 0.5)
-		dartPoint := dartPointToward(f, apex, refDist)
-		leg1, leg2 := dartLegsAt(dartPoint, f, theta)
-		first, second := orderAlong(leg1, leg2, sub(underarm, shoulderTip))
-		pb.curveTo(a, d, first).lineTo(dartPoint).lineTo(second).curveTo(e, c, underarm)
-	} else {
-		pb.curveTo(ac1, ac2, underarm)
-	}
-
-	// --- side seam segment ---
-	if dartPosition == "side" || dartPosition == "french" {
-		t := 0.5
-		if dartPosition == "french" {
-			t = 0.78 // lower down the side seam, angled toward the bust — the classic "French dart"
-		}
-		target := lerp(underarm, sideWaist, t)
-		dartPoint := dartPointToward(target, apex, refDist)
-		leg1, leg2 := dartLegsAt(dartPoint, target, theta)
-		first, second := orderAlong(leg1, leg2, sub(sideWaist, underarm))
-		pb.lineTo(first).lineTo(dartPoint).lineTo(second).lineTo(sideWaist)
-	} else {
-		pb.lineTo(sideWaist)
-	}
-
-	// --- waist segment (the default dart position) ---
-	if dartPosition == "waist" {
-		target := point{apexX, height}
-		dartPoint := dartPointToward(target, apex, refDist)
-		leg1, leg2 := dartLegsAt(dartPoint, target, theta)
-		first, second := orderAlong(leg1, leg2, sub(cfBottom, sideWaist))
-		pb.lineTo(first).lineTo(dartPoint).lineTo(second).lineTo(cfBottom)
-	} else {
-		pb.lineTo(cfBottom)
-	}
-
-	pb.lineTo(cfTop).close()
-
-	armholeLen := cubicLength(shoulderTip, ac1, ac2, underarm)
-	neckLen := cubicLength(cfTop, nc1, nc2, neckPoint)
-
-	return Piece{
-		Name:        "Bodice front",
-		PathData:    pb.String(),
-		Width:       round1(width),
-		Height:      round1(height),
-		FoldEdge:    "left",
-		Notes:       "Half front, center front (left edge) on fold. Dart rotated to: " + dartPosition + ". Refine fit with a muslin toile.",
-		ShoulderTip: &Point{X: shoulderTip.x, Y: shoulderTip.y},
-	}, armholeLen, neckLen
+// shoulderSlopeScale grades the slope with the body: a child's shoulders
+// are much flatter than an adult's. The shop's boys' size-8 shirt chart
+// (66cm chest) drops the front shoulder 1.25cm over 8cm — 15:2.3, 0.43 of
+// the adult 15:5.5 — and the slope rises to the full men's shirt slope at an
+// 88cm chest, linearly between.
+func shoulderSlopeScale(bust float64) float64 {
+	return clamp(0.43+(bust-66)/(88-66)*0.57, 0.43, 1)
 }
+
+// The back shoulder seam is 1cm longer than the front's and eased onto it
+// over the shoulder blade (Bunka men's shirt block: front shoulder = back
+// shoulder - 1). shoulderLen, the size chart's shoulder, is their middle.
+const shoulderEase = 1.0
+
+// shoulderTipAt is the shoulder point: seam cm from the neck point along a
+// shoulder that drops slope per cm.
+func shoulderTipAt(neckPoint point, seam, slope float64) point {
+	a := math.Atan(slope)
+	return point{round1(neckPoint.x + seam*math.Cos(a)), round1(neckPoint.y + seam*math.Sin(a))}
+}
+
+// frontNeckDepth is how far the front neck drops below the neck point:
+// 1/6 of the neck plus 1.5cm. neckW is the neck width, 1/5 of the neck.
+func frontNeckDepth(neckW float64) float64 { return neckW*5/6 + 1.5 }
 
 // neckControls are the bezier controls for a neckline from the centre line
 // (centre front or back) up to the side neck point: a quarter ellipse that
 // leaves the centre line square (so the two mirrored halves join in one smooth
-// curve, not a notch) and reaches the neck point square to the shoulder, as
-// every block-drafting method prescribes. 0.552 is the usual constant that
-// makes a cubic bezier match a quarter circle.
-func neckControls(centre, neck point) (point, point) {
+// curve, not a notch) and reaches the neck point square to the shoulder seam,
+// as every block-drafting method prescribes, so front and back necklines run
+// on smoothly across the shoulder seam and the collar sits flat. The shoulder
+// slopes, so "square to it" leans the last part of the curve back toward the
+// centre by the shoulder's slope. 0.552 is the usual constant that makes a
+// cubic bezier match a quarter circle.
+func neckControls(centre, neck, shoulderTip point) (point, point) {
 	const k = 0.552
+	u := unit(sub(shoulderTip, neck))
+	down := point{-u.y, u.x} // square to the shoulder, pointing down
+	if down.y < 0 {
+		down = scale(down, -1)
+	}
+	reach := (centre.y - neck.y) * k / math.Max(down.y, 0.5)
 	return point{round1(centre.x + (neck.x-centre.x)*k), centre.y},
-		point{neck.x, round1(neck.y + (centre.y-neck.y)*k)}
-}
-
-// draftBack mirrors draftFront's doc comment: returns the Piece plus
-// its armhole and neckline curve lengths.
-func draftBack(qBust, qWaist, scye, neckW, shoulderLen, backWaistLen float64) (Piece, float64, float64) {
-	height := backWaistLen
-	neckDrop := neckW * 0.35 // back neck sits much shallower than front
-	shoulderDrop := 1.3
-	shoulderTipX := neckW + shoulderLen*1.0
-	backScye := scye // the bust line is one horizontal across front and back
-
-	width := math.Max(qBust, shoulderTipX)
-
-	// A smaller waist dart than the front — the back has less shaping
-	// to do since there's no bust curve to absorb.
-	dartIntake := clamp(qBust-qWaist-1.5, 0.5, 4) * 0.6
-	apexX := clamp(qBust*0.5, 0, qWaist*0.85)
-	apex := point{round1(apexX), round1(backScye + (height-backScye)*0.5)}
-
-	cbTop := point{0, round1(neckDrop)}
-	neckPoint := point{round1(neckW), 0}
-	shoulderTip := point{round1(shoulderTipX), round1(shoulderDrop)}
-	underarm := point{round1(qBust), round1(backScye)}
-	sideWaist := point{round1(qWaist), round1(height)}
-	dartRight := point{round1(apexX + dartIntake/2), round1(height)}
-	dartLeft := point{round1(apexX - dartIntake/2), round1(height)}
-	cbBottom := point{0, round1(height)}
-
-	nc1, nc2 := neckControls(cbTop, neckPoint)
-	ac1 := point{round1(shoulderTip.x + (underarm.x-shoulderTip.x)*0.25 + 1.2), round1(shoulderTip.y + (underarm.y-shoulderTip.y)*0.15)}
-	ac2 := point{round1(underarm.x + 1.0), round1(underarm.y - (underarm.y-shoulderTip.y)*0.3)}
-
-	pb := &pathBuilder{}
-	pb.moveTo(cbTop).
-		curveTo(nc1, nc2, neckPoint).
-		lineTo(shoulderTip).
-		curveTo(ac1, ac2, underarm).
-		lineTo(sideWaist).
-		lineTo(dartRight).
-		lineTo(apex).
-		lineTo(dartLeft).
-		lineTo(cbBottom).
-		lineTo(cbTop).
-		close()
-
-	armholeLen := cubicLength(shoulderTip, ac1, ac2, underarm)
-	neckLen := cubicLength(cbTop, nc1, nc2, neckPoint)
-
-	return Piece{
-		Name:        "Bodice back",
-		PathData:    pb.String(),
-		Width:       round1(width),
-		Height:      round1(height),
-		FoldEdge:    "left",
-		Notes:       "Half back, center back (left edge) on fold. Small waist dart included.",
-		ShoulderTip: &Point{X: shoulderTip.x, Y: shoulderTip.y},
-	}, armholeLen, neckLen
+		point{round1(neck.x + down.x*reach), round1(neck.y + down.y*reach)}
 }
 
 // draftSleeve returns a basic one-piece set-in sleeve sized to fit
@@ -552,7 +394,9 @@ func sleeveLengthFraction(style string) float64 {
 // cuffPleat is the extra sleeve-opening width gathered into a cuff.
 const cuffPleat = 4.0
 
-func draftSleeve(armhole, sleeveLen, upperArm, wrist, ease float64, style, name string) Piece {
+// across is the shoulder width (both shoulders and the neck), or 0 to size the
+// sleeve from the arm alone.
+func draftSleeve(armhole, sleeveLen, upperArm, wrist, ease, across float64, style, name string) Piece {
 	sleeveEase := ease / 3 // a share of the garment's overall wearing ease, for arm movement
 	// A shirt sleeve is cut with real room round the arm — the charts run
 	// 5-8cm over the arm on an adult (42 wide at the bicep for a chest of
@@ -561,14 +405,32 @@ func draftSleeve(armhole, sleeveLen, upperArm, wrist, ease float64, style, name 
 	// 24cm arm) still comes out within its tolerance.
 	bicepEase := math.Max(sleeveEase, upperArm*0.15)
 	halfBicep := (upperArm + bicepEase) / 2
+	// A uniform shirt's sleeve is cut roomier, sized from the shoulder the
+	// way konveksi kemeja drafts do: half the sleeve is half the shoulder
+	// width less 1cm (jarumjahit "Pola Dasar Kemeja Pria": "B–C = ½ lebar
+	// bahu – 1cm"). That makes a wide shirt sleeve with a low cap, as real
+	// shirts have (a Japanese regular shirt: 46cm wide, 7cm cap). It was
+	// cut 2cm narrower for a while only because the preview drew it big.
+	if across > 0 {
+		halfBicep = math.Max(halfBicep, across/2-1)
+	}
+	// A sleeve can't be wider than its armhole can take: the cap is at least
+	// as long as the sleeve is wide, so on a broad shoulder with a small
+	// armhole the shoulder rule asks for a sleeve no cap height can set in.
+	// Keep it narrow enough for a shallow shirt cap (15% of the armhole, as
+	// low as Japanese shirt caps go), but never narrower than the arm needs.
+	armMin := (upperArm + bicepEase) / 2
+	for halfBicep > armMin && sleeveCapLength(halfBicep, armhole*minShirtCap, 0, 0) > armhole+sleeveCapEase {
+		halfBicep -= 0.25
+	}
 	halfWristFull := (wrist + sleeveEase*0.5) / 2
 	if style != "half" {
-		// A cuffed sleeve opens as wide as the cuff (wrist + 3, see
+		// A cuffed sleeve opens as wide as the cuff (cuffLength, see
 		// draftCuff) plus the pleats gathered into it, so the sleeve
 		// hangs nearly straight and narrows only a little. Cutting it
 		// to the bare wrist made the opening narrower than its own
 		// cuff.
-		halfWristFull = math.Min(halfBicep*0.9, (wrist+3+cuffPleat)/2)
+		halfWristFull = math.Min(halfBicep*0.9, (cuffLength(wrist)+cuffPleat)/2)
 	}
 	width := halfBicep * 2
 
@@ -585,28 +447,43 @@ func draftSleeve(armhole, sleeveLen, upperArm, wrist, ease float64, style, name 
 	// exactly as long as the armhole plus ease by adjusting the curve's
 	// fullness, not by making the dome taller. Truing seams this way is
 	// the step every drafting reference lists before cutting.
-	capHeight, fullness := solveSleeveCap(halfBicep, armhole)
-
-	// Guard against a length shorter than the cap itself, which would
-	// fold the wrist points back above the underarm and self-intersect.
+	// The cap meets the underarm seam square, as the armhole meets the side
+	// seam, so the seam under the arm is smooth once the sleeve is set in —
+	// the seam's slant depends on the cap height, so solve twice.
+	//
+	// The hem, too, meets the underarm seams square: a sleeve that narrows is
+	// part of a cone, and a cone's hem, laid flat, is an arc — cut straight
+	// across, the hem dips to a point at the seam once it is sewn into a
+	// tube. The arc keeps the sleeve's length at the centre and drops at the
+	// seams by rise.
 	length := sleeveLen * fraction
-	if length < capHeight+2 {
-		length = capHeight + 2
+	tilt, rise := 0.0, 0.0
+	var capHeight, fullness float64
+	for i := 0; i < 3; i++ {
+		capHeight, fullness = solveSleeveCap(halfBicep, armhole, tilt)
+		// Guard against a length shorter than the cap itself, which would
+		// fold the wrist points back above the underarm and self-intersect.
+		length = math.Max(sleeveLen*fraction, capHeight+2)
+		tilt = math.Atan2(halfBicep-halfWrist, length+rise-capHeight)
+		rise = halfWrist * math.Tan(tilt) / 2
 	}
 
 	crown := point{round1(halfBicep), 0}
 	backUnderarm := point{0, round1(capHeight)}
 	frontUnderarm := point{round1(width), round1(capHeight)}
-	backWrist := point{round1(halfBicep - halfWrist), round1(length)}
-	frontWrist := point{round1(halfBicep + halfWrist), round1(length)}
+	backWrist := point{round1(halfBicep - halfWrist), round1(length + rise)}
+	frontWrist := point{round1(halfBicep + halfWrist), round1(length + rise)}
+	reach := halfWrist * 2 / 3
+	hemC1 := point{round1(backWrist.x + reach), round1(backWrist.y - reach*math.Tan(tilt))}
+	hemC2 := point{round1(frontWrist.x - reach), round1(frontWrist.y - reach*math.Tan(tilt))}
 
-	backC1, backC2, frontC1, frontC2 := sleeveCapControls(halfBicep, capHeight, fullness)
+	backC1, backC2, frontC1, frontC2 := sleeveCapControls(halfBicep, capHeight, fullness, tilt)
 
 	pb := &pathBuilder{}
 	pb.moveTo(crown).
 		curveTo(backC1, backC2, backUnderarm).
 		lineTo(backWrist).
-		lineTo(frontWrist).
+		curveTo(hemC1, hemC2, frontWrist).
 		lineTo(frontUnderarm).
 		curveTo(frontC1, frontC2, crown).
 		close()
@@ -615,11 +492,21 @@ func draftSleeve(armhole, sleeveLen, upperArm, wrist, ease float64, style, name 
 		Name:     name,
 		PathData: pb.String(),
 		Width:    round1(width),
-		Height:   round1(length),
-		Notes:    "Full piece, cut once per arm (not on fold). Crown at top center; the flatter edge (left) is the back, the more scooped edge (right) is the front — match those to the bodice's back/front armhole when sewing in. Cap curve is drafted to the armhole length plus 2cm of ease. Basic straight sleeve, no elbow shaping.",
-		Crown:    &Point{X: crown.x, Y: crown.y},
+		Height:   round1(length + rise),
+		Landmarks: map[string]Point{
+			"backUnderarm":  {X: backUnderarm.x, Y: backUnderarm.y},
+			"frontUnderarm": {X: frontUnderarm.x, Y: frontUnderarm.y},
+			"backWrist":     {X: backWrist.x, Y: backWrist.y},
+			"frontWrist":    {X: frontWrist.x, Y: frontWrist.y},
+		},
+		Notes: "Full piece, cut once per arm (not on fold). Crown at top center; the flatter edge (left) is the back, the more scooped edge (right) is the front — match those to the bodice's back/front armhole when sewing in. Cap curve is drafted to the armhole length plus 2cm of ease. Basic straight sleeve, no elbow shaping.",
+		Crown: &Point{X: crown.x, Y: crown.y},
 	}
 }
+
+// minShirtCap is the lowest a shirt's sleeve cap goes, as a share of the
+// armhole (a Japanese regular shirt: a 7cm cap on an armhole of about 46).
+const minShirtCap = 0.15
 
 // sleeveCapEase is how much longer the cap curve is than the armhole
 // it's sewn into, cm — eased in over the top of the shoulder.
@@ -633,7 +520,10 @@ const sleeveCapRatio = 0.25
 // back (flatter) then front (more scooped). fullness 0 is a plain
 // dome; toward 1 the curve pulls out into an S, which lengthens it
 // without raising the crown.
-func sleeveCapControls(halfBicep, capHeight, fullness float64) (backC1, backC2, frontC1, frontC2 point) {
+//
+// tilt is how far the underarm seams lean in from vertical: the cap's ends
+// are turned by it so they meet the seams square.
+func sleeveCapControls(halfBicep, capHeight, fullness, tilt float64) (backC1, backC2, frontC1, frontC2 point) {
 	f := fullness
 	width := halfBicep * 2
 	crown := point{halfBicep, 0}
@@ -643,15 +533,22 @@ func sleeveCapControls(halfBicep, capHeight, fullness float64) (backC1, backC2, 
 	backC2 = point{round1(backUnderarm.x + halfBicep*(0.15+0.65*f)), round1(capHeight * (0.70 + 0.30*f))}
 	frontC1 = point{round1(frontUnderarm.x - halfBicep*(0.22+0.60*f)), round1(capHeight * (0.62 + 0.38*f))}
 	frontC2 = point{round1(crown.x + halfBicep*(0.32+0.80*f)), round1(capHeight * 0.16 * (1 - f))}
+	square := func(end, c point, sign float64) point {
+		v := sub(c, end)
+		l := math.Hypot(v.x, v.y)
+		return point{round1(end.x + sign*l*math.Cos(tilt)), round1(end.y - l*math.Sin(tilt))}
+	}
+	backC2 = square(backUnderarm, backC2, 1)
+	frontC1 = square(frontUnderarm, frontC1, -1)
 	return
 }
 
 // sleeveCapLength is the total length of both cap curves.
-func sleeveCapLength(halfBicep, capHeight, fullness float64) float64 {
+func sleeveCapLength(halfBicep, capHeight, fullness, tilt float64) float64 {
 	crown := point{halfBicep, 0}
 	backUnderarm := point{0, capHeight}
 	frontUnderarm := point{halfBicep * 2, capHeight}
-	b1, b2, f1, f2 := sleeveCapControls(halfBicep, capHeight, fullness)
+	b1, b2, f1, f2 := sleeveCapControls(halfBicep, capHeight, fullness, tilt)
 	return cubicLength(crown, b1, b2, backUnderarm) + cubicLength(frontUnderarm, f1, f2, crown)
 }
 
@@ -659,19 +556,25 @@ func sleeveCapLength(halfBicep, capHeight, fullness float64) float64 {
 // the cap run armhole + sleeveCapEase. It starts at the charts' cap
 // height and, only if even the fullest curve can't reach the length
 // (a deep armhole on a narrow sleeve), raises the dome until it can.
-func solveSleeveCap(halfBicep, armhole float64) (capHeight, fullness float64) {
+func solveSleeveCap(halfBicep, armhole, tilt float64) (capHeight, fullness float64) {
 	target := armhole + sleeveCapEase
 	capHeight = armhole * sleeveCapRatio
-	for capHeight < armhole && sleeveCapLength(halfBicep, capHeight, 1) < target {
+	for capHeight < armhole && sleeveCapLength(halfBicep, capHeight, 1, tilt) < target {
 		capHeight += 0.25
 	}
-	if sleeveCapLength(halfBicep, capHeight, 0) >= target {
+	// ...and lowers it when even the plainest dome is already longer than
+	// the armhole (a wide sleeve on a small armhole), instead of leaving the
+	// extra length to be eased in.
+	for capHeight > armhole*0.12 && sleeveCapLength(halfBicep, capHeight, 0, tilt) > target {
+		capHeight -= 0.25
+	}
+	if sleeveCapLength(halfBicep, capHeight, 0, tilt) >= target {
 		return capHeight, 0
 	}
 	lo, hi := 0.0, 1.0
 	for i := 0; i < 40; i++ {
 		mid := (lo + hi) / 2
-		if sleeveCapLength(halfBicep, capHeight, mid) < target {
+		if sleeveCapLength(halfBicep, capHeight, mid, tilt) < target {
 			lo = mid
 		} else {
 			hi = mid

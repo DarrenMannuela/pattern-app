@@ -193,11 +193,10 @@ func pathStartY(d string) float64 {
 // finished garment (appliqué, ribbon or printed fabric tape) rather than cut
 // into it, so the body pieces stay whole. Names avoid "front", "back",
 // "sleeve", "collar" and "placket", which the preview reads as the main pieces.
-func motifPieces(front, back, sleeve Piece, motifs []string, pattern string) []Piece {
+func motifPieces(front, back, sleeve Piece, motifs []string, patternFor func(string) string) []Piece {
 	if len(motifs) == 0 {
 		return nil
 	}
-	mat := motifMaterial(pattern)
 	around := front.Width + back.Width // half the way round the body
 	var out []Piece
 	seen := map[string]bool{}
@@ -206,6 +205,9 @@ func motifPieces(front, back, sleeve Piece, motifs []string, pattern string) []P
 			continue
 		}
 		seen[m] = true
+		pat := patternFor(m)
+		mat := motifMaterial(pat)
+		start := len(out)
 		switch m {
 		case "centre":
 			length := round1(front.Height - pathStartY(front.PathData))
@@ -227,6 +229,9 @@ func motifPieces(front, back, sleeve Piece, motifs []string, pattern string) []P
 		case "arms":
 			out = append(out, contrastFabric(withQty(draftRectPiece("Arm motif band", round1(sleeve.Width*0.85), 5, "", ""), 2,
 				"Cut 2 (one per arm) in the "+mat+", 5cm high: a band round each arm, about a third of the way down.")))
+		}
+		for i := start; i < len(out); i++ {
+			out[i].Motif = pat
 		}
 	}
 	return out

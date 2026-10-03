@@ -33,6 +33,7 @@ var DefaultChildGradeRule = GradeRule{
 	SleeveLength:    1.5,
 	UpperArm:        0.8,
 	Wrist:           0.3,
+	Hip:             2.5,
 }
 
 // DefaultChildBase anchors the child grade rule at age 8 — roughly
@@ -42,6 +43,10 @@ var DefaultChildBase = draft.Measurements{
 	Bust: 60, Waist: 56, BackWaistLength: 28.7,
 	Shoulder: 9.8, Neck: 29, Ease: 10,
 	SleeveLength: 38, UpperArm: 21, Wrist: 13,
+	// An 8-year-old's hip, about 4cm over the chest (children's hips run
+	// close to their chests); without one, drafting fell back to an adult's
+	// 98cm hip and flared a child's shirt hem out to it.
+	Hip: 64,
 }
 
 // GradeChildMeasurements grades base (any zero field filled from

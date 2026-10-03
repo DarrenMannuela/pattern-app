@@ -143,27 +143,30 @@ func (a *OrdersAPI) ByID(w http.ResponseWriter, r *http.Request) {
 // types ignore it and force their own combination; Gender,
 // DartPosition, and SleeveStyle apply to every shirt type.
 type mockupRequest struct {
-	Note         string               `json:"note"`
-	Gender       string               `json:"gender"`
-	DartPosition string               `json:"dartPosition"`
-	SleeveStyle  string               `json:"sleeveStyle"`
-	Collar       bool                 `json:"collar"`
-	CollarStyle  string               `json:"collarStyle"`
-	FrontStyle   string               `json:"frontStyle"`
-	BackStyle    string               `json:"backStyle"`
-	HemStyle     string               `json:"hemStyle"`
-	Neckline     string               `json:"neckline"`
-	Trim         string               `json:"trim"`
-	Panel        string               `json:"panel"`
-	SleeveFabric string               `json:"sleeveFabric"`
-	ColorBlock   string               `json:"colorBlock"`
-	Motifs       []string             `json:"motifs"`
-	Pattern      string               `json:"pattern"`
-	Trousers     draft.TrouserOptions `json:"trousers"`
-	Merch        draft.MerchOptions   `json:"merch"`
-	Skirt        draft.SkirtOptions   `json:"skirt"`
-	Custom       draft.CustomOptions  `json:"custom"`
-	Accessories  []draft.Accessory    `json:"accessories"`
+	Note          string               `json:"note"`
+	Gender        string               `json:"gender"`
+	Fit           string               `json:"fit"`
+	SleevePlacket string               `json:"sleevePlacket"`
+	DartPosition  string               `json:"dartPosition"`
+	SleeveStyle   string               `json:"sleeveStyle"`
+	Collar        bool                 `json:"collar"`
+	CollarStyle   string               `json:"collarStyle"`
+	FrontStyle    string               `json:"frontStyle"`
+	BackStyle     string               `json:"backStyle"`
+	HemStyle      string               `json:"hemStyle"`
+	Neckline      string               `json:"neckline"`
+	Trim          string               `json:"trim"`
+	Panel         string               `json:"panel"`
+	SleeveFabric  string               `json:"sleeveFabric"`
+	ColorBlock    string               `json:"colorBlock"`
+	Motifs        []string             `json:"motifs"`
+	Pattern       string               `json:"pattern"`
+	MotifPatterns map[string]string    `json:"motifPatterns"`
+	Trousers      draft.TrouserOptions `json:"trousers"`
+	Merch         draft.MerchOptions   `json:"merch"`
+	Skirt         draft.SkirtOptions   `json:"skirt"`
+	Custom        draft.CustomOptions  `json:"custom"`
+	Accessories   []draft.Accessory    `json:"accessories"`
 	// Sizes overrides the saved size chart for a live preview only, and
 	// GarmentType the order's garment (so the pattern maker can draw a
 	// collared shirt for a part thumbnail on any shirt order).
@@ -173,26 +176,29 @@ type mockupRequest struct {
 
 func (req mockupRequest) options() draft.ShirtOptions {
 	return draft.ShirtOptions{
-		Gender:       req.Gender,
-		DartPosition: req.DartPosition,
-		SleeveStyle:  req.SleeveStyle,
-		Collar:       req.Collar,
-		CollarStyle:  req.CollarStyle,
-		FrontStyle:   req.FrontStyle,
-		BackStyle:    req.BackStyle,
-		HemStyle:     req.HemStyle,
-		Neckline:     req.Neckline,
-		Trim:         req.Trim,
-		Panel:        req.Panel,
-		SleeveFabric: req.SleeveFabric,
-		ColorBlock:   req.ColorBlock,
-		Motifs:       req.Motifs,
-		Pattern:      req.Pattern,
-		Trousers:     req.Trousers,
-		Merch:        req.Merch,
-		Skirt:        req.Skirt,
-		Custom:       req.Custom,
-		AddOns:       draft.AddOns{Accessories: req.Accessories},
+		Gender:        req.Gender,
+		Fit:           req.Fit,
+		SleevePlacket: req.SleevePlacket,
+		DartPosition:  req.DartPosition,
+		SleeveStyle:   req.SleeveStyle,
+		Collar:        req.Collar,
+		CollarStyle:   req.CollarStyle,
+		FrontStyle:    req.FrontStyle,
+		BackStyle:     req.BackStyle,
+		HemStyle:      req.HemStyle,
+		Neckline:      req.Neckline,
+		Trim:          req.Trim,
+		Panel:         req.Panel,
+		SleeveFabric:  req.SleeveFabric,
+		ColorBlock:    req.ColorBlock,
+		Motifs:        req.Motifs,
+		Pattern:       req.Pattern,
+		MotifPatterns: req.MotifPatterns,
+		Trousers:      req.Trousers,
+		Merch:         req.Merch,
+		Skirt:         req.Skirt,
+		Custom:        req.Custom,
+		AddOns:        draft.AddOns{Accessories: req.Accessories},
 	}
 }
 
@@ -233,7 +239,7 @@ func (a *OrdersAPI) Preview(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusUnprocessableEntity)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"pieces": pieces})
+	writeJSON(w, http.StatusOK, map[string]any{"pieces": pieces, "summaries": orders.Summaries(sizes, pieces)})
 }
 
 // CreateMockup handles POST /api/orders/{id}/mockups.
@@ -265,10 +271,12 @@ func (a *OrdersAPI) CreateMockup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	latest := updated.Mockups[len(updated.Mockups)-1]
 	writeJSON(w, http.StatusCreated, map[string]any{
-		"order":  updated,
-		"mockup": updated.Mockups[len(updated.Mockups)-1],
-		"pieces": pieces,
+		"order":     updated,
+		"mockup":    latest,
+		"pieces":    pieces,
+		"summaries": orders.Summaries(latest.Sizes, pieces),
 	})
 }
 
@@ -300,8 +308,9 @@ func (a *OrdersAPI) MockupByVersion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"mockup": mockup,
-		"pieces": pieces,
+		"mockup":    mockup,
+		"pieces":    pieces,
+		"summaries": orders.Summaries(mockup.Sizes, pieces),
 	})
 }
 

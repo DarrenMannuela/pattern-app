@@ -150,6 +150,22 @@ func GeneratePieces(garmentType string, sizes []OrderSize, opts draft.ShirtOptio
 	return pieces, nil
 }
 
+// Summaries measures and checks each size's pieces (draft.Summarize): the
+// finished garment's measurements and whether its pieces sew together.
+func Summaries(sizes []OrderSize, pieces map[string][]draft.Piece) map[string]draft.Summary {
+	out := make(map[string]draft.Summary, len(pieces))
+	for label, ps := range pieces {
+		var m draft.Measurements
+		for _, sz := range sizes {
+			if sz.Label == label {
+				m = sz.Measurements
+			}
+		}
+		out[label] = draft.Summarize(ps, m)
+	}
+	return out
+}
+
 func generateBlocks(garmentType string, sizes []OrderSize, opts draft.ShirtOptions) (map[string][]draft.Piece, error) {
 	switch garmentType {
 	case GarmentSchoolShirt:

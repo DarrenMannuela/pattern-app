@@ -28,6 +28,9 @@ type StoredPiece struct {
 	// bolts of cloth, so they are nested and their yardage counted separately
 	// rather than as one length of fabric.
 	Fabric string `json:"fabric,omitempty"`
+	// FoldEdge is "left" for a half drawn against a fold (a shirt back, a
+	// yoke): cut as one whole piece, so it is laid out unfolded.
+	FoldEdge string `json:"foldEdge,omitempty"`
 }
 
 // Store is a simple thread-safe in-memory piece list. Swap this out
@@ -127,16 +130,33 @@ type packRequest struct {
 // toNestPieces converts stored pieces into the nester's input type,
 // synthesizing a rectangle outline for any piece that doesn't already
 // carry real drafted geometry.
+// toNestPieces turns stored pieces into what the nester lays out, the way
+// they are really cut: a half drawn against a fold becomes the whole piece
+// (half as many of them), and a pair of grain-locked pieces (a left and right
+// front) becomes one of each, mirror images, rather than two identical copies.
 func toNestPieces(pieces []StoredPiece) []nesting.NestPiece {
-	out := make([]nesting.NestPiece, len(pieces))
-	for i, p := range pieces {
+	var out []nesting.NestPiece
+	for _, p := range pieces {
 		path := p.PathData
 		if path == "" {
 			path = nesting.RectPath(p.Width, p.Height)
 		}
-		out[i] = nesting.NestPiece{
+		np := nesting.NestPiece{
 			Name: p.Name, Color: p.Color, GrainLocked: p.GrainLocked,
 			PathData: path, Width: p.Width, Height: p.Height, Qty: p.Qty,
+		}
+		switch {
+		case p.FoldEdge == "left" && p.Qty%2 == 0:
+			np.PathData, np.Width = nesting.UnfoldPath(path)
+			np.Qty = p.Qty / 2
+			out = append(out, np)
+		case p.GrainLocked && p.Qty >= 2 && p.Qty%2 == 0:
+			np.Qty = p.Qty / 2
+			mirror := np
+			mirror.PathData = nesting.MirrorPath(path)
+			out = append(out, np, mirror)
+		default:
+			out = append(out, np)
 		}
 	}
 	return out

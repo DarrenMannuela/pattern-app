@@ -33,7 +33,11 @@ func firstCurve(t *testing.T, d string) (start, c1, c2, end [2]float64) {
 // notch at centre front or back) and the collar sits flat.
 func TestNecklinesAreSquareAtCentreAndShoulder(t *testing.T) {
 	m := Measurements{Bust: 92, Waist: 78, Neck: 37, Shoulder: 13}
-	check := func(name, d string) {
+	check := func(name string, p Piece) {
+		d := p.PathData
+		if p.Outline != "" {
+			d = p.Outline // a front that opens has its button extension drawn on past centre front; the neckline starts at centre front on the whole front
+		}
 		start, c1, c2, end := firstCurve(t, d)
 		if start[0] != 0 {
 			t.Fatalf("%s: neckline doesn't start on the centre line: %v", name, start)
@@ -41,18 +45,23 @@ func TestNecklinesAreSquareAtCentreAndShoulder(t *testing.T) {
 		if math.Abs(c1[1]-start[1]) > 0.05 || c1[0] <= 0.5 {
 			t.Errorf("%s: leaves the centre line at an angle (start %v, control %v)", name, start, c1)
 		}
-		if math.Abs(c2[0]-end[0]) > 0.05 || c2[1] <= end[1] {
-			t.Errorf("%s: doesn't rise square into the neck point (control %v, end %v)", name, c2, end)
+		// Square to the shoulder seam, which slopes down from the neck point.
+		sh := [2]float64{p.Landmarks["shoulderTip"].X - end[0], p.Landmarks["shoulderTip"].Y - end[1]}
+		in := [2]float64{end[0] - c2[0], end[1] - c2[1]}
+		cos := (sh[0]*in[0] + sh[1]*in[1]) / math.Hypot(sh[0], sh[1]) / math.Hypot(in[0], in[1])
+		// Points are rounded to 1mm, which tilts a short control arm a little.
+		if math.Abs(cos) > 0.02+0.06/math.Hypot(in[0], in[1]) || c2[1] <= end[1] {
+			t.Errorf("%s: doesn't reach the neck point square to the shoulder (control %v, end %v, cos %.3f)", name, c2, end, cos)
 		}
 	}
 	for _, p := range DraftShirt(m, ShirtOptions{Collar: true, CollarStyle: "convertible", BackStyle: "yoke"}) {
 		if p.Name == "Yoke" || p.Name == "Shirt front" {
-			check(p.Name, p.PathData)
+			check(p.Name, p)
 		}
 	}
 	for _, p := range DraftShirt(m, ShirtOptions{BackStyle: "plain"}) {
 		if p.Name == "Shirt back" {
-			check("plain back", p.PathData)
+			check("plain back", p)
 		}
 	}
 }
@@ -76,7 +85,13 @@ func TestOpenFrontsAreNotCutOnTheFold(t *testing.T) {
 		if f.FoldEdge != "" || f.Qty != 2 {
 			t.Errorf("front style %q: fold %q qty %d, want a cut-2 pair", style, f.FoldEdge, f.Qty)
 		}
-		if f.CutOffset == nil || f.CutOffset.X < 0.9 {
+		// The sewing line's front edge (the button extension's) has
+		// a seam allowance outside it.
+		minX := math.Inf(1)
+		for _, q := range flattenPath(f.PathData) {
+			minX = math.Min(minX, q.x)
+		}
+		if f.CutOffset == nil || minX+f.CutOffset.X < 0.9 {
 			t.Errorf("front style %q: no seam allowance at centre front (offset %+v)", style, f.CutOffset)
 		}
 	}

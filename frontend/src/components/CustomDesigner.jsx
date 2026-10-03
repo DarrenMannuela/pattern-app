@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { bounds, nearestOnOutline, splitBetween } from "../lib/customDesign.js";
+import { bounds, nearestOnOutline, pointsToPath, splitBetween } from "../lib/customDesign.js";
 import { fileToDataUrl, traceSilhouette } from "../lib/imageTrace.js";
 
 // Draw your own uniform: start from a picture (a photo or flat-lay of the

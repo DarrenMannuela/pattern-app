@@ -195,7 +195,7 @@ func (a *OrdersAPI) CuttingPlan(w http.ResponseWriter, r *http.Request) {
 		p := params
 		if fabric == "main" {
 			p.LayWidths = req.LayWidths
-		} else {
+		} else { // "contrast" or "contrast/<motif>"
 			// The contrast fabric is bought separately, on its own width and price.
 			p.FabricWidth = req.ContrastWidth
 			p.PricePerMeter, p.PricePerKg = 0, 0

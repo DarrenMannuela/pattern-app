@@ -21,7 +21,8 @@ import "math"
 //
 // Proportions follow the standard block: hip line about 74% of the way to
 // the crotch line, knee line halfway between crotch and hem less 2.5cm, crotch
-// extension 11% of the quarter hip on the front and 32% on the back, the
+// extension 20% of the quarter hip on the front and 44% on the back (see
+// frontFork), the
 // back rising above the front at the waist with its center line leaning
 // outward, and a hem about 75% of the width at the thigh.
 //
@@ -36,9 +37,9 @@ func draftTrouserPanel(m Measurements, isBack bool, legStyle string, elastic boo
 	legLen := rise + m.Inseam
 	hipY := clamp(rise*0.74, 8, rise-3)
 
-	extFactor, dropIn := 0.11, 9.0
+	extFactor, dropIn := frontFork, 9.0
 	if isBack {
-		extFactor, dropIn = 0.32, 13.0
+		extFactor, dropIn = backFork, 13.0
 	}
 	ext := round1(qHip * extFactor)
 	cfX := ext
@@ -64,6 +65,16 @@ func draftTrouserPanel(m Measurements, isBack bool, legStyle string, elastic boo
 		waistCF = point{cfX, 0}
 		waistY = 0
 	}
+	// The back rises above the front at centre back, rather than dropping
+	// at the side: everything from the hip down sits waistY lower on the
+	// back, so the side seams come out the same length. (The back used to
+	// start its side seam 1.5cm lower, making it 1.3cm shorter than the
+	// front's.)
+	if isBack {
+		rise += waistY
+		legLen += waistY
+		hipY += waistY
+	}
 	waistSide := point{round1(waistCF.x + qWaist + dartTotal), round1(waistY)}
 	hipSide := point{round1(cfX + qHip), round1(hipY)}
 
@@ -75,8 +86,8 @@ func draftTrouserPanel(m Measurements, isBack bool, legStyle string, elastic boo
 	// the center front/back line on both panels (so the two panels' legs
 	// line up when sewn): halfway between the front crotch point and the
 	// front side seam. The back's hem is 2cm wider than the front's.
-	frontReach := qHip * (1 + 0.11)
-	legMid := cfX + frontReach/2 - qHip*0.11
+	frontReach := qHip * (1 + frontFork)
+	legMid := cfX + frontReach/2 - qHip*frontFork
 	hemW := m.HemWidth
 	if hemW == 0 {
 		hemW = frontReach * legStyleFactor(legStyle, m.Inseam < 40)
@@ -88,17 +99,40 @@ func draftTrouserPanel(m Measurements, isBack bool, legStyle string, elastic boo
 	kneeY := rise + m.Inseam*0.5 - 2.5
 	hasKnee := m.Inseam >= 32
 
-	crotchPt := point{0, round1(rise)}
-	crotchStart := point{cfX, round1(math.Max(hipY, rise-dropIn))}
 	hemInseam := point{round1(legMid - hemW/2), round1(legLen)}
 	hemSide := point{round1(legMid + hemW/2), round1(legLen)}
 	kneeInseam := point{round1(legMid - kneeW/2), round1(kneeY)}
 	kneeSide := point{round1(legMid + kneeW/2), round1(kneeY)}
 
+	// The back's crotch point reaches much further out, which makes its
+	// inseam longer than the front's; the back crotch line is dropped until
+	// the inseams match, as every trouser block does (Aldrich lowers it
+	// 0.5-1cm), so the legs don't twist when the inseams are sewn.
+	crotchY := rise
+	if isBack {
+		fExt := round1(qHip * frontFork)
+		fMid := fExt + qHip*(1+frontFork)/2 - qHip*frontFork
+		fHemW := hemW - 2
+		fKneeY := m.Rise + m.Inseam*0.5 - 2.5
+		want := inseamLength(point{0, m.Rise}, point{fMid - (fHemW+3)/2, fKneeY}, point{fMid - fHemW/2, m.Rise + m.Inseam}, hasKnee)
+		lo, hi := 0.0, 3.0
+		for i := 0; i < 30; i++ {
+			mid := (lo + hi) / 2
+			if inseamLength(point{0, rise + mid}, kneeInseam, hemInseam, hasKnee) > want {
+				lo = mid
+			} else {
+				hi = mid
+			}
+		}
+		crotchY = rise + hi
+	}
+	crotchPt := point{0, round1(crotchY)}
+	crotchStart := point{cfX, round1(math.Max(hipY, rise-dropIn))}
+
 	pb := &pathBuilder{}
 	pb.moveTo(waistCF).
 		lineTo(crotchStart).
-		curveTo(point{cfX, round1(rise - 1)}, point{round1(cfX * 0.4), round1(rise)}, crotchPt)
+		curveTo(point{cfX, round1(crotchY - 1)}, point{round1(cfX * 0.4), round1(crotchY)}, crotchPt)
 	if hasKnee {
 		pb.lineTo(kneeInseam)
 	}
@@ -109,7 +143,7 @@ func draftTrouserPanel(m Measurements, isBack bool, legStyle string, elastic boo
 	}
 	pb.lineTo(hipSide).
 		curveTo(sideC2, sideC1, waistSide).
-		lineTo(waistCF).
+		curveTo(squareWaist(waistSide, sideC1, waistCF, crotchStart)).
 		close()
 
 	if !hasKnee {
@@ -395,7 +429,13 @@ func draftSkirtPanel(m Measurements, isBack bool, o SkirtOptions, name string) P
 	waistCF := point{0, round1(yCF)}
 	waistSide := point{round1(sideWaistX), 0}
 	waistC1 := point{round1(sideWaistX * 0.3), round1(yCF)}
+	// The waist meets the side seam square (front and back join without a
+	// point at the side), leaving it toward where the side seam heads.
 	waistC2 := point{round1(sideWaistX * 0.72), round1(math.Min(0.15, yCF))}
+	if !elastic {
+		in := inward(sub(point{sideWaistX + (qHip-sideWaistX)*0.35 + 0.3, casing + hipDepth*0.35}, point{sideWaistX, 0}))
+		waistC2 = point{round1(sideWaistX + in.x*sideWaistX*0.28), round1(in.y * sideWaistX * 0.28)}
+	}
 	hipSide := point{round1(qHip), round1(hipY)}
 	sideC1 := point{round1(sideWaistX + (qHip-sideWaistX)*0.35 + 0.3), round1(casing + hipDepth*0.35)}
 	sideC2 := point{round1(qHip), round1(casing + hipDepth*0.7)}
@@ -478,4 +518,52 @@ func DraftSkirt(m Measurements, addOns AddOns, o SkirtOptions) []Piece {
 	pieces = append(pieces, draftAccessoryPockets(addOns.Accessories, &front, &back, nil)...)
 
 	return pieces
+}
+
+// The crotch extensions, as shares of the quarter hip. Four published
+// trouser systems compared on one body (Aldrich, Armstrong, Bunka, ESMOD —
+// "A comparative study of trouser pattern making methods", J. Textile Eng.
+// Fashion Technol. 2020) put the front at 4.8-6.8cm and the back at
+// 9.3-13.2cm; these land in the middle, near Bunka, at 5.2 and 11.4 on a
+// 98cm hip. The earlier 11% and 32% (2.9 and 8.3cm) left the crotch about
+// 5cm short, too tight to sit in.
+const (
+	frontFork = 0.20
+	backFork  = 0.44
+)
+
+// inward is the direction square to a seam heading along dir, pointing in
+// toward the centre line (x decreasing).
+func inward(dir point) point {
+	d := unit(dir)
+	in := point{-d.y, d.x}
+	if in.x > 0 {
+		in = scale(in, -1)
+	}
+	return in
+}
+
+// squareWaist is the waist from the side seam to the centre seam, leaving
+// the side seam square to it (towards sideNext) and meeting the centre seam
+// square (which runs on to centreNext), so the waist runs on smoothly
+// across both seams instead of peaking at the side or dipping at centre back.
+func squareWaist(side, sideNext, centre, centreNext point) (point, point, point) {
+	d := math.Hypot(side.x-centre.x, side.y-centre.y) * 0.3
+	c := unit(sub(centreNext, centre))
+	out := point{c.y, -c.x} // square to the centre seam, toward the side
+	if out.x < 0 {
+		out = scale(out, -1)
+	}
+	c1 := add(side, scale(inward(sub(sideNext, side)), d))
+	c2 := add(centre, scale(out, d))
+	return point{round1(c1.x), round1(c1.y)}, point{round1(c2.x), round1(c2.y)}, centre
+}
+
+// inseamLength is the inseam from the crotch point through the knee (when
+// the leg is long enough to have one) to the hem.
+func inseamLength(crotch, knee, hem point, hasKnee bool) float64 {
+	if !hasKnee {
+		return math.Hypot(hem.x-crotch.x, hem.y-crotch.y)
+	}
+	return math.Hypot(knee.x-crotch.x, knee.y-crotch.y) + math.Hypot(hem.x-knee.x, hem.y-knee.y)
 }

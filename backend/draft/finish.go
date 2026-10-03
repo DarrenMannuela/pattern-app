@@ -50,7 +50,7 @@ func cutQty(p Piece) int {
 		per = 2 // sleeves and trouser legs come in pairs
 	case n == "collar leaf", n == "collar stand", n == "standing collar", n == "yoke":
 		per = 2 // outer + inner layer
-	case n == "placket", n == "waistband", strings.Contains(n, "welt strip"):
+	case n == "placket", n == "hidden placket", n == "waistband", strings.Contains(n, "welt strip"):
 		per = 2 // two shirt front bands, band + facing, two pockets
 	case n == "patch pocket":
 		return 2 // one per back half
@@ -93,6 +93,12 @@ func Finish(p Piece) Piece {
 		minY, maxY = math.Min(minY, q.y), math.Max(maxY, q.y)
 	}
 	hem := hemAllowanceFor(p.Name)
+	// The fold is the piece's leftmost edge — at x = 0 for a plain half, but
+	// further left when something is added at the fold (a back pleat).
+	minX := poly[0].x
+	for _, q := range poly {
+		minX = math.Min(minX, q.x)
+	}
 
 	n := len(poly)
 	allow := make([]float64, n) // allowance of edge i: poly[i] -> poly[i+1]
@@ -100,7 +106,7 @@ func Finish(p Piece) Piece {
 		a, b := poly[i], poly[(i+1)%n]
 		allow[i] = seamAllowance
 		switch {
-		case p.FoldEdge == "left" && math.Abs(a.x) < 0.05 && math.Abs(b.x) < 0.05:
+		case p.FoldEdge == "left" && math.Abs(a.x-minX) < 0.05 && math.Abs(b.x-minX) < 0.05:
 			allow[i] = 0
 		case p.FoldEdge == "bottom" && math.Abs(a.y-maxY) < 0.05 && math.Abs(b.y-maxY) < 0.05:
 			allow[i] = 0

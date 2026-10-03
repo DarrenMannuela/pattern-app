@@ -308,8 +308,9 @@ func PackPolygonsWithin(pieces []NestPiece, fabricWidth, seamAllowance, resoluti
 	}
 
 	// Placement is greedy, so allowing more moves does not guarantee a better
-	// layout. Where pieces may be turned end for end, the first few orders are
-	// also tried without turning anything, and the shortest result is kept.
+	// layout. Where pieces may be turned end for end, every order is also
+	// tried without turning anything (so a two-way layout is never worse than
+	// the one-way one the same search would find), and the shortest is kept.
 	canFlip := false
 	for _, in := range instances {
 		if in.grainLocked && !in.oneWay {
@@ -326,7 +327,7 @@ func PackPolygonsWithin(pieces []NestPiece, fabricWidth, seamAllowance, resoluti
 		if l := pk.pack(order, false); l.better(best) {
 			best = l
 		}
-		if canFlip && i < 3 && time.Since(start) <= budget {
+		if canFlip && time.Since(start) <= budget {
 			if l := pk.pack(order, true); l.better(best) {
 				best = l
 			}

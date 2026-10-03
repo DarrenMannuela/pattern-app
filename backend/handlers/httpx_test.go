@@ -136,3 +136,25 @@ func TestReplacingAnOrderWithAnEmptyBodyIsRefused(t *testing.T) {
 		t.Errorf("order was blanked: %s", rec.Body)
 	}
 }
+
+// Pieces go to the nester as they are cut: a fold half whole, a pair mirrored.
+func TestToNestPiecesUnfoldsAndMirrors(t *testing.T) {
+	half := "M0,0 L10,0 L14,30 L0,30 Z"
+	got := toNestPieces([]StoredPiece{
+		{Name: "back", PathData: half, Width: 14, Height: 30, Qty: 2, GrainLocked: true, FoldEdge: "left"},
+		{Name: "front", PathData: half, Width: 14, Height: 30, Qty: 4, GrainLocked: true},
+		{Name: "loop", Width: 1, Height: 5, Qty: 5, GrainLocked: true},
+	})
+	if len(got) != 4 {
+		t.Fatalf("want back, front, mirrored front, loop; got %d pieces", len(got))
+	}
+	if got[0].Qty != 1 || got[0].Width != 28 {
+		t.Errorf("the fold half should be one whole piece 28 wide: qty %d width %v", got[0].Qty, got[0].Width)
+	}
+	if got[1].Qty != 2 || got[2].Qty != 2 || got[1].PathData == got[2].PathData {
+		t.Errorf("a pair should be one of each, mirrored: %+v %+v", got[1], got[2])
+	}
+	if got[3].Qty != 5 {
+		t.Errorf("an odd count stays as it is: %d", got[3].Qty)
+	}
+}

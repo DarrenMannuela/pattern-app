@@ -167,12 +167,13 @@ export function PartThumb({ slot, thumb }) {
   const [x, y, w, h] = region.box;
   return (
     <svg className="pm-thumb" viewBox={`${x} ${y} ${w} ${h}`} preserveAspectRatio="xMidYMid meet" aria-hidden="true">
-      {o.pattern && o.pattern !== "solid" && <MotifDefs prefix={`mo${uid}`} base={ACCENT} />}
+      {view.items.some((it) => (it.pattern || o.pattern) && (it.pattern || o.pattern) !== "solid") && <MotifDefs prefix={`mo${uid}`} base={ACCENT} />}
       {view.items.map((it) => {
+        if (it.category === "stitch") return null; // too fine to read at tile size
         const sw = Math.max(0.3, w / 140);
         let el = null;
         if (it.kind === "path") {
-          const patterned = (it.category === "motif" || it.category === "panel") && motifFill(`mo${uid}`, o.pattern, it.orient);
+          const patterned = (it.category === "motif" || it.category === "panel") && motifFill(`mo${uid}`, it.pattern || o.pattern, it.orient);
           el = <path key={it.key} d={it.d} transform={it.transform} fill={it.noFill ? "none" : patterned || (it.fabric === "contrast" ? ACCENT : it.category === "collar" ? COLLAR : it.category === "trim" || it.category === "panel" || it.category === "motif" ? ACCENT : FABRIC)} stroke={it.noStroke ? "none" : LINE} strokeWidth={sw} />;
         } else if (it.kind === "line" && it.category === "trim") {
           el = <line key={it.key} x1={it.x1} y1={it.y1} x2={it.x2} y2={it.y2} stroke={ACCENT} strokeWidth={Math.max(0.6, w / 60)} strokeLinecap="round" />;

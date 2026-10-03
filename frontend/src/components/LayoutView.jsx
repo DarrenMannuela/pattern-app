@@ -4,14 +4,14 @@ import Sidebar from "./Sidebar";
 import LayoutCanvas from "./Canvas";
 import StatBar from "./StatBar";
 
-const FABRIC_LABEL = { main: "Main fabric", contrast: "Contrast fabric" };
+import { fabricKey, fabricName, orderFabrics } from "../lib/fabricKeys.js";
 
 // Pieces of a different fabric (a motif band, an insert panel, a contrast
 // trim, a side stripe) come from a different bolt of cloth, so each fabric is
 // nested onto its own length of fabric rather than mixed into one marker.
 function groupByFabric(pieces) {
-  const groups = { main: [], contrast: [] };
-  for (const p of pieces) groups[p.fabric === "contrast" ? "contrast" : "main"].push(p);
+  const groups = {};
+  for (const p of pieces) (groups[fabricKey(p)] ||= []).push(p);
   return groups;
 }
 
@@ -19,7 +19,7 @@ export default function LayoutView() {
   const [pieces, setPieces] = useState([]);
   const [fabricWidth, setFabricWidth] = useState(150);
   const [seamAllowance, setSeamAllowance] = useState(0.25);
-  const [results, setResults] = useState({ main: null, contrast: null });
+  const [results, setResults] = useState({});
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState(null);
 
@@ -40,6 +40,22 @@ export default function LayoutView() {
     }
   }
 
+  // Removes every piece, one at a time, keeping any that fail so the list
+  // stays true to what the server still has.
+  async function handleClearPieces() {
+    setError(null);
+    for (const p of pieces) {
+      try {
+        await api.removePiece(p.id);
+        setPieces((prev) => prev.filter((q) => q.id !== p.id));
+      } catch (e) {
+        setError(e.message);
+        return;
+      }
+    }
+    setResults({});
+  }
+
   async function handleRemovePiece(id) {
     try {
       await api.removePiece(id);
@@ -54,9 +70,8 @@ export default function LayoutView() {
     setError(null);
     try {
       const groups = groupByFabric(pieces);
-      const next = { main: null, contrast: null };
-      for (const fabric of ["main", "contrast"]) {
-        if (groups[fabric].length === 0) continue;
+      const next = {};
+      for (const fabric of orderFabrics(Object.keys(groups))) {
         next[fabric] = await api.pack(fabricWidth, seamAllowance, groups[fabric]);
       }
       setResults(next);
@@ -67,7 +82,7 @@ export default function LayoutView() {
     }
   }
 
-  const fabricsWithPieces = ["main", "contrast"].filter((f) => groupByFabric(pieces)[f].length > 0);
+  const fabricsWithPieces = orderFabrics(Object.keys(groupByFabric(pieces)));
 
   return (
     <div className="tab-body">
@@ -79,6 +94,7 @@ export default function LayoutView() {
         pieces={pieces}
         onAddPiece={handleAddPiece}
         onRemovePiece={handleRemovePiece}
+        onClearPieces={handleClearPieces}
         onGenerate={handleGenerate}
         generating={generating}
         error={error}
@@ -88,7 +104,7 @@ export default function LayoutView() {
         {fabricsWithPieces.length === 0 && <LayoutCanvas result={null} />}
         {fabricsWithPieces.map((fabric) => (
           <section key={fabric} className="fabric-layout">
-            {fabricsWithPieces.length > 1 && <h2 className="fabric-layout-title">{FABRIC_LABEL[fabric]}</h2>}
+            {fabricsWithPieces.length > 1 && <h2 className="fabric-layout-title">{fabricName(fabric)}</h2>}
             <StatBar result={results[fabric]} />
             <LayoutCanvas result={results[fabric]} />
           </section>

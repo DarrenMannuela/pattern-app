@@ -3,8 +3,8 @@ import { api } from "../api";
 import LayoutCanvas from "./Canvas";
 import { COMPARE_WIDTHS, DEFAULT_PLAN_FORM, TUBE_WIDTHS, compareActual, metres, planRequest, ratioText, rupiah } from "../lib/cutPlan.js";
 import { formatElapsed, useElapsed } from "../lib/useElapsed.js";
+import { fabricName } from "../lib/fabricKeys.js";
 
-const FABRIC_NAME = { main: "Main fabric", contrast: "Contrast fabric" };
 
 function Field({ label, hint, children }) {
   return (
@@ -241,7 +241,7 @@ export default function CuttingPlan({ orderId, version, actualFabric, onSaveActu
           {result.plans.map((plan) => (
             <div key={plan.fabric} className="cutplan-fabric">
               <div className="pm-slot-title">
-                {FABRIC_NAME[plan.fabric]} ·{" "}
+                {fabricName(plan.fabric)} ·{" "}
                 {plan.fabricWidthCm ? `${plan.fabricWidthCm} cm ${plan.tubular ? "tube (laid flat)" : "wide"}` : `best ${plan.tubular ? "tube" : "width"} for each lay`} ·{" "}
                 {plan.garments} garments
               </div>

@@ -2,6 +2,7 @@ package draft
 
 import (
 	"math"
+	"strings"
 	"testing"
 )
 
@@ -40,10 +41,10 @@ func TestColorBlockSplitsTheFrontIntoTwoFabrics(t *testing.T) {
 		if upper.Qty != whole.Qty || lower.Qty != whole.Qty || upper.FoldEdge != whole.FoldEdge {
 			t.Errorf("%s: parts must be cut like the front (qty %d, fold %q)", style, whole.Qty, whole.FoldEdge)
 		}
-		if a, b, w := areaOf(upper.PathData), areaOf(lower.PathData), areaOf(whole.PathData); math.Abs(a+b-w) > 1 {
+		if a, b, w := areaOf(upper.PathData), areaOf(lower.PathData), areaOf(whole.PathData); math.Abs(a+b-w) > 0.002*w { // points are rounded to 1mm where the parts are cut
 			t.Errorf("%s: parts %.0f + %.0f cm² don't make the front's %.0f cm²", style, a, b, w)
 		}
-		if lower.Outline != whole.PathData {
+		if lower.Outline != whole.Outline {
 			t.Errorf("%s: the drawing needs the whole front's outline", style)
 		}
 		cf, arm := lower.Landmarks["blockCF"], lower.Landmarks["blockArm"]
@@ -72,5 +73,29 @@ func TestColorBlockOnAPlainBackSplitsTheBack(t *testing.T) {
 func TestColorBlockEdgeIsASeamNotAHem(t *testing.T) {
 	if got := hemAllowanceFor("Upper front"); got != seamAllowance {
 		t.Errorf("upper front edge allowance %.1f, want the seam allowance %.1f", got, seamAllowance)
+	}
+}
+
+func TestEachMotifBandCarriesItsOwnPattern(t *testing.T) {
+	m := Measurements{Bust: 92, Waist: 80, Neck: 37, Shoulder: 13}
+	pieces := DraftShirt(m, ShirtOptions{Collar: true, Panel: "side", Motifs: []string{"chest", "hem", "arms"}, Pattern: "parang", MotifPatterns: map[string]string{"arms": "stripes", "side": "batik"}})
+	want := map[string]string{"Chest band": "parang", "Hem band": "parang", "Arm motif band": "stripes", "Insert panel": "batik"}
+	for name, pat := range want {
+		p := byName(pieces, name)
+		if p == nil || p.Motif != pat || p.Fabric != "contrast" {
+			t.Errorf("%s: %+v, want motif %s", name, p, pat)
+		}
+	}
+	if p := byName(pieces, "Arm motif band"); !strings.Contains(p.Notes, "striped") {
+		t.Errorf("the arm band's note should name its own fabric: %q", p.Notes)
+	}
+}
+
+func TestHiddenPlacketIsCutTwice(t *testing.T) {
+	m := Measurements{Bust: 92, Waist: 80, Neck: 37, Shoulder: 13}
+	for _, p := range FinishAll(DraftShirt(m, ShirtOptions{Collar: true, FrontStyle: "hidden_placket"})) {
+		if p.Name == "Hidden placket" && (p.Qty != 4 || p.FoldEdge != "left") {
+			t.Errorf("hidden placket qty %d fold %q, want 2 folded bands (4 halves) — one per front edge", p.Qty, p.FoldEdge)
+		}
 	}
 }

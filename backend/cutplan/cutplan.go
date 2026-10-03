@@ -160,12 +160,17 @@ type Sizes struct {
 	Pieces map[string][]draft.Piece
 }
 
-// fabricOf says which fabric a piece is cut from.
+// fabricOf says which fabric a piece is cut from: "main", "contrast" (a plain
+// second fabric), or "contrast/<motif>" for a patterned one. Two motifs are two
+// different cloths, bought and laid out separately.
 func fabricOf(p draft.Piece) string {
-	if p.Fabric == "contrast" {
-		return "contrast"
+	if p.Fabric != "contrast" {
+		return "main"
 	}
-	return "main"
+	if p.Motif != "" && p.Motif != "solid" {
+		return "contrast/" + p.Motif
+	}
+	return "contrast"
 }
 
 // Fabrics lists the fabrics the order's pieces are cut from, main first.
@@ -183,9 +188,15 @@ func (s Sizes) Fabrics() []string {
 	for _, f := range []string{"main", "contrast"} {
 		if seen[f] {
 			out = append(out, f)
+			delete(seen, f)
 		}
 	}
-	return out
+	var motifs []string
+	for f := range seen {
+		motifs = append(motifs, f)
+	}
+	sort.Strings(motifs)
+	return append(out, motifs...)
 }
 
 type layPlan struct {

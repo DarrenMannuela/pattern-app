@@ -183,6 +183,14 @@ func draftAccessoryPockets(accessories []Accessory, front, back, sleeve *Piece) 
 		anchorY := parent.Height * posY
 		size := parent.Width * 0.32
 		width, height := size, size*1.05
+		if acc.Segment == SegmentLeftChest || acc.Segment == SegmentRightChest {
+			// A chest pocket sized like the shop's own: 12 x 13cm on its size-L
+			// shirt, whose front is 26.5cm across the chest (45% of it), at
+			// least 9cm wide on a child's shirt and no wider than 13. A third
+			// of the front, as before, made an L's pocket 8cm across.
+			width = clamp(parent.Width*0.45, 9, 13)
+			height = width * 13 / 12
+		}
 		if acc.Width > 0 {
 			width = acc.Width
 		}

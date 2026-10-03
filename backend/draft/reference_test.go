@@ -37,7 +37,8 @@ func pieceNamed(t *testing.T, ps []Piece, name string) Piece {
 func TestReferenceBoys8Shirt(t *testing.T) {
 	// Chart: front 18 wide, neck 5.5 + shoulder 8, armhole 15.5 below a
 	// 1.25 shoulder drop, collar stand 16, sleeve 26.5 wide x 42 long.
-	m := Measurements{Bust: 66, Waist: 62, BackWaistLength: 28.7, ShirtLength: 50, Shoulder: 8, Neck: 29, Ease: 6, SleeveLength: 42, UpperArm: 24, Wrist: 15, Hip: 70}
+	// The chart's sleeve piece is 42 long; with its 6cm cuff, a 48cm sleeve.
+	m := Measurements{Bust: 66, Waist: 62, BackWaistLength: 28.7, ShirtLength: 50, Shoulder: 8, Neck: 29, Ease: 6, SleeveLength: 42 + cuffDepth, UpperArm: 24, Wrist: 15, Hip: 70}
 	ps := DraftShirt(m, ShirtOptions{Gender: "unisex", Collar: true, SleeveStyle: "full"})
 
 	front := pieceNamed(t, ps, "Shirt front")
@@ -47,8 +48,10 @@ func TestReferenceBoys8Shirt(t *testing.T) {
 	near(t, "collar stand length", pieceNamed(t, ps, "Collar stand").Width, 16, 1.5)
 	sleeve := pieceNamed(t, ps, "Sleeve")
 	near(t, "sleeve width", sleeve.Width, 26.5, 1.5)
-	near(t, "sleeve length", sleeve.Height, 42, 0.1)
-	near(t, "sleeve cap height (chart: 8)", pathPoints(sleeve.PathData)[1].y, 8, 1.5)
+	// The hem is an arc (square to the seams); the sleeve is its length at the centre.
+	so, _ := parseOutline(sleeve.PathData)
+	near(t, "sleeve length", pointAt(so.segs[1].p, so.segs[2], 0.5).y, 42, 0.1)
+	near(t, "sleeve cap height (chart: 8)", sleeve.Landmarks["backUnderarm"].Y, 8, 1.5)
 }
 
 func TestBodiceArmholeDepthMatchesShirtScye(t *testing.T) {
@@ -60,10 +63,10 @@ func TestBodiceArmholeDepthMatchesShirtScye(t *testing.T) {
 	m := Measurements{Bust: 96, Waist: 84, BackWaistLength: 42, Shoulder: 13, Neck: 38, Ease: 6, SleeveLength: 60, UpperArm: 30, Wrist: 18}
 	ps := DraftBodice(m, "waist")
 	back := pieceNamed(t, ps, "Bodice back")
-	underarm := pathPoints(back.PathData)[3]
-	near(t, "bodice back underarm depth", underarm.y, round1(shirtScye(m.Bust)), 0.05)
-	if old := round1(m.Bust/4 + 2.5); math.Abs(underarm.y-old) < 0.05 {
-		t.Errorf("still using the discredited Bust/4+2.5 formula (got %.2f, that formula gives %.2f)", underarm.y, old)
+	underarm := back.Landmarks["underarm"]
+	near(t, "bodice back underarm depth", underarm.Y, round1(shirtScye(m.Bust)), 0.05)
+	if old := round1(m.Bust/4 + 2.5); math.Abs(underarm.Y-old) < 0.05 {
+		t.Errorf("still using the discredited Bust/4+2.5 formula (got %.2f, that formula gives %.2f)", underarm.Y, old)
 	}
 }
 
@@ -121,7 +124,8 @@ func hasPiece(ps []Piece, name string) bool {
 func TestDetailPieceNamesDontCollideWithPanelLookups(t *testing.T) {
 	m := Measurements{Bust: 96, Waist: 84, Hip: 100}
 	all := append(DraftShirt(m, ShirtOptions{Collar: true, SleeveStyle: "full"}), DraftTrousers(m, "Pants", AddOns{}, TrouserOptions{})...)
-	for _, n := range []string{"Cuff", "Cuff slit facing", "Belt loop", "Slant pocket bag", "Welt strip", "Welt pocket bag", "Fly facing"} {
+	all = append(all, DraftShirt(m, ShirtOptions{Collar: true, SleeveStyle: "full", SleevePlacket: "bound"})...)
+	for _, n := range []string{"Cuff", "Cuff slit tower", "Cuff slit underlap", "Cuff slit facing", "Belt loop", "Slant pocket bag", "Welt strip", "Welt pocket bag", "Fly facing"} {
 		p := pieceNamed(t, all, n)
 		for _, bad := range []string{"front", "back", "sleeve", "placket"} {
 			if containsFold(p.Name, bad) {
@@ -159,7 +163,15 @@ func TestShirtCuffsFollowSleeveLength(t *testing.T) {
 	long := DraftShirt(m, ShirtOptions{SleeveStyle: "full"})
 	// Chart: 17cm cuff for a ~14cm wrist; slit strip 13 x 2.
 	near(t, "cuff length", pieceNamed(t, long, "Cuff").Width, 17, 0.6)
-	near(t, "cuff slit length", pieceNamed(t, long, "Cuff slit facing").Height, 11.8, 2.0)
+	// The opening above the cuff: a tower placket by default, its point 2cm
+	// above the opening; a bound slit (the chart's 13 x 2 strip) on request.
+	near(t, "cuff opening", pieceNamed(t, long, "Cuff slit underlap").Height, 11.8, 2.0)
+	near(t, "tower placket, point included", pieceNamed(t, long, "Cuff slit tower").Height, pieceNamed(t, long, "Cuff slit underlap").Height+2, 0.05)
+	bound := DraftShirt(m, ShirtOptions{SleeveStyle: "full", SleevePlacket: "bound"})
+	near(t, "cuff slit length", pieceNamed(t, bound, "Cuff slit facing").Height, 11.8, 2.0)
+	if hasPiece(bound, "Cuff slit tower") {
+		t.Error("a bound slit has no tower placket")
+	}
 	if hasPiece(DraftShirt(m, ShirtOptions{SleeveStyle: "half"}), "Cuff") {
 		t.Error("a short sleeve should not get a buttoned cuff")
 	}
@@ -213,21 +225,26 @@ func TestSeamsAreTrued(t *testing.T) {
 		{18, 16.5, 5.8, 8, 50},    // boys' 8
 		{28.5, 26.5, 7.8, 13, 72}, // adult
 	} {
-		f, fa, _ := draftRelaxedFront(tc.q, tc.scye, tc.neck, tc.sh, tc.h, "f")
-		b, ba, _ := draftRelaxedBack(tc.q, tc.scye, tc.neck, tc.sh, tc.h, "b")
-		fp, bp := pathPoints(f.PathData), pathPoints(b.PathData)
-		// points: cf-neck, neck point, shoulder tip, underarm, hem side, ...
-		near(t, "side seam, front vs back", dist(fp[3], fp[4]), dist(bp[3], bp[4]), 0.2)
-		if d := dist(bp[1], bp[2]) - dist(fp[1], fp[2]); d < 0 || d > 1.0 {
-			t.Errorf("back shoulder should be 0-1cm longer than front (ease), got %+.2f", d)
+		f, fa, _ := draftRelaxedFront(tc.q*4-6, tc.q, tc.scye, tc.neck, tc.sh, tc.h, 0, "f")
+		b, ba, _ := draftRelaxedBack(tc.q*4-6, tc.q, tc.scye, tc.neck, tc.sh, tc.h, 0, "b")
+		lp := func(p Piece, k string) point { return point{p.Landmarks[k].X, p.Landmarks[k].Y} }
+		near(t, "side seam, front vs back", dist(lp(f, "underarm"), lp(f, "hemSide")), dist(lp(b, "underarm"), lp(b, "hemSide")), 0.2)
+		if d := dist(lp(b, "neckPoint"), lp(b, "shoulderTip")) - dist(lp(f, "neckPoint"), lp(f, "shoulderTip")); math.Abs(d-shoulderEase) > 0.15 {
+			t.Errorf("back shoulder should be %.0fcm longer than front (eased in), got %+.2f", shoulderEase, d)
 		}
 
-		upperArm, ease := 0.36*tc.q*4-1, 6.0
-		sl := draftSleeve(fa+ba, 55, upperArm, 16, ease, "full", "s")
-		hb := (upperArm + ease/3) / 2
-		capH, full := solveSleeveCap(hb, fa+ba)
-		near(t, "sleeve cap length minus armhole", sleeveCapLength(hb, capH, full)-(fa+ba), sleeveCapEase, 0.3)
-		near(t, "piece crown-to-underarm height", pathPoints(sl.PathData)[1].y, capH, 0.1)
+		upperArm := 0.36*tc.q*4 - 1
+		sl := draftSleeve(fa+ba, 55, upperArm, 16, 6, 0, "full", "s")
+		o, ok := parseOutline(sl.PathData)
+		if !ok {
+			t.Fatal("sleeve path doesn't parse")
+		}
+		// The cap is the first curve (crown to back underarm) and the last
+		// (front underarm back to the crown).
+		n := len(o.segs)
+		capLen := segLength(o.start, o.segs[0]) + segLength(o.segs[n-2].p, o.segs[n-1])
+		near(t, "sleeve cap length minus armhole", capLen-(fa+ba), sleeveCapEase, 0.3)
+		capH := sl.Landmarks["backUnderarm"].Y
 		if r := capH / (fa + ba); r < 0.22 || r > 0.32 {
 			t.Errorf("cap height / armhole = %.2f, charts sit at 0.24-0.27", r)
 		}
@@ -296,7 +313,9 @@ func TestShirtConstructionOptions(t *testing.T) {
 	if !hasPiece(base, "Yoke") {
 		t.Errorf("default back should have a yoke")
 	}
-	near(t, "full placket runs the front", pieceNamed(t, base, "Placket").Height, front.Height, 0.1)
+	// The placket runs the centre-front edge it is sewn to: neckline to hem.
+	edge := front.Landmarks["hemCentre"].Y - pathStartY(front.Outline)
+	near(t, "full placket runs the front edge", pieceNamed(t, base, "Placket").Height, edge, 0.4)
 
 	opt := DraftShirt(m, ShirtOptions{Collar: true, FrontStyle: "half_placket", BackStyle: "plain", HemStyle: "straight"})
 	if hasPiece(opt, "Yoke") {
@@ -305,8 +324,8 @@ func TestShirtConstructionOptions(t *testing.T) {
 	if pieceNamed(t, opt, "Placket").Height > 0.5*front.Height {
 		t.Errorf("half placket should stop well short of the hem")
 	}
-	if strings.Contains(pieceNamed(t, opt, "Shirt front").PathData, "C") && strings.Count(pieceNamed(t, opt, "Shirt front").PathData, "C") > 2 {
-		t.Errorf("straight hem should not add a curve")
+	if lm := pieceNamed(t, opt, "Shirt front").Landmarks; lm["hemSide"].Y != lm["hemCentre"].Y {
+		t.Errorf("straight hem should run level to centre front")
 	}
 	if pieceNamed(t, base, "Shirt front").PathData == pieceNamed(t, opt, "Shirt front").PathData {
 		t.Errorf("curved and straight hems drafted the same outline")
@@ -544,9 +563,8 @@ func TestPoloHasStraightHemAndVent(t *testing.T) {
 	ps := DraftShirt(m, ShirtOptions{Collar: true, CollarStyle: "polo", SleeveStyle: "half"})
 	for _, name := range []string{"Shirt front", "Shirt back"} {
 		p := pieceNamed(t, ps, name)
-		// Every front/back already has a neck curve and an armhole curve (2
-		// C's); curveHem would add a third for the shirttail sweep.
-		if strings.Count(p.PathData, "C") > 2 {
+		// A shirttail would lift the hem at the side seam.
+		if p.Landmarks["hemSide"].Y != p.Landmarks["hemCentre"].Y {
 			t.Errorf("%q should have a straight hem, not a shirttail curve: %s", name, p.PathData)
 		}
 		if !strings.Contains(p.Notes, "vent") {
@@ -570,7 +588,7 @@ func TestPoloHasStraightHemAndVent(t *testing.T) {
 func TestSleeveFabricTagsSleeveAndCuffOnly(t *testing.T) {
 	m := Measurements{Bust: 96, Waist: 84, BackWaistLength: 42, Shoulder: 13, Neck: 38, Ease: 6, SleeveLength: 60, UpperArm: 30, Wrist: 18}
 	ps := DraftShirt(m, ShirtOptions{Collar: true, CollarStyle: "convertible", SleeveFabric: "contrast"})
-	contrast := map[string]bool{"Sleeve": true, "Cuff": true, "Cuff slit facing": true}
+	contrast := map[string]bool{"Sleeve": true, "Cuff": true, "Cuff slit tower": true, "Cuff slit underlap": true}
 	for _, p := range ps {
 		want := contrast[p.Name]
 		got := p.Fabric == "contrast"
@@ -869,16 +887,20 @@ func TestDesignFeaturesFromRealUniforms(t *testing.T) {
 	// A V-neck: the neckline is straight lines from the neck point to a low center front.
 	v := DraftShirt(m, ShirtOptions{Neckline: "v_neck", SleeveStyle: "three_quarter"})
 	front := pieceNamed(t, v, "Shirt front")
-	if !regexp.MustCompile(`^M0\.0,\S+ L\S+ L\S+ C`).MatchString(front.PathData) || !strings.HasSuffix(front.PathData, "L0.0,20.8 Z") {
-		t.Errorf("a V-neck front should start with two straight lines and close at the V: %s", front.PathData)
+	// It opens down the front, so it has a button extension past centre front; the V is on
+	// the whole front's outline.
+	if !regexp.MustCompile(`^M0\.0,\S+ L\S+ L\S+ C`).MatchString(front.Outline) || !strings.HasSuffix(front.Outline, "L0.0,20.8 Z") {
+		t.Errorf("a V-neck front should start with two straight lines and close at the V: %s", front.Outline)
 	}
-	pts := pathPoints(front.PathData)
+	pts := pathPoints(front.Outline)
 	near(t, "V depth is deep (about 0.85 x armhole)", pts[0].y, shirtScye(96)*vNeckDepthFactor, 0.3)
 	near(t, "the V ends at the neck point", pts[1].y, 0, 0.05)
 	if hasPiece(v, "Collar leaf") || !hasPiece(v, "Neck facing") || !hasPiece(v, "Placket") {
 		t.Errorf("a V-neck has a facing and an opening but no collar")
 	}
-	near(t, "placket starts at the V", pieceNamed(t, v, "Placket").Height, front.Height-pts[0].y, 0.2)
+	// ...along the button extension's edge, from the V's point to the hem.
+	near(t, "placket runs the front edge", pieceNamed(t, v, "Placket").Height, frontEdge(t, front), 0.2)
+	near(t, "the extension starts level with the V", frontEdge(t, front), front.Landmarks["hemCentre"].Y-pts[0].y, 0.2)
 	_ = round
 	trimmed := DraftShirt(m, ShirtOptions{Neckline: "v_neck", Trim: "contrast"})
 	if !hasPiece(trimmed, "Neck trim") || hasPiece(trimmed, "Neck facing") {
@@ -902,4 +924,55 @@ func TestDesignFeaturesFromRealUniforms(t *testing.T) {
 	if off := pieceNamed(t, pan, "Insert panel").Landmarks["offset"]; off.X <= 0 {
 		t.Errorf("the panel should remember where it sits on the front")
 	}
+}
+
+// The shop's own shirt: a size-L long-sleeve kemeja with a hidden placket,
+// made by the family konveksi and measured flat on 2026-10-02. Only the
+// shirt was measured, so the body is the man's L that the formulas would
+// fit it to (chest 94 + the regular 12cm, the shirt's own 16cm shoulder
+// seam, a 40 neck, 43 back length, 63 sleeve); what's checked is that the
+// rest of the shirt then comes out as the shop made it.
+func TestShopShirtL(t *testing.T) {
+	m := Measurements{Bust: 94, Waist: 86, Hip: 100, BackWaistLength: 43, Shoulder: 16, Neck: 40, Ease: 6, SleeveLength: 63, UpperArm: 31, Wrist: 17}
+	ps := FinishAll(DraftShirt(m, ShirtOptions{Collar: true, SleeveStyle: "full", FrontStyle: "hidden_placket", Fit: "regular"}))
+	got := map[string]float64{}
+	for _, f := range Summarize(ps, m).Finished {
+		got[f.Key] = f.CM
+	}
+	near(t, "chest (shop: 106)", got["chest"], 106, 1)
+	near(t, "hem (shop: 108)", got["hem"], 108, 2)
+	near(t, "shoulder width (shop: 46)", got["shoulder"], 46, 2)
+	// The shop's sleeve is its shoulder width less 2cm (46 -> 44), the
+	// konveksi rule. A sleeve that wide needs an armhole of about 46 or more,
+	// and ours drafts 40 round for this body, so ours keeps to the rule only
+	// as far as its armhole can carry (about 41 here). The shop shirt's
+	// armhole was measured as 41, which can't hold a 44 sleeve either; the
+	// user chose (2026-10-03) to keep our armhole and sleeve as they are.
+	if got["bicep"] > got["shoulder"]-2+0.3 {
+		t.Errorf("sleeve %.1f is wider than the konveksi rule allows (%.1f)", got["bicep"], got["shoulder"]-2)
+	}
+	if got["bicep"] < 38 {
+		t.Errorf("sleeve %.1f is narrower than a man's L arm needs", got["bicep"])
+	}
+	for _, c := range Summarize(ps, m).Checks {
+		if !c.OK {
+			t.Errorf("%s — %s", c.Label, c.Detail)
+		}
+	}
+	near(t, "sleeve length, cuff included (shop: 63)", got["sleeve"], 63, 0.5)
+	front := pieceNamed(t, ps, "Shirt front")
+	near(t, "front length, collar to hem (shop: 67)", front.Landmarks["hemCentre"].Y-frontNeckDepth(m.Neck/5), 67, 1)
+	near(t, "collar stand (shop: 45)", 2*pieceNamed(t, ps, "Collar stand").Width, 45, 1.5)
+	near(t, "placket (shop: 3)", 2*pieceNamed(t, ps, "Hidden placket").Width, 6, 0.01) // drawn on the fold: 3cm finished, 6 unfolded
+}
+
+// A chest pocket with no size given comes out like the shop's own on its
+// size-L shirt: 12 wide by 13 deep, its top 18cm down from the shoulder.
+func TestDefaultChestPocketMatchesShop(t *testing.T) {
+	m := Measurements{Bust: 94, Waist: 86, Hip: 100, BackWaistLength: 43, Shoulder: 16, Neck: 40, Ease: 6, SleeveLength: 63, UpperArm: 31, Wrist: 17}
+	ps := DraftShirt(m, ShirtOptions{Collar: true, Fit: "regular", AddOns: AddOns{Accessories: []Accessory{{ID: "p", Type: "pocket", Segment: SegmentLeftChest, Shape: "pointed"}}}})
+	p := pieceNamed(t, ps, pocketName(SegmentLeftChest))
+	near(t, "pocket width (shop: 12)", p.Width, 12, 0.6)
+	near(t, "pocket height (shop: 13)", p.Height, 13, 0.7)
+	near(t, "pocket top below the shoulder (shop: 18)", p.Anchor.Y, 18, 1.5)
 }

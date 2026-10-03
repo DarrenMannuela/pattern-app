@@ -1,5 +1,7 @@
 package draft
 
+import "fmt"
+
 // Construction details that turn a bare torso/leg block into the
 // garment a reference chart actually shows: cuffs and cuff slits on a
 // dress shirt, the polo's knit collar/placket/ribbing, and the
@@ -24,19 +26,63 @@ func draftRectPiece(name string, w, h float64, foldEdge, notes string) Piece {
 	return Piece{Name: name, PathData: pb.String(), Width: round1(w), Height: round1(h), FoldEdge: foldEdge, Notes: notes}
 }
 
-// draftCuff is the buttoned cuff band: wrist circumference plus an
-// overlap and a little ease for the buttons (the boys' chart draws a
-// 17cm cuff for a ~14cm wrist), 4cm finished, cut on the fold.
+// cuffLength is a buttoned cuff's length: the wrist plus 3cm, as the
+// boys' chart draws it (a 17cm cuff for a ~14cm wrist), which covers the
+// button overlap and a little ease.
+func cuffLength(wrist float64) float64 { return wrist + 3 }
+
+// cuffDepth is the finished cuff's depth, the usual 6cm of a shirt cuff.
+const cuffDepth = 6.0
+
+// draftCuff is the buttoned cuff band, drawn at its finished depth against
+// the fold it is cut on: one piece folded lengthwise makes the outside and
+// the inside of the cuff.
 func draftCuff(wrist float64) Piece {
-	return draftRectPiece("Cuff", wrist+3, 8, "bottom",
-		"Cut 2 (one per sleeve) plus 2 interfacing. Folded lengthwise to a 4cm finished band; buttonhole at the overlap end, button near the other.")
+	return draftRectPiece("Cuff", cuffLength(wrist), cuffDepth, "bottom",
+		"Cut 2 (one per sleeve) on the fold, plus 2 interfacing. Folded lengthwise to a 6cm finished band; buttonhole at the overlap end, button near the other.")
 }
 
 // draftCuffSlit is the facing that finishes the opening above the cuff
 // (the chart's small 13 x 2 strip).
 func draftCuffSlit(sleeveLen float64) Piece {
-	return draftRectPiece("Cuff slit facing", 2, clamp(sleeveLen*0.28, 9, 14), "",
+	return draftRectPiece("Cuff slit facing", 2, cuffOpening(sleeveLen), "",
 		"Cut 2. Folded strip that binds the slit above the cuff so the sleeve can open to slide the hand through.")
+}
+
+// cuffOpening is how long the opening above a cuff is: about 28% of the
+// sleeve, 9-14cm.
+func cuffOpening(sleeveLen float64) float64 { return clamp(sleeveLen*0.28, 9, 14) }
+
+// towerWidth is a tower sleeve placket's finished width.
+const towerWidth = 2.5
+
+// draftCuffTower is the tower (pointed) sleeve placket that finishes the
+// opening above a cuff, as konveksi kemeja are made: the tower band, whose
+// outer half shows on the sleeve and ends in a point, its inner half facing
+// it, and a narrow underlap binding for the other edge of the opening. The
+// shop's own shirts use it.
+func draftCuffTower(sleeveLen float64) (tower, underlap Piece) {
+	open := cuffOpening(sleeveLen)
+	tip := 2.0
+	w := towerWidth
+	pb := &pathBuilder{}
+	pb.moveTo(point{0, round1(tip)}).
+		lineTo(point{round1(w / 2), 0}).
+		lineTo(point{round1(w), round1(tip)}).
+		lineTo(point{round1(2 * w), round1(tip)}).
+		lineTo(point{round1(2 * w), round1(open + tip)}).
+		lineTo(point{0, round1(open + tip)}).
+		close()
+	tower = Piece{
+		Name:     "Cuff slit tower",
+		PathData: pb.String(),
+		Width:    round1(2 * w),
+		Height:   round1(open + tip),
+		Notes:    fmt.Sprintf("Cut 2 (one per sleeve). Tower placket: the pointed half (left) shows on the outside of the sleeve, %.1fcm wide; the other half folds behind it. Sew it to the overlap edge of the %.0fcm opening.", w, open),
+	}
+	underlap = draftRectPiece("Cuff slit underlap", 1.2, open, "left",
+		fmt.Sprintf("Cut 2 (one per sleeve) on the fold. Binds the underlap edge of the %.0fcm opening, 1.2cm finished.", open))
+	return tower, underlap
 }
 
 // draftPoloCollar is a flat knit polo collar: a folded strip about as

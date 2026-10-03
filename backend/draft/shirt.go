@@ -24,6 +24,16 @@ type ShirtOptions struct {
 	// a new order shouldn't silently read as gendered either way
 	// until someone picks one.
 	Gender string `json:"gender"`
+	// SleevePlacket finishes the opening above a cuff: "" or "tower" (the
+	// pointed tower placket, default, as the shop makes it) or "bound" (a
+	// narrow bound slit).
+	SleevePlacket string `json:"sleevePlacket"`
+	// Fit is how much room the shirt has round the chest, on top of the size
+	// chart's wearing ease: "" (as the chart: ease only), "regular" (+6cm,
+	// 12cm in all on the usual chart: a quarter of the chest + 3cm a panel,
+	// the konveksi kemeja "medium fit" — jarumjahit) or "loose" (+14cm, 20cm
+	// in all: the Bunka men's shirt block, half the chest + 10).
+	Fit string `json:"fit"`
 	// DartPosition only matters when Gender == "female"; see
 	// DartPositions. Ignored otherwise.
 	DartPosition string `json:"dartPosition"`
@@ -51,8 +61,9 @@ type ShirtOptions struct {
 	// full length, default), "half_placket" (a short placket to about
 	// mid-chest) or "plain" (no placket). Only applies with Collar.
 	FrontStyle string `json:"frontStyle"`
-	// BackStyle: "yoke" (default, a separate back yoke) or "plain" (one
-	// back panel). Polo shirts are always plain.
+	// BackStyle: "yoke" (default, a separate back yoke), "yoke_pleat" (a
+	// yoke with a box pleat at centre back below it) or "plain" (one back
+	// panel). Polo shirts are always plain.
 	BackStyle string `json:"backStyle"`
 	// HemStyle: "curved" (default, a shirttail hem a little higher at
 	// the sides) or "straight". Polo shirts are always straight.
@@ -91,6 +102,10 @@ type ShirtOptions struct {
 	// the pieces are the same whatever the pattern.
 	Motifs  []string `json:"motifs"`
 	Pattern string   `json:"pattern"`
+	// MotifPatterns gives a band its own pattern, keyed by placement ("side"
+	// for the insert panel): a batik chest band with striped arm bands, say.
+	// Bands not listed use Pattern.
+	MotifPatterns map[string]string `json:"motifPatterns,omitempty"`
 	// AddOns are extras independent of style/collar — a chest pocket,
 	// an embroidery placement.
 	AddOns AddOns `json:"addOns"`
@@ -106,10 +121,55 @@ func shirtScye(bust float64) float64 {
 	return bust/4 + 0.5
 }
 
+// backPleat is how much a centre-back box pleat opens at the yoke seam:
+// the extra width folded into it. The shop's own size-L kemeja opens 3cm.
+const backPleat = 3.0
+
+// addBackPleat widens the back panel at centre back (its fold) by half the
+// pleat on this half — the whole pleat once cut on the fold — from the yoke
+// seam down to the hem, so the pleat hangs open below the yoke and the back
+// can spread when the arms reach forward. The yoke is unchanged: the back's
+// top edge is longer than the yoke's by the pleat, folded in where they're
+// sewn. The drawing keeps the sewn shape (Outline).
+func addBackPleat(back Piece, pleat float64) Piece {
+	o, ok := parseOutline(back.PathData)
+	if !ok {
+		return back
+	}
+	wider, _, ok := o.extendLeft(pleat / 2)
+	if !ok {
+		return back
+	}
+	if back.Outline == "" {
+		back.Outline = back.PathData
+	}
+	back.PathData = wider.path()
+	lm := make(map[string]Point, len(back.Landmarks)+1)
+	for k, v := range back.Landmarks {
+		lm[k] = v
+	}
+	lm["pleat"] = Point{X: pleat}
+	back.Landmarks = lm
+	back.Notes += fmt.Sprintf(" Box pleat at centre back: the back is cut %.0fcm wider at the fold. Lay the extra as a box pleat centred on centre back, stitch it into the yoke seam, and leave it open below.", pleat)
+	return back
+}
+
+// fitEase is the chest ease a shirt's Fit adds to the size chart's.
+func fitEase(fit string) float64 {
+	switch fit {
+	case "regular":
+		return 6
+	case "loose":
+		return 14
+	}
+	return 0
+}
+
 // DraftShirt returns [front, back, sleeve] and, when opts.Collar is
 // set, [..., collar, placket] — the full cut set for one shirt style
 // at one size.
 func DraftShirt(m Measurements, opts ShirtOptions) []Piece {
+	hipGiven := m.Hip > 0 // the default hip is an adult's: no use for sizing a child's hem
 	m = m.withDefaults()
 
 	ease := m.Ease
@@ -121,41 +181,59 @@ func DraftShirt(m Measurements, opts ShirtOptions) []Piece {
 	// scaling one piece and leaving the others mismatched at the
 	// shoulder/armhole seams.
 	if opts.Gender == "male" {
-		ease += 4
+		if opts.Fit == "" {
+			ease += 4 // a male cut was always drafted a little roomier
+		}
 		shoulderLen += 1.5
 	}
+	ease += fitEase(opts.Fit)
 
 	qBust := m.Bust/4 + ease/4
-	qWaist := m.Waist/4 + ease/4
+	// The waist gets half the chest's ease, as in the Bunka block (half the
+	// bust + 6, half the waist + 3).
+	qWaist := m.Waist/4 + ease/8
+	// A shirt hangs to the hip, so its hem has to go over it. The reference
+	// charts' hems are as wide as the chest, which on the boys' size 8 is 2cm
+	// over the hip; the hem is kept at least that, and where the hip is wider
+	// than the chest the side seam flares out to it.
+	qHem := (m.Hip + 2) / 4
+	if !hipGiven {
+		qHem = 0
+	}
 	scye := shirtScye(m.Bust)
 	neckW := m.Neck / 5
 
 	var front, yoke, back Piece
 	var frontArmhole, backArmhole, frontNeck, backNeck float64
 	isPolo := opts.CollarStyle == "polo"
+	opensDown := false // a front that buttons all the way down: gets its button extension at the end
 
 	if isPolo {
 		// A knit polo has no back yoke — the back is one panel.
-		front, frontArmhole, frontNeck = draftRelaxedFront(qBust, scye, neckW, shoulderLen, m.shirtLen(), "Shirt front")
-		back, backArmhole, backNeck = draftRelaxedBack(qBust, scye, neckW, shoulderLen, m.shirtLen(), "Shirt back")
+		front, frontArmhole, frontNeck = draftRelaxedFront(m.Bust, qBust, scye, neckW, shoulderLen, m.shirtLen(), qHem, "Shirt front")
+		back, backArmhole, backNeck = draftRelaxedBack(m.Bust, qBust, scye, neckW, shoulderLen, m.shirtLen(), qHem, "Shirt back")
 	} else if opts.Gender == "female" {
-		dartPosition := validDartPosition(opts.DartPosition)
-		front, frontArmhole, frontNeck = draftFront(qBust, qWaist, scye, neckW, shoulderLen, m.shirtLen(), dartPosition)
-		if opts.BackStyle == "plain" {
-			back, backArmhole, backNeck = draftBack(qBust, qWaist, scye, neckW, shoulderLen, m.shirtLen())
-		} else {
-			yoke, back, backArmhole, backNeck = draftBackWithYoke(qBust, qWaist, scye, neckW, shoulderLen, m.shirtLen())
+		qHip := m.Hip/4 + ease/4
+		if !hipGiven {
+			qHip = qBust // no hip measured: shape the hip as wide as the chest
 		}
+		spec := fittedSpec{bust: m.Bust, qBust: qBust, qWaist: qWaist, qHip: qHip, scye: scye, neckW: neckW, shoulderLen: shoulderLen,
+			waistLen: m.BackWaistLength, length: m.shirtLen(), dartPosition: opts.DartPosition, shirttail: opts.HemStyle != "straight"}
+		front, frontArmhole, frontNeck = draftFittedFront(spec)
+		yoke, back, backArmhole, backNeck = draftFittedBack(spec, opts.BackStyle != "plain")
 	} else {
-		front, frontArmhole, frontNeck = draftRelaxedFront(qBust, scye, neckW, shoulderLen, m.shirtLen(), "Shirt front")
+		front, frontArmhole, frontNeck = draftRelaxedFront(m.Bust, qBust, scye, neckW, shoulderLen, m.shirtLen(), qHem, "Shirt front")
 		if opts.BackStyle == "plain" {
-			back, backArmhole, backNeck = draftRelaxedBack(qBust, scye, neckW, shoulderLen, m.shirtLen(), "Shirt back")
+			back, backArmhole, backNeck = draftRelaxedBack(m.Bust, qBust, scye, neckW, shoulderLen, m.shirtLen(), qHem, "Shirt back")
 		} else {
-			yoke, back, backArmhole, backNeck = draftRelaxedBackWithYoke(qBust, scye, neckW, shoulderLen, m.shirtLen())
+			yoke, back, backArmhole, backNeck = draftRelaxedBackWithYoke(m.Bust, qBust, scye, neckW, shoulderLen, m.shirtLen(), qHem)
 		}
 	}
-	if !isPolo && opts.HemStyle != "straight" {
+	if !isPolo && opts.Gender != "female" && opts.HemStyle != "straight" { // the fitted block curves its own hem
 		front, back = curveHem(front), curveHem(back)
+	}
+	if opts.BackStyle == "yoke_pleat" && yoke.PathData != "" {
+		back = addBackPleat(back, backPleat)
 	}
 	// A classic pique polo keeps its straight-across hem even when the
 	// maker's own Hem choice isn't offered for it — a polo's hem is
@@ -166,7 +244,28 @@ func DraftShirt(m Measurements, opts ShirtOptions) []Piece {
 		front = vNeckFront(front, vDepth)
 	}
 
-	sleeve := draftSleeve(frontArmhole+backArmhole, m.SleeveLength, m.UpperArm, m.Wrist, ease, opts.SleeveStyle, "Sleeve")
+	// The sleeve length is shoulder to wrist, cuff included: a cuffed sleeve
+	// is drafted that much shorter ("A–D = panjang lengan – lebar manset",
+	// jarumjahit). It used to be drafted full length with the cuff added on.
+	sleeveLen := m.SleeveLength
+	if cuffed := !isPolo && opts.SleeveStyle != "half"; cuffed {
+		sleeveLen -= cuffDepth / sleeveLengthFraction(opts.SleeveStyle)
+	}
+	// The sleeve is sized from the shirt's own shoulder width — across the
+	// back, shoulder point to shoulder point, as drafted (on the yoke when
+	// there is one) — the measure the konveksi rule is written in. A real
+	// size-L kemeja from the shop (shoulder 46) has exactly the 44cm sleeve
+	// the rule gives; estimating the width from the neck and the seam length
+	// instead ignored the shoulder's slope and made the sleeve 2cm too wide.
+	top := back
+	if yoke.PathData != "" {
+		top = yoke
+	}
+	shoulderWidth := 2 * (neckW + shoulderLen)
+	if top.ShoulderTip != nil {
+		shoulderWidth = 2 * top.ShoulderTip.X
+	}
+	sleeve := draftSleeve(frontArmhole+backArmhole, sleeveLen, m.UpperArm, m.Wrist, ease, shoulderWidth, opts.SleeveStyle, "Sleeve")
 	if opts.SleeveFabric == "contrast" {
 		sleeve.Fabric = "contrast"
 	}
@@ -197,11 +296,20 @@ func DraftShirt(m Measurements, opts ShirtOptions) []Piece {
 	} else if opts.SleeveStyle != "half" {
 		// Every long-sleeve reference shirt has a buttoned cuff and a
 		// slit above it — cut from the same fabric as the sleeve itself.
-		cuff, cuffSlit := draftCuff(m.Wrist), draftCuffSlit(m.SleeveLength)
-		if opts.SleeveFabric == "contrast" {
-			cuff.Fabric, cuffSlit.Fabric = "contrast", "contrast"
+		cuff := draftCuff(m.Wrist)
+		opening := []Piece{draftCuffSlit(m.SleeveLength)}
+		if opts.SleevePlacket != "bound" {
+			tower, underlap := draftCuffTower(m.SleeveLength)
+			opening = []Piece{tower, underlap}
 		}
-		pieces = append(pieces, cuff, cuffSlit)
+		if opts.SleeveFabric == "contrast" {
+			cuff.Fabric = "contrast"
+			for i := range opening {
+				opening[i].Fabric = "contrast"
+			}
+		}
+		pieces = append(pieces, cuff)
+		pieces = append(pieces, opening...)
 	}
 
 	if opts.Collar {
@@ -231,10 +339,14 @@ func DraftShirt(m Measurements, opts ShirtOptions) []Piece {
 		}
 	}
 	if opts.Collar || vNeck {
-		placketLen := front.Height // a V-neck's placket starts at the point of the V
-		if vNeck {
-			placketLen = round1(front.Height - vDepth)
+		// The placket runs the length of the centre-front edge it is sewn
+		// to: from the neckline (or a V-neck's point) down to the hem at
+		// centre front — not from the shoulder, which made it 7.5cm too long.
+		edgeBottom := front.Height
+		if c, ok := front.Landmarks["hemCentre"]; ok {
+			edgeBottom = c.Y
 		}
+		placketLen := round1(edgeBottom - pathStartY(front.PathData))
 		switch {
 		case isPolo:
 			pieces = append(pieces, draftPoloPlacket(frontNeck))
@@ -244,7 +356,7 @@ func DraftShirt(m Measurements, opts ShirtOptions) []Piece {
 		case opts.FrontStyle == "hidden_placket":
 			p := draftPlacket(placketLen)
 			p.Name = "Hidden placket"
-			p.Notes = "Cut 2. A folded facing strip that hides the buttons behind the front edge."
+			p.Notes = "Cut 2 (one per front) on the fold. A folded facing strip that hides the buttons behind the front edge, centred on the centre-front line."
 			pieces = append(pieces, p)
 		default:
 			pieces = append(pieces, draftPlacket(placketLen))
@@ -254,9 +366,10 @@ func DraftShirt(m Measurements, opts ShirtOptions) []Piece {
 		// the placket (or facing) to be sewn to. A pullover front (plain, half
 		// placket, polo) stays one piece cut on the fold.
 		if !isPolo && opts.FrontStyle != "plain" && opts.FrontStyle != "half_placket" {
+			opensDown = true
 			pieces[0].FoldEdge = ""
 			pieces[0].Qty = 2
-			pieces[0].Notes = strings.Replace(pieces[0].Notes, "Half front, center front (left edge) on fold", "Front, cut 2 (left and right, mirror images); the centre-front edge (left) is sewn to the placket", 1)
+			pieces[0].Notes = strings.Replace(pieces[0].Notes, "Half front, center front (left edge) on fold", "Front, cut 2 (left and right, mirror images); the placket is sewn along the front edge (left)", 1)
 		}
 	}
 	if vNeck {
@@ -265,6 +378,10 @@ func DraftShirt(m Measurements, opts ShirtOptions) []Piece {
 	if opts.Panel == "side" {
 		if inner, panel, outer := insertPanelPieces(front); panel != nil {
 			pieces[0].Qty = 1 // the plain half of the front; the panel side is cut in three
+			if panel != nil {
+				panel.Motif = opts.motifPattern("side")
+				panel.Notes = "Cut 1 in the " + motifMaterial(panel.Motif) + ". It sits between the two front pieces of that side, shoulder to hem."
+			}
 			for _, pc := range []*Piece{inner, panel, outer} {
 				if pc != nil {
 					pieces = append(pieces, withQty(*pc, 1, ""))
@@ -277,14 +394,74 @@ func DraftShirt(m Measurements, opts ShirtOptions) []Piece {
 		pieces = colorBlock(pieces, back, opts.ColorBlock)
 	}
 
-	pieces = append(pieces, motifPieces(front, back, sleeve, opts.Motifs, opts.Pattern)...)
+	pieces = append(pieces, motifPieces(front, back, sleeve, opts.Motifs, opts.motifPattern)...)
 
 	// Pockets/embroidery on the "back" segment attach to the lower back
 	// panel (below the yoke seam) — the yoke itself is too narrow and
 	// too close to the neckline to carry a chest-height accessory.
 	pieces = append(pieces, draftAccessoryPockets(opts.AddOns.Accessories, &front, &back, &sleeve)...)
 
+	if opensDown {
+		// The placket is as long as the front edge it is sewn to, as cut.
+		if edge := addButtonExtension(pieces); edge > 0 {
+			for i, p := range pieces {
+				if p.Name == "Placket" || p.Name == "Hidden placket" {
+					band := draftPlacket(edge)
+					pieces[i].PathData, pieces[i].Height = band.PathData, band.Height
+				}
+			}
+		}
+	}
 	return pieces
+}
+
+// buttonExtension is the lidah: how far a front that buttons reaches past
+// centre front, so the left and right fronts lap over each other with the
+// buttons on centre front. Every konveksi kemeja draft we have adds 1.5cm
+// (jarumjahit.com "Pola Dasar Kemeja Pria": "Garis B dibuat dari titik A ke
+// kiri 1,5cm. Fungsinya untuk kancing"; kursusjahityogya: "1,5 cm untuk
+// tempat kancing").
+const buttonExtension = 1.5
+
+// placketWidth is a button placket's finished width: the band covers the
+// lidah and as much again inside centre front, so it sits centred on
+// centre front with the buttons down its middle.
+const placketWidth = 2 * buttonExtension
+
+// addButtonExtension draws the lidah onto every piece along the centre-front
+// edge of a front that opens: the edge moves buttonExtension past centre
+// front. (Last week's version cut these fronts back to the placket seam
+// instead, which is not how a konveksi drafts a kemeja.) The drawing keeps
+// the front to centre front (Outline). It returns the length of the main
+// front's new edge, which the placket runs.
+func addButtonExtension(pieces []Piece) (edge float64) {
+	for i := range pieces {
+		p := &pieces[i]
+		if p.FoldEdge != "" || !strings.Contains(strings.ToLower(p.Name), "front") {
+			continue
+		}
+		if off, ok := p.Landmarks["offset"]; ok && off.X > 0.05 {
+			continue // cut from further out (the outer part beside an insert panel)
+		}
+		o, ok := parseOutline(p.PathData)
+		if !ok {
+			continue
+		}
+		extended, length, ok := o.extendLeft(buttonExtension)
+		if !ok {
+			continue
+		}
+		_, panel := p.Landmarks["shoulderTip"]
+		if panel && p.Outline == "" {
+			p.Outline = p.PathData
+		}
+		p.PathData = extended.path()
+		p.Notes += fmt.Sprintf(" The front edge is %.2gcm past centre front: the button extension (lidah); buttons and buttonholes go on centre front.", buttonExtension)
+		if panel {
+			edge = round1(length)
+		}
+	}
+	return edge
 }
 
 // COLLAR PATTERN PIECES. Drawn from the collar reference sheet, not as
@@ -419,7 +596,7 @@ func draftPeterPanCollarLeaf(neckLen float64) Piece {
 // draftPlacket drafts the center-front button placket as a straight
 // folded strip running the full front length.
 func draftPlacket(frontHeight float64) Piece {
-	width := 3.5 // finished placket width, cm
+	width := placketWidth
 
 	pb := &pathBuilder{}
 	pb.moveTo(point{0, 0}).
@@ -433,7 +610,8 @@ func draftPlacket(frontHeight float64) Piece {
 		PathData: pb.String(),
 		Width:    round1(width),
 		Height:   round1(frontHeight),
-		Notes:    "Straight strip, folds along center front to face the button/buttonhole line. Cut two (or one strip twice as wide, folded) per shirt.",
+		FoldEdge: "left",
+		Notes:    "Straight strip, cut 2 (one per front) on the fold: folded in half lengthwise into a band, sewn to the front edge and centred on the centre-front line, where the buttons and buttonholes go.",
 	}
 }
 
@@ -450,157 +628,86 @@ func draftPlacket(frontHeight float64) Piece {
 // the yoke seam happens to cross it, since a sleeve or collar sewn in
 // later cares about the total curve length, not how many pieces
 // currently make it up.
-func draftRelaxedBackWithYoke(qChest, scye, neckW, shoulderLen, backWaistLen float64) (yoke, lowerBack Piece, armholeLen, neckLen float64) {
-	height := backWaistLen
-	neckDrop := neckW * 0.3
-	shoulderDrop := 1.0
-	shoulderTipX := neckW + shoulderLen*1.0
-	backScye := scye // same bust line front and back, so the side seams true
-	hemWidth := qChest + 1.5
-
-	width := max2(qChest, hemWidth, shoulderTipX)
-
-	cbTop := point{0, round1(neckDrop)}
-	neckPoint := point{round1(neckW), 0}
-	shoulderTip := point{round1(shoulderTipX), round1(shoulderDrop)}
-	underarm := point{round1(qChest), round1(backScye)}
-	hemSide := point{round1(hemWidth), round1(height)}
-	cbBottom := point{0, round1(height)}
-
-	nc1, nc2 := neckControls(cbTop, neckPoint)
-	ac1 := point{round1(shoulderTip.x + (underarm.x-shoulderTip.x)*0.25 + 1.0), round1(shoulderTip.y + (underarm.y-shoulderTip.y)*0.15)}
-	ac2 := point{round1(underarm.x + 1.0), round1(underarm.y - (underarm.y-shoulderTip.y)*0.3)}
-
-	armholeLen = cubicLength(shoulderTip, ac1, ac2, underarm)
-	neckLen = cubicLength(cbTop, nc1, nc2, neckPoint)
-
-	yokeDepth := clamp(backScye*0.4, 6, 10) // below the nape — a standard real-shirt yoke depth
-	splitT := tForY(shoulderTip, ac1, ac2, underarm, cbTop.y+yokeDepth)
-	a, d, splitPt, e, c := splitCubic(shoulderTip, ac1, ac2, underarm, splitT)
-
-	yokePb := &pathBuilder{}
-	yokePb.moveTo(cbTop).
-		curveTo(nc1, nc2, neckPoint).
-		lineTo(shoulderTip).
-		curveTo(a, d, splitPt).
-		lineTo(point{0, splitPt.y}).
-		lineTo(cbTop).
-		close()
-
-	lowerPb := &pathBuilder{}
-	lowerPb.moveTo(point{0, splitPt.y}).
-		lineTo(splitPt).
-		curveTo(e, c, underarm).
-		lineTo(hemSide).
-		lineTo(cbBottom).
-		lineTo(point{0, splitPt.y}).
-		close()
-
-	yoke = Piece{
-		Name:        "Yoke",
-		PathData:    yokePb.String(),
-		Width:       round1(shoulderTip.x),
-		Height:      round1(splitPt.y - cbTop.y),
-		FoldEdge:    "left",
-		Notes:       "Half yoke, center back (left edge) on fold. Sewn to the lower back panel below (a felled seam) and to the front shoulder seams above.",
-		ShoulderTip: &Point{X: shoulderTip.x, Y: shoulderTip.y},
-	}
-	lowerBack = Piece{
-		Name:     "Shirt back",
-		PathData: lowerPb.String(),
-		Width:    round1(width),
-		Height:   round1(height - splitPt.y),
-		FoldEdge: "left",
-		Notes:    "Half back panel, center back (left edge) on fold. Joins the yoke above along a felled seam.",
-	}
+func draftRelaxedBackWithYoke(bust, qChest, scye, neckW, shoulderLen, backWaistLen, qHem float64) (yoke, lowerBack Piece, armholeLen, neckLen float64) {
+	whole, armholeLen, neckLen := relaxedPanel(bust, qChest, scye, neckW, shoulderLen, backWaistLen, math.Max(qChest, qHem)+1.5, true)
+	yoke, lowerBack = splitYoke(whole, scye)
+	lowerBack.Notes = "Half back panel, center back (left edge) on fold. Joins the yoke above along a felled seam."
 	return yoke, lowerBack, armholeLen, neckLen
 }
 
-// draftBackWithYoke is draftBack's (draft.go) counterpart for the
-// fitted/dart preset — see draftRelaxedBackWithYoke's doc comment for
-// why this seam exists at all. The waist dart lives entirely below
-// the yoke seam (real fitted shirts put shaping darts in the lower
-// back, not across the shoulder blades), so it's unaffected by the split.
-func draftBackWithYoke(qBust, qWaist, scye, neckW, shoulderLen, backWaistLen float64) (yoke, lowerBack Piece, armholeLen, neckLen float64) {
-	height := backWaistLen
-	neckDrop := neckW * 0.35
-	shoulderDrop := 1.3
-	shoulderTipX := neckW + shoulderLen*1.0
-	backScye := scye
+// splitYoke cuts a half back across at the yoke seam: the yoke above
+// (neckline, shoulder and the top of the armhole) and the back panel below.
+// The panel keeps the whole back's coordinates, so its outline still lines
+// up with the front; its landmarks carry over.
+func splitYoke(whole Piece, scye float64) (yoke, lowerBack Piece) {
+	o, ok := parseOutline(whole.PathData)
+	if !ok || len(o.segs) < 4 {
+		return Piece{}, whole
+	}
+	// segs: neckline, shoulder, the armhole's curves up to the underarm,
+	// then the side seam, hem and centre line.
+	lm := whole.Landmarks
+	tip := point{lm["shoulderTip"].X, lm["shoulderTip"].Y}
+	under := point{lm["underarm"].X, lm["underarm"].Y}
+	armEnd := -1
+	for i, sg := range o.segs {
+		if dist2(sg.p, under) < 0.01 {
+			armEnd = i
+			break
+		}
+	}
+	if armEnd < 2 {
+		return Piece{}, whole
+	}
+	yokeDepth := clamp(scye*0.4, 6, 10) // below the nape — a standard real-shirt yoke depth
+	seamY := round1(o.start.y + yokeDepth)
+	above, below, at := splitAtY(tip, o.segs[2:armEnd+1], seamY)
+	at = point{round1(at.x), seamY}
 
-	width := max2(qBust, shoulderTipX)
+	y := outline{start: o.start}
+	y.add(o.segs[0], o.segs[1]).add(above...)
+	y.segs[len(y.segs)-1].p = at
+	y.lineTo(point{0, seamY})
 
-	dartIntake := clamp(qBust-qWaist-1.5, 0.5, 4) * 0.6
-	apexX := clamp(qBust*0.5, 0, qWaist*0.85)
-	apex := point{round1(apexX), round1(backScye + (height-backScye)*0.5)}
-
-	cbTop := point{0, round1(neckDrop)}
-	neckPoint := point{round1(neckW), 0}
-	shoulderTip := point{round1(shoulderTipX), round1(shoulderDrop)}
-	underarm := point{round1(qBust), round1(backScye)}
-	sideWaist := point{round1(qWaist), round1(height)}
-	dartRight := point{round1(apexX + dartIntake/2), round1(height)}
-	dartLeft := point{round1(apexX - dartIntake/2), round1(height)}
-	cbBottom := point{0, round1(height)}
-
-	nc1, nc2 := neckControls(cbTop, neckPoint)
-	ac1 := point{round1(shoulderTip.x + (underarm.x-shoulderTip.x)*0.25 + 1.2), round1(shoulderTip.y + (underarm.y-shoulderTip.y)*0.15)}
-	ac2 := point{round1(underarm.x + 1.0), round1(underarm.y - (underarm.y-shoulderTip.y)*0.3)}
-
-	armholeLen = cubicLength(shoulderTip, ac1, ac2, underarm)
-	neckLen = cubicLength(cbTop, nc1, nc2, neckPoint)
-
-	yokeDepth := clamp(backScye*0.4, 6, 10)
-	splitT := tForY(shoulderTip, ac1, ac2, underarm, cbTop.y+yokeDepth)
-	a, d, splitPt, e, c := splitCubic(shoulderTip, ac1, ac2, underarm, splitT)
-
-	yokePb := &pathBuilder{}
-	yokePb.moveTo(cbTop).
-		curveTo(nc1, nc2, neckPoint).
-		lineTo(shoulderTip).
-		curveTo(a, d, splitPt).
-		lineTo(point{0, splitPt.y}).
-		lineTo(cbTop).
-		close()
-
-	lowerPb := &pathBuilder{}
-	lowerPb.moveTo(point{0, splitPt.y}).
-		lineTo(splitPt).
-		curveTo(e, c, underarm).
-		lineTo(sideWaist).
-		lineTo(dartRight).
-		lineTo(apex).
-		lineTo(dartLeft).
-		lineTo(cbBottom).
-		lineTo(point{0, splitPt.y}).
-		close()
+	// The side seam, hem and centre line down to the hem — not the whole
+	// back's closing edge, which runs on up to the neck.
+	rest := o.segs[armEnd+1:]
+	if n := len(rest); n > 0 && dist2(rest[n-1].p, o.start) < 1e-4 {
+		rest = rest[:n-1]
+	}
+	b := outline{start: point{0, seamY}}
+	b.lineTo(at).add(below...).add(rest...).lineTo(point{0, seamY})
 
 	yoke = Piece{
 		Name:        "Yoke",
-		PathData:    yokePb.String(),
-		Width:       round1(shoulderTip.x),
-		Height:      round1(splitPt.y - cbTop.y),
+		PathData:    y.path(),
+		Width:       round1(at.x),
+		Height:      round1(seamY - o.start.y),
 		FoldEdge:    "left",
 		Notes:       "Half yoke, center back (left edge) on fold. Sewn to the lower back panel below (a felled seam) and to the front shoulder seams above.",
-		ShoulderTip: &Point{X: shoulderTip.x, Y: shoulderTip.y},
+		ShoulderTip: whole.ShoulderTip,
+		Landmarks:   map[string]Point{"neckPoint": lm["neckPoint"], "shoulderTip": lm["shoulderTip"], "yokeArm": {X: at.x, Y: at.y}},
 	}
-	lowerBack = Piece{
-		Name:     "Shirt back",
-		PathData: lowerPb.String(),
-		Width:    round1(width),
-		Height:   round1(height - splitPt.y),
-		FoldEdge: "left",
-		Notes:    "Half back panel, center back (left edge) on fold. Small waist dart included. Joins the yoke above along a felled seam.",
+	lowerBack = whole
+	lowerBack.Name = "Shirt back"
+	lowerBack.PathData = b.path()
+	lowerBack.Height = round1(whole.Height - seamY)
+	lowerBack.ShoulderTip = nil
+	lowerBack.Landmarks = map[string]Point{"yokeArm": {X: at.x, Y: at.y}, "underarm": lm["underarm"], "hemSide": lm["hemSide"], "hemCentre": lm["hemCentre"]}
+	for k, v := range lm {
+		if strings.HasPrefix(k, "waist") || strings.HasPrefix(k, "hip") {
+			lowerBack.Landmarks[k] = v
+		}
 	}
-	return yoke, lowerBack, armholeLen, neckLen
+	return yoke, lowerBack
 }
 
 // halfPlacketFraction is how far down the front a half placket runs.
 const halfPlacketFraction = 0.42
 
 // hemRise is how much higher a curved (shirttail) hem sits at the side
-// seam than at center front.
-const hemRise = 2.5
+// seam than at center front: 4cm, as on the shop's own size-L kemeja.
+const hemRise = 4.0
 
 // The armhole curve followed directly by one straight side seam and a
 // straight hem — i.e. a panel with no dart cut into its side or hem.
@@ -621,7 +728,30 @@ func curveHem(p Piece) Piece {
 	}
 	x, _ := strconv.ParseFloat(sx, 64)
 	y, _ := strconv.ParseFloat(sy, 64)
-	rep := fmt.Sprintf("L%.1f,%.1f C%.1f,%.1f %.1f,%.1f 0.0,%.1f L0.0,", x, y-hemRise, x*0.85, y-hemRise*0.1, x*0.5, y, y)
+	// The curve leaves the side seam square to it and reaches centre front
+	// square to that, so front and back (and the two halves) meet in one
+	// smooth hem instead of a notch at the side seam.
+	rep := fmt.Sprintf("L%.1f,%.1f C%.1f,%.1f %.1f,%.1f 0.0,%.1f L0.0,", x, y-hemRise, x*0.75, y-hemRise, x*0.4, y, y)
 	p.PathData = p.PathData[:tailStart] + rep + p.PathData[m[1]:]
+	if hs, ok := p.Landmarks["hemSide"]; ok {
+		lm := make(map[string]Point, len(p.Landmarks))
+		for k, v := range p.Landmarks {
+			lm[k] = v
+		}
+		lm["hemSide"] = Point{X: hs.X, Y: round1(y - hemRise)}
+		p.Landmarks = lm
+	}
 	return p
+}
+
+// motifPattern is the pattern of one motif placement: its own if it has one,
+// else the shirt's.
+func (o ShirtOptions) motifPattern(placement string) string {
+	if p := o.MotifPatterns[placement]; p != "" {
+		return p
+	}
+	if o.Pattern == "" {
+		return "solid"
+	}
+	return o.Pattern
 }

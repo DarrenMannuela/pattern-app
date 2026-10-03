@@ -19,7 +19,7 @@ import { sleeveAlignment } from "../lib/garmentFlat.js";
 const SLOTS = [
   {
     key: "fit",
-    label: "Fit",
+    label: "Cut",
     parts: [
       { value: "unisex", label: "Unisex", hint: "Relaxed, no dart" },
       { value: "male", label: "Male", hint: "Broader, no dart" },
@@ -79,6 +79,7 @@ const SLOTS = [
     label: "Back",
     parts: [
       { value: "yoke", label: "Yoke", hint: "Shoulder yoke seam" },
+      { value: "yoke_pleat", label: "Yoke + pleat", hint: "Yoke with a box pleat at centre back below it" },
       { value: "plain", label: "Plain", hint: "One panel" },
     ],
   },
@@ -114,6 +115,9 @@ const SLOTS = [
   },
   { key: "pattern", label: "Motif pattern", parts: MOTIF_PATTERNS },
 ];
+
+// The motif bands' names, for the pattern's "apply to" chips.
+const BAND_LABELS = Object.fromEntries((SLOTS.find((s) => s.key === "bands")?.parts || []).map((p) => [p.value, p.label]));
 
 const BOTTOM_SLOTS = [
   { key: "trouserWaist", label: "Waist", parts: [{ value: "band", label: "Waistband", hint: "Fitted band with belt loops, darts and a fly" }, { value: "elastic", label: "Elastic", hint: "Pull-on with elastic and drawstring" }] },
@@ -225,7 +229,7 @@ function currentPart(slotKey, value) {
     case "collar": return value.collarEnabled ? value.collarStyle : value.neckline === "v_neck" ? "v_neck" : "none";
     case "trim": return value.trim;
     case "bands": return value.motifs;
-    case "pattern": return value.pattern;
+    case "pattern": return value.pattern || "solid";
     case "front": return value.frontStyle;
     case "back": return value.backStyle;
     case "hem": return value.hemStyle;
@@ -282,6 +286,8 @@ function previewPayload(garmentType, value, size, accessories) {
   }
   const payload = {
     gender: value.gender,
+    fit: value.fit || "",
+    sleevePlacket: value.sleevePlacket || "",
     sleeveStyle: value.sleeveStyle,
     sleeveFabric: value.sleeveFabric,
     colorBlock: value.colorBlock === "none" ? "" : value.colorBlock,
@@ -294,6 +300,8 @@ function previewPayload(garmentType, value, size, accessories) {
     panel: value.motifs.includes("side") ? "side" : "none",
     motifs: value.motifs.filter((m) => m !== "side"),
     pattern: value.pattern,
+    // Only the bands that are on keep their own pattern.
+    motifPatterns: Object.fromEntries(Object.entries(value.motifPatterns || {}).filter(([band]) => value.motifs?.includes(band))),
     sizes: [size],
     accessories,
   };
@@ -346,14 +354,79 @@ function startExtraDrag(e, extra) {
   e.dataTransfer.effectAllowed = "copy";
 }
 
+// How roomy a shirt is round the chest, on top of the size chart's ease —
+// konveksi pick it per design ("medium fit"), not per person.
+const FITS = [
+  { value: "", label: "As chart", hint: "Only the size chart's wearing ease" },
+  { value: "regular", label: "Regular", hint: "+6 cm: a quarter of the chest + 3 cm a panel, the usual kemeja fit" },
+  { value: "loose", label: "Loose", hint: "+14 cm: the Bunka shirt block, half the chest + 10 cm" },
+];
+
+const LIVE_KEYS = ["chest", "length", "shoulder", "sleeve"];
+
+// How the opening above a cuff is finished.
+const SLEEVE_OPENINGS = [
+  { value: "", label: "Pointed placket", hint: "Tower placket with a point, as the shop makes kemeja" },
+  { value: "bound", label: "Bound slit", hint: "A narrow strip binding the slit; quicker to sew" },
+];
+
+// The shirt's Fit, and what the drafted size comes out at: the finished
+// measurements a size chart lists, and whether its seams all check out.
+function FitPicker({ value, onChange, summary, sizeLabel }) {
+  const shown = (summary?.finished || []).filter((f) => LIVE_KEYS.includes(f.key));
+  const checks = summary?.checks || [];
+  const failing = checks.filter((c) => !c.ok);
+  return (
+    <div className="pm-slot">
+      <div className="pm-slot-title">Fit</div>
+      <div className="pm-fit-chips" role="radiogroup" aria-label="Fit">
+        {FITS.map((f) => (
+          <button
+            type="button"
+            key={f.value || "chart"}
+            role="radio"
+            aria-checked={value === f.value}
+            className={`pm-ref-chip${value === f.value ? " pm-ref-chip-on" : ""}`}
+            onClick={() => onChange(f.value)}
+            title={f.hint}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
+      {shown.length > 0 && (
+        <div className="pm-live">
+          <div className="pm-live-head">Finished size {sizeLabel}</div>
+          <dl className="pm-live-grid">
+            {shown.map((f) => (
+              <div key={f.key} title={f.local}>
+                <dt>{f.label.replace(", shoulder to hem", "")}</dt>
+                <dd>{f.cm.toFixed(1)}</dd>
+              </div>
+            ))}
+          </dl>
+          {checks.length > 0 && (
+            <p className={`pm-live-checks ${failing.length ? "is-bad" : "is-ok"}`}>
+              {failing.length ? `${failing.length} of ${checks.length} seam checks fail: ${failing[0].label.toLowerCase()}` : `All ${checks.length} seam checks pass`}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function PatternMaker({ orderId, garmentType, sizes, value, onChange, dartPositions, accessories = [], onAddAccessory, onRemoveAccessory, onUpdateAccessory, onMirrorAccessory, onDragAccessory, colorHint, onColorHint, fabricColors, fabrics, fabricName, onFabricPick, referencePhoto, onReferencePhoto }) {
   const [pieces, setPieces] = useState(null);
+  const [liveSummary, setLiveSummary] = useState(null); // the previewed size's finished measurements and seam checks
   const [error, setError] = useState(null);
   const [dragging, setDragging] = useState(null); // { slot, value }
   const [over, setOver] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [viewMode, setViewMode] = useState("both"); // both | front | back
   const [zoom, setZoom] = useState(100);
+  // Which band the Motif pattern tiles set: "all", or one band's own pattern.
+  const [patternTarget, setPatternTarget] = useState("all");
   const [partsOpen, setPartsOpen] = useState(true);
   const [photo, setPhoto] = useState(referencePhoto ? { url: referencePhoto } : null); // the reference photo: { url }, kept with the order
   const [photoResult, setPhotoResult] = useState(null); // what a reader made of it
@@ -381,6 +454,7 @@ export default function PatternMaker({ orderId, garmentType, sizes, value, onCha
         const res = await api.previewPieces(orderId, JSON.parse(request));
         if (mine !== seq.current) return; // a newer change is already in flight
         setPieces(res.pieces[size.label] || Object.values(res.pieces)[0] || null);
+        setLiveSummary(res.summaries?.[size.label] || Object.values(res.summaries || {})[0] || null);
         setError(null);
       } catch (e) {
         if (mine === seq.current) setError(e.message);
@@ -396,7 +470,15 @@ export default function PatternMaker({ orderId, garmentType, sizes, value, onCha
       let next = has ? value.motifs.filter((m) => m !== part) : [...value.motifs, part];
       if (!has && part === "centre") next = next.filter((m) => m !== "double");
       if (!has && part === "double") next = next.filter((m) => m !== "centre");
-      onChange({ motifs: next });
+      const kept = Object.fromEntries(Object.entries(value.motifPatterns || {}).filter(([band]) => next.includes(band)));
+      onChange({ motifs: next, motifPatterns: kept });
+      if (!next.includes(patternTarget)) setPatternTarget("all");
+      return;
+    }
+    if (slotKey === "pattern") {
+      // One pattern for every band, or just the band picked above the tiles.
+      if (patternTarget === "all") onChange({ pattern: part, motifPatterns: {} });
+      else onChange({ motifPatterns: { ...(value.motifPatterns || {}), [patternTarget]: part } });
       return;
     }
     onChange(patchFor(slotKey, part));
@@ -511,12 +593,50 @@ export default function PatternMaker({ orderId, garmentType, sizes, value, onCha
   return (
     <div className={`pattern-maker${partsOpen ? "" : " pattern-maker-wide"}`}>
       {partsOpen && <div className="pm-palette">
+        {!isBottoms(garmentType) && !isSkirt(garmentType) && !isMerch(garmentType) && (
+          <FitPicker value={value.fit || ""} onChange={(fit) => onChange({ fit })} summary={liveSummary} sizeLabel={size?.label} />
+        )}
+        {!isBottoms(garmentType) && !isSkirt(garmentType) && !isMerch(garmentType) && garmentType !== "polo_shirt" && value.sleeveStyle !== "half" && (
+          <div className="pm-slot">
+            <div className="pm-slot-title">Sleeve opening</div>
+            <div className="pm-fit-chips" role="radiogroup" aria-label="Sleeve opening">
+              {SLEEVE_OPENINGS.map((o) => {
+                const on = (value.sleevePlacket || "") === o.value;
+                return (
+                  <button type="button" key={o.value || "tower"} role="radio" aria-checked={on} className={`pm-ref-chip${on ? " pm-ref-chip-on" : ""}`} onClick={() => onChange({ sleevePlacket: o.value })} title={o.hint}>
+                    {o.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
         {slots.map((slot) => (
           <div key={slot.key} className="pm-slot">
             <div className="pm-slot-title">{slot.label}</div>
             <div className="pm-parts">
+              {slot.key === "pattern" && value.motifs.length > 1 && (
+                <div className="pm-pattern-targets" role="group" aria-label="Apply the pattern to">
+                  {["all", ...value.motifs].map((band) => {
+                    const label = band === "all" ? "All bands" : BAND_LABELS[band] || band;
+                    const own = band !== "all" && value.motifPatterns?.[band];
+                    return (
+                      <button
+                        type="button"
+                        key={band}
+                        className={`pm-ref-chip${patternTarget === band ? " pm-ref-chip-on" : ""}`}
+                        onClick={() => setPatternTarget(band)}
+                        title={band === "all" ? "Pick one pattern for every band" : `Pick a pattern for the ${label.toLowerCase()} only`}
+                      >
+                        {label}
+                        {own ? ` · ${MOTIF_PATTERNS.find((p) => p.value === own)?.label || own}` : ""}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
               {slot.parts.map((part) => {
-                const current = currentPart(slot.key, value);
+                const current = slot.key === "pattern" && patternTarget !== "all" ? value.motifPatterns?.[patternTarget] || value.pattern || "solid" : currentPart(slot.key, value);
                 const active = Array.isArray(current) ? current.includes(part.value) : current === part.value;
                 return (
                   <button
@@ -704,7 +824,7 @@ export default function PatternMaker({ orderId, garmentType, sizes, value, onCha
                       <button type="button" className="pm-tool" onClick={() => onMirrorAccessory(a.id)} title="Add a matching one on the other side">Copy to other side</button>
                     )}
                     {/sleeve/.test(a.segment) && (
-                      <button type="button" className="pm-tool" onClick={() => onUpdateAccessory?.(a.id, { rotation: sleeveAlignment(a.segment, a.view) })} title="Turn it to follow the arm">Fit sleeve</button>
+                      <button type="button" className="pm-tool" onClick={() => onUpdateAccessory?.(a.id, { rotation: sleeveAlignment(a.segment, a.view, value.sleeveStyle) })} title="Turn it to follow the arm">Fit sleeve</button>
                     )}
                   </div>
                   <div className="pm-extra-row">

@@ -1,3 +1,5 @@
+import { pieceLabel } from "../lib/layoutLabels.js";
+
 const MARGIN = 34;
 const MAX_RENDER_WIDTH = 680;
 
@@ -106,20 +108,33 @@ export default function LayoutCanvas({ result }) {
                   />
                 </g>
               )}
-              {p.origWidth > 12 && p.origHeight > 8 && (
-                <text
-                  x={2}
-                  y={6}
-                  fontSize={3.2}
-                  fontWeight="600"
-                  fontFamily="Space Grotesk, sans-serif"
-                  fill="#23272A"
-                >
-                  {p.name}
-                </text>
-              )}
             </g>
           ))}
+          {/* Labels on top of every piece, upright and centred, so a turned
+              piece's name isn't upside down or spilling onto its neighbours. */}
+          {placed.map((p, i) => {
+            const l = pieceLabel(p);
+            if (!l) return null;
+            return (
+              <text
+                key={`label-${i}`}
+                x={l.x}
+                y={l.y}
+                transform={l.rotate ? `rotate(${l.rotate} ${l.x} ${l.y})` : undefined}
+                fontSize={l.size}
+                fontWeight="600"
+                fontFamily="Space Grotesk, sans-serif"
+                textAnchor="middle"
+                dominantBaseline="middle"
+                fill="#23272A"
+                stroke={p.color}
+                strokeWidth={l.size * 0.28}
+                paintOrder="stroke"
+              >
+                {l.text}
+              </text>
+            );
+          })}
         </g>
       </svg>
     </div>
