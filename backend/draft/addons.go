@@ -74,6 +74,15 @@ type Accessory struct {
 	// konveksi work). Only meaningful for a pocket; embroidery and sablon
 	// are printed onto whatever fabric is already there.
 	Fabric string `json:"fabric,omitempty"`
+	// Image is the artwork of an embroidery or sablon: the id the artwork
+	// store gave the uploaded picture ("" leaves the print a placeholder box).
+	// Width and Height are the printed size, in the picture's proportions.
+	Image string `json:"image,omitempty"`
+	// InkColors are the artwork's main colours as hex, one screen (sablon) or
+	// one thread (embroidery) each. FullColour marks artwork with too many to
+	// count, a photo say, which is printed digitally (DTF) instead of screened.
+	InkColors  []string `json:"inkColors,omitempty"`
+	FullColour bool     `json:"fullColour,omitempty"`
 }
 
 // Position is a fraction (0-1) of a parent piece's own width/height —

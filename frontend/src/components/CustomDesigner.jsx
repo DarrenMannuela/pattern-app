@@ -20,6 +20,8 @@ export default function CustomDesigner({ design, image, onDesign, onImage }) {
   const svgRef = useRef(null);
   const wrapRef = useRef(null);
   const history = useRef([]);
+  // How many steps can be undone, kept in state so the Undo button updates.
+  const [undoCount, setUndoCount] = useState(0);
   const [mode, setMode] = useState("edit"); // edit | draw | scale | split
   const [draftPts, setDraftPts] = useState([]);
   const [cursor, setCursor] = useState(null);
@@ -40,9 +42,14 @@ export default function CustomDesigner({ design, image, onDesign, onImage }) {
 
   const sel = d.pieces.find((p) => p.id === selected) || null;
 
-  function commit(next) {
-    history.current.push(d);
+  // Keeps a design to go back to (the last 40).
+  function remember(snapshot) {
+    history.current.push(snapshot);
     if (history.current.length > 40) history.current.shift();
+    setUndoCount(history.current.length);
+  }
+  function commit(next) {
+    remember(d);
     onDesign(next);
   }
   function replacePiece(id, patch) {
@@ -50,6 +57,7 @@ export default function CustomDesigner({ design, image, onDesign, onImage }) {
   }
   function undo() {
     const prev = history.current.pop();
+    setUndoCount(history.current.length);
     if (prev) onDesign(prev);
   }
 
@@ -177,7 +185,7 @@ export default function CustomDesigner({ design, image, onDesign, onImage }) {
       if (!moved && Math.hypot(ev.clientX - start.x, ev.clientY - start.y) < 3) return;
       if (!moved) {
         moved = true;
-        history.current.push(snap);
+        remember(snap);
       }
       const p = toWorld(ev);
       snap = { ...snap, pieces: snap.pieces.map((q) => (q.id === piece.id ? { ...q, points: q.points.map((pt, i) => (i === idx ? { ...pt, x: p.x, y: p.y } : pt)) } : q)) };
@@ -220,7 +228,7 @@ export default function CustomDesigner({ design, image, onDesign, onImage }) {
     setBusy(true);
     try {
       const { dataUrl, width, height } = await fileToDataUrl(file);
-      history.current.push(d);
+      remember(d);
       onImage(dataUrl);
       // A new picture starts 60cm wide until its scale is set.
       onDesign({ ...d, imgW: width, imgH: height, scale: width / 60 });
@@ -263,7 +271,7 @@ export default function CustomDesigner({ design, image, onDesign, onImage }) {
               <input type="file" accept="image/*" onChange={onUpload} hidden />
             </label>
             {image && (
-              <button type="button" className="link-btn link-btn-danger" onClick={() => { history.current.push(d); onImage(""); onDesign({ ...d, scale: 0, imgW: 0, imgH: 0 }); }}>
+              <button type="button" className="link-btn link-btn-danger" onClick={() => { remember(d); onImage(""); onDesign({ ...d, scale: 0, imgW: 0, imgH: 0 }); }}>
                 Remove
               </button>
             )}
@@ -306,7 +314,7 @@ export default function CustomDesigner({ design, image, onDesign, onImage }) {
             <button type="button" className={`btn-add btn-inline${mode === "split" ? " cd-on" : ""}`} disabled={!sel} onClick={() => { cancelTool(); setMode("split"); setMsg("Click two points on the selected piece\u2019s outline: it is cut along the straight line between them. Add points along the cut afterwards if it needs to curve."); }}>
               Split with a line
             </button>
-            <button type="button" className="btn-add btn-inline" onClick={undo} disabled={history.current.length === 0}>
+            <button type="button" className="btn-add btn-inline" onClick={undo} disabled={undoCount === 0}>
               Undo
             </button>
           </div>

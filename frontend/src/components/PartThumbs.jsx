@@ -87,6 +87,10 @@ const cache = new Map();
 // Fetches (and remembers) the drafted pieces behind every tile in `parts`.
 export function usePartThumbs(orderId, size, parts, garmentType, base) {
   const [, bump] = useState(0);
+  // Tiles whose drawing failed (the server restarting, a dropped connection)
+  // are tried again, a few times, 5 seconds apart, instead of staying blank
+  // until the page is reloaded.
+  const [attempt, setAttempt] = useState(0);
   const key = size ? JSON.stringify(size.measurements) : "";
   const baseKey = base ? JSON.stringify(base) : "";
   // Slots come and go as other choices change (a V-neck adds Front and Trim tiles).
@@ -94,7 +98,9 @@ export function usePartThumbs(orderId, size, parts, garmentType, base) {
   useEffect(() => {
     if (!size) return undefined;
     let cancelled = false;
+    let retry;
     (async () => {
+      let failed = 0;
       for (const { slot, value } of parts) {
         const o = optionsFor(slot, value, base);
         const id = `${garmentType}|${key}|${JSON.stringify(o)}`;
@@ -103,17 +109,19 @@ export function usePartThumbs(orderId, size, parts, garmentType, base) {
           const res = await api.previewPieces(orderId, payloadFor(o, size, garmentType));
           cache.set(id, { pieces: res.pieces[size.label] || Object.values(res.pieces)[0], options: o });
         } catch {
-          cache.set(id, null);
+          failed++; // not remembered: tried again below
         }
         if (cancelled) return;
         bump((n) => n + 1);
       }
+      if (failed && attempt < 3) retry = setTimeout(() => setAttempt((a) => a + 1), 5000);
     })();
     return () => {
       cancelled = true;
+      clearTimeout(retry);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orderId, key, garmentType, baseKey, partsKey]);
+  }, [orderId, key, garmentType, baseKey, partsKey, attempt]);
   return (slot, value) => cache.get(`${garmentType}|${key}|${JSON.stringify(optionsFor(slot, value, base))}`);
 }
 
@@ -219,6 +227,12 @@ export function ExtraThumb({ kind }) {
       {kind === "embroidery" ? (
         <>
           <path d="M5 14 L5 6 L15 6 L15 14 M5 10 L13 10" fill="none" stroke="#f0d98a" strokeWidth="1.4" strokeDasharray="1.6 1" />
+        </>
+      ) : kind === "logo" ? (
+        // A picture going up onto the cloth: an upload arrow in a dashed frame.
+        <>
+          <rect x="4.5" y="4.5" width="11" height="11" rx="2" fill="none" stroke="#f4f5f3" strokeWidth="0.9" strokeDasharray="1.5 1" />
+          <path d="M10 13.2 V7.4 M7.5 9.8 L10 7.2 L12.5 9.8" fill="none" stroke="#f4f5f3" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
         </>
       ) : (
         <>

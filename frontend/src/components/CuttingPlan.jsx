@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { api } from "../api";
 import LayoutCanvas from "./Canvas";
-import { COMPARE_WIDTHS, DEFAULT_PLAN_FORM, TUBE_WIDTHS, compareActual, metres, planRequest, ratioText, rupiah } from "../lib/cutPlan.js";
+import { COMPARE_WIDTHS, DEFAULT_PLAN_FORM, SAI_ROLL, TUBE_WIDTHS, compareActual, metres, planRequest, ratioText, rollsText, rupiah } from "../lib/cutPlan.js";
+import { fabricLabel } from "../lib/fabricCatalog.js";
 import { formatElapsed, useElapsed } from "../lib/useElapsed.js";
 import { fabricName } from "../lib/fabricKeys.js";
 
@@ -103,8 +104,11 @@ function ActualCut({ actual, onSave, plan, reservePercent, onPlanAtWidth }) {
   );
 }
 
-export default function CuttingPlan({ orderId, version, actualFabric, onSaveActual }) {
-  const [form, setForm] = useState(DEFAULT_PLAN_FORM);
+export default function CuttingPlan({ orderId, version, actualFabric, onSaveActual, fabric }) {
+  // The order's fabric gives the roll; without one, SAI's standard roll.
+  const roll = fabric?.widthCm ? { widthCm: fabric.widthCm, yards: fabric.rollYards || SAI_ROLL.yards } : SAI_ROLL;
+  const [form, setForm] = useState(() => ({ ...DEFAULT_PLAN_FORM, fabricWidth: String(roll.widthCm) }));
+  const onRoll = !form.tubular && Number(String(form.fabricWidth).replace(",", ".")) === roll.widthCm;
   const [more, setMore] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
@@ -144,9 +148,23 @@ export default function CuttingPlan({ orderId, version, actualFabric, onSaveActu
         (a nested layout of a few garments). Pieces of different sizes fill each other's gaps, so mixed markers
         usually use less cloth. Worked out from revision v{version}'s own pieces and its saved quantities.
       </p>
+      <p className="note cutplan-roll">
+        {fabric?.widthCm ? (
+          <>Roll: <b>{fabricLabel(fabric)}</b>, SAI {fabric.widthCm} cm × {roll.yards} yd{fabric.widthListed ? "" : " (SAI's usual roll; check it against the catalogue)"}.</>
+        ) : (
+          <>Roll: SAI's standard {SAI_ROLL.widthCm} cm × {SAI_ROLL.yards} yd. Choose the order's fabric to use its own roll.</>
+        )}
+      </p>
 
       <div className="cutplan-form">
-        <Field label="Fabric width (cm)" hint="The usable width of the roll, less its selvedges.">
+        <Field
+          label="Fabric width (cm)"
+          hint={
+            fabric?.widthCm
+              ? `${fabricLabel(fabric)}: SAI roll ${fabric.widthCm} cm × ${roll.yards} yd${fabric.widthListed ? "" : " (SAI's usual roll; check the catalogue)"}.`
+              : `SAI's standard roll: ${SAI_ROLL.widthCm} cm × ${SAI_ROLL.yards} yd. Choose the order's fabric to use its own roll.`
+          }
+        >
           <input type="text" inputMode="decimal" value={form.fabricWidth} onChange={set("fabricWidth")} />
         </Field>
         <Field label="Plies per lay" hint="The tallest stack your cutting machine takes. Usually 50 to 100.">
@@ -250,6 +268,7 @@ export default function CuttingPlan({ orderId, version, actualFabric, onSaveActu
                   <b>{metres(plan.buyMeters)}</b>
                   <span>
                     {plan.tubular ? "of tube " : ""}to buy ({metres(plan.meters)} cut + reserve)
+                    {onRoll && plan.fabric === "main" && <><br />{rollsText(plan.buyMeters, roll.yards)}</>}
                   </span>
                 </div>
                 <div className="cutplan-stat">

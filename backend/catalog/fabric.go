@@ -29,6 +29,12 @@ type Fabric struct {
 	// SourceURL is the supplier's own product page, for checking current
 	// colours/pricing — this list is a fixed reference, not live stock.
 	SourceURL string `json:"sourceUrl,omitempty"`
+	// WidthCm is the roll's width and RollYards its length, for the cutting
+	// layout. WidthListed is true when a seller lists that width for this
+	// fabric; otherwise it's the supplier's usual roll, to be checked.
+	WidthCm     float64 `json:"widthCm,omitempty"`
+	RollYards   float64 `json:"rollYards,omitempty"`
+	WidthListed bool    `json:"widthListed,omitempty"`
 }
 
 // Fabrics lists the fabrics most commonly used for Indonesian
@@ -221,6 +227,28 @@ var fabricCatalogEntries = []Fabric{
 	},
 }
 
+// SAI's woven uniform fabrics come 150 cm (59") wide in rolls of about 30
+// yards. Sellers list that width for these (Tokopedia, bahankain.com, 2026);
+// the rest are taken to be the same until checked against the catalogue.
+const (
+	saiWidthCm   = 150
+	saiRollYards = 30
+)
+
+var saiWidthListed = map[string]bool{
+	"Verlando CP American Drill": true,
+	"Verlando Basic":             true,
+	"Verlando Japan Drill":       true,
+	"Verlando Gabardine Deluxe":  true,
+	"Maryland Tropical Deluxe":   true,
+	"Venhouston USA Drill":       true,
+}
+
 func init() {
+	for i := range fabricCatalogEntries {
+		f := &fabricCatalogEntries[i]
+		f.WidthCm, f.RollYards = saiWidthCm, saiRollYards
+		f.WidthListed = saiWidthListed[f.Brand+" "+f.Name]
+	}
 	Fabrics = append(Fabrics, fabricCatalogEntries...)
 }

@@ -1,0 +1,5 @@
+# Data and local files never go into the image.
+orders.json
+orders.json.*
+uploads/
+*.log

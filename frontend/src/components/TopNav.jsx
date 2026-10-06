@@ -16,7 +16,7 @@ export default function TopNav({ tab, setTab }) {
           className={tab === "layout" ? "tab active" : "tab"}
           onClick={() => setTab("layout")}
         >
-          Cutting Layout
+          Cutting<span className="phone-hide"> Layout</span>
         </button>
       </div>
     </nav>

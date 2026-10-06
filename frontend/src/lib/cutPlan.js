@@ -20,6 +20,23 @@ export const DEFAULT_PLAN_FORM = {
   gsm: "",
 };
 
+// SAI (Sumber Agung Internusa), the shop's supplier, sells its uniform fabrics
+// 150 cm wide in rolls of about 30 yards: the plan's standard unless the
+// order's fabric says otherwise.
+export const SAI_ROLL = { widthCm: 150, yards: 30 };
+const YARD_M = 0.9144;
+
+/** A length in metres as whole rolls plus what's left: "1 roll of 30 yd + 1.1 m". */
+export function rollsText(meters, yards = SAI_ROLL.yards) {
+  if (!meters || !yards) return "";
+  const rollM = yards * YARD_M;
+  const full = Math.floor(meters / rollM + 1e-9);
+  const rest = meters - full * rollM;
+  const rolls = (n) => `${n} roll${n === 1 ? "" : "s"} of ${yards} yd`;
+  if (full === 0) return `less than a roll (${rolls(1)} = ${rollM.toFixed(1)} m)`;
+  return rest < 0.05 ? rolls(full) : `${rolls(full)} + ${rest.toFixed(1)} m`;
+}
+
 // Widths the fabric is commonly sold in, in cm, for the comparison.
 export const COMPARE_WIDTHS = [110, 115, 120, 140, 150, 160];
 // Knit tubes are sold by their width laid flat, in inches: 36" to 46".

@@ -98,11 +98,12 @@ func polyPiece(name string, poly []point) Piece {
 	}
 }
 
-// Where the insert panel sits across the front half, as shares of its width
-// from center front.
+// Where the insert panel sits, as on the shop's uniform: a straight strip from
+// the shoulder to the hem, about a third of the front wide, with body fabric
+// left between it and the armhole all the way down.
 const (
-	panelFrom = 0.47
-	panelTo   = 0.88
+	panelShare = 0.33 // its width, as a share of the front at the underarm
+	panelClear = 2.0  // cm of body between it and the armhole's deepest point
 )
 
 // insertPanelPieces splits a front half into the part between center front
@@ -113,11 +114,23 @@ func insertPanelPieces(front Piece) (inner, panel, outer *Piece) {
 	if len(poly) < 3 {
 		return
 	}
-	w := 0.0
+	neck, tip, under := front.Landmarks["neckPoint"], front.Landmarks["shoulderTip"], front.Landmarks["underarm"]
+	lo, hi := poly[0].x, poly[0].x
+	armIn := math.Inf(1) // the armhole's deepest point
 	for _, p := range poly {
-		w = math.Max(w, p.x)
+		lo, hi = math.Min(lo, p.x), math.Max(hi, p.x)
+		if p.y > tip.Y && p.y < under.Y && p.x > neck.X {
+			armIn = math.Min(armIn, p.x)
+		}
 	}
-	a, b := w*panelFrom, w*panelTo
+	if math.IsInf(armIn, 1) || under.X <= 0 {
+		return
+	}
+	b := armIn - panelClear
+	a := math.Max(b-under.X*panelShare, neck.X+1) // never into the collar seam
+	if b-a < 3 {
+		return
+	}
 	build := func(name string, lo, hi float64, note string) *Piece {
 		part := clipX(poly, lo, hi)
 		if part == nil {
@@ -127,12 +140,12 @@ func insertPanelPieces(front Piece) (inner, panel, outer *Piece) {
 		pc.Notes = note
 		return &pc
 	}
-	inner = build("Front inner (panel side)", -1, a, "Cut 1. The front's center-front side on the side that carries the insert panel; join it to the panel along the cut line.")
+	inner = build("Front inner (panel side)", lo-1, a, "Cut 1. The front's center-front side on the side that carries the insert panel; join it to the panel along the cut line.")
 	panel = build("Insert panel", a, b, "Cut 1 in the contrast (batik or printed) fabric. It sits between the two front pieces of that side, shoulder to hem.")
 	if panel != nil {
 		panel.Fabric = "contrast"
 	}
-	outer = build("Front outer (panel side)", b, w+1, "Cut 1. The armhole side of the front on the side that carries the insert panel.")
+	outer = build("Front outer (panel side)", b, hi+1, "Cut 1. The armhole side of the front on the side that carries the insert panel.")
 	return
 }
 

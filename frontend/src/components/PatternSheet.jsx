@@ -1,7 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
-import { api } from "../api";
+import { Fragment, useEffect, useId, useMemo, useState } from "react";
+import { api, artworkUrl } from "../api";
+import { inkSummary } from "../lib/artworkImage.js";
+import { printMarks } from "../lib/printMarks.js";
 import FlatDrawing from "./FlatDrawing.jsx";
-import { layoutGarmentViews } from "../lib/garmentFlat.js";
+import CutoutsPanel from "./CutoutsPanel.jsx";
+import { foldOutline, layoutGarmentViews } from "../lib/garmentFlat.js";
 import { GARMENT_LABELS } from "../lib/garmentTypes.js";
 import { measurementFieldsFor } from "../lib/measurementFields.js";
 import { fabricLabel } from "../lib/fabricCatalog.js";
@@ -11,15 +14,61 @@ const PIECE_SCALE = 2.4; // px per cm for the pattern pieces, the same for all s
 const NEST_SCALE = 2.2;
 const INK = "#1d1d1f";
 
+const SIDE_NOTE = { left: "left piece only", right: "right piece only", fold: "centred on the fold", centre: "centred on the centre line" };
+
+// A logo marked on the piece it is printed on: its area dashed, a centre
+// cross to line the screen or hoop up with, and what it is underneath. The
+// mark is in the drawing's own coordinates (see SheetPiece).
+function LogoMark({ mark: m, clipId, foldAt = null }) {
+  const cx = m.x + m.width / 2;
+  const cy = m.y + m.height / 2;
+  const what = `${m.type === "sablon" ? "Sablon" : "Embroidery"} ${+m.width.toFixed(1)} × ${+m.height.toFixed(1)} cm`;
+  // A logo across the fold is labelled from the fold out, so the words stay on the piece.
+  const labelX = foldAt !== null ? foldAt + 2.8 : cx;
+  return (
+    <g>
+      <g clipPath={`url(#${clipId})`}>
+        <g transform={m.rotation ? `rotate(${m.rotation} ${cx} ${cy})` : undefined}>
+          {m.image && <image href={artworkUrl(m.image)} x={m.x} y={m.y} width={m.width} height={m.height} opacity={0.6} preserveAspectRatio="xMidYMid meet" />}
+          {!m.image && m.label && (
+            <text x={cx} y={cy} fontSize={Math.min(2.2, m.height * 0.6)} textAnchor="middle" dominantBaseline="central" fill={INK} opacity={0.75}>
+              {m.label}
+            </text>
+          )}
+          <rect x={m.x} y={m.y} width={m.width} height={m.height} fill="none" stroke={INK} strokeWidth={0.22} strokeDasharray="0.8,0.5" />
+          <path d={`M ${cx - 0.9} ${cy} H ${cx + 0.9} M ${cx} ${cy - 0.9} V ${cy + 0.9}`} stroke={INK} strokeWidth={0.18} />
+        </g>
+      </g>
+      <text x={labelX} y={m.y + m.height + 2.4} fontSize={2} textAnchor={foldAt !== null ? "start" : "middle"} fill={INK}>
+        {what}
+        {SIDE_NOTE[m.side] && (
+          <tspan x={labelX} dy={2.3}>
+            {SIDE_NOTE[m.side]}
+          </tspan>
+        )}
+      </text>
+    </g>
+  );
+}
+
 // One pattern piece as a cutting room reads it: the cutting line solid, the
-// sewing line dashed inside it, the grainline, the fold, its name and count.
-function SheetPiece({ piece }) {
+// sewing line dashed inside it, the grainline, the fold, its name and count,
+// and any logo printed on it. mirror draws the other piece of a pair (the
+// right front, say), for the logos that go on that one; a logo itself is
+// never drawn mirrored.
+function SheetPiece({ piece, marks = [], mirror = false, side }) {
+  const clipId = `piece${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
   const cw = piece.cutWidth || piece.width;
   const ch = piece.cutHeight || piece.height;
   const off = piece.cutOffset || { x: 0, y: 0 };
   const pad = 3;
   const g = piece.grainline;
-  const fold = piece.foldEdge === "left";
+  // A half cut as one whole piece (the shop's back): drawn whole, no fold.
+  const whole = !!piece.cutFull;
+  const fold = piece.foldEdge === "left" && !whole;
+  // Its sewing line without the edge that was the fold, drawn on both sides.
+  const sewing = whole ? foldOutline(piece.pathData) || piece.pathData : piece.pathData;
+  const mirrorWhole = `translate(${cw} 0) scale(-1 1) translate(${off.x} ${off.y})`;
   // The fold is the cut piece's left edge (no allowance there); a back pleat
   // puts it left of the sewing line's x = 0.
   const foldX = -off.x;
@@ -28,37 +77,68 @@ function SheetPiece({ piece }) {
     const p = (d, s) => [x + Math.cos(a) * d + Math.cos(a + s) * 0.9, y + Math.sin(a) * d + Math.sin(a + s) * 0.9];
     return `${x},${y} ${p(1.8, 2.6).join(",")} ${p(1.8, -2.6).join(",")}`;
   };
+  const flip = mirror ? `translate(${cw} 0) scale(-1 1)` : "";
+  // Marks come in the piece's sewing-line coordinates; the drawing is in cut
+  // coordinates, mirrored for the other piece of a pair.
+  const placed = marks.map((m) => ({
+    ...m,
+    x: whole ? cw / 2 + (m.fullX ?? m.x) : mirror ? cw - (m.x + off.x) - m.width : m.x + off.x,
+    y: m.y + off.y,
+    side: whole && m.side === "fold" ? "centre" : m.side,
+    rotation: whole ? m.fullRotation ?? m.rotation : mirror ? -m.rotation : m.rotation,
+  }));
   return (
     <figure className="sheet-piece">
       <svg viewBox={`${-pad} ${-pad} ${cw + pad * 2} ${ch + pad * 2}`} width={(cw + pad * 2) * PIECE_SCALE} height={(ch + pad * 2) * PIECE_SCALE}>
-        <path d={piece.cutPathData || piece.pathData} fill={piece.fabric === "contrast" ? "#eef0f3" : "#fff"} stroke={INK} strokeWidth={0.35} />
-        <g transform={`translate(${off.x} ${off.y})`}>
-          {piece.cutPathData && <path d={piece.pathData} fill="none" stroke={INK} strokeWidth={0.18} strokeDasharray="0.9,0.6" />}
-          {(piece.darts || []).map((dart, i) => (
-            <polyline key={`dart-${i}`} points={dart.map((p) => `${p.x},${p.y}`).join(" ")} fill="none" stroke={INK} strokeWidth={0.22} />
-          ))}
-          {fold && (
-            <g stroke={INK} strokeWidth={0.22} fill="none">
-              <line x1={foldX + 1.4} y1={piece.height * 0.25} x2={foldX + 1.4} y2={piece.height * 0.75} />
-              <line x1={foldX} y1={piece.height * 0.25} x2={foldX + 1.4} y2={piece.height * 0.25} />
-              <line x1={foldX} y1={piece.height * 0.75} x2={foldX + 1.4} y2={piece.height * 0.75} />
-              <text x={foldX + 2.2} y={piece.height * 0.5} fontSize={2.2} fill={INK} stroke="none" transform={`rotate(90 ${foldX + 2.2} ${piece.height * 0.5})`} textAnchor="middle">
-                FOLD
-              </text>
-            </g>
-          )}
-          {g && (
-            <g stroke={INK} strokeWidth={0.25} fill={INK}>
-              <line x1={g[0]} y1={g[1]} x2={g[2]} y2={g[3]} />
-              <polygon points={arrow(g[0], g[1], g[2], g[3])} stroke="none" />
-              <polygon points={arrow(g[2], g[3], g[0], g[1])} stroke="none" />
+        <g transform={flip || undefined}>
+          <path d={piece.cutPathData || piece.pathData} fill={piece.fabric === "contrast" ? "#eef0f3" : "#fff"} stroke={INK} strokeWidth={0.35} />
+          <g transform={`translate(${off.x} ${off.y})`}>
+            {piece.cutPathData && <path d={sewing} fill="none" stroke={INK} strokeWidth={0.18} strokeDasharray="0.9,0.6" />}
+            {(piece.darts || []).map((dart, i) => (
+              <polyline key={`dart-${i}`} points={dart.map((p) => `${p.x},${p.y}`).join(" ")} fill="none" stroke={INK} strokeWidth={0.22} />
+            ))}
+            {fold && (
+              <g stroke={INK} strokeWidth={0.22} fill="none">
+                <line x1={foldX + 1.4} y1={piece.height * 0.25} x2={foldX + 1.4} y2={piece.height * 0.75} />
+                <line x1={foldX} y1={piece.height * 0.25} x2={foldX + 1.4} y2={piece.height * 0.25} />
+                <line x1={foldX} y1={piece.height * 0.75} x2={foldX + 1.4} y2={piece.height * 0.75} />
+                <text x={foldX + 2.2} y={piece.height * 0.5} fontSize={2.2} fill={INK} stroke="none" transform={`rotate(90 ${foldX + 2.2} ${piece.height * 0.5})`} textAnchor="middle">
+                  FOLD
+                </text>
+              </g>
+            )}
+            {g && (
+              <g stroke={INK} strokeWidth={0.25} fill={INK}>
+                <line x1={g[0]} y1={g[1]} x2={g[2]} y2={g[3]} />
+                <polygon points={arrow(g[0], g[1], g[2], g[3])} stroke="none" />
+                <polygon points={arrow(g[2], g[3], g[0], g[1])} stroke="none" />
+              </g>
+            )}
+          </g>
+          {whole && piece.cutPathData && (
+            <g transform={mirrorWhole}>
+              <path d={sewing} fill="none" stroke={INK} strokeWidth={0.18} strokeDasharray="0.9,0.6" />
+              {(piece.darts || []).map((dart, i) => (
+                <polyline key={`mdart-${i}`} points={dart.map((p) => `${p.x},${p.y}`).join(" ")} fill="none" stroke={INK} strokeWidth={0.22} />
+              ))}
             </g>
           )}
         </g>
+        {placed.length > 0 && (
+          <clipPath id={clipId}>
+            {whole ? <path d={piece.cutPathData || piece.pathData} /> : <path d={piece.pathData} transform={`${flip} translate(${off.x} ${off.y})`} />}
+          </clipPath>
+        )}
+        {placed.map((m) => (
+          <LogoMark key={m.id} mark={m} clipId={clipId} foldAt={m.side === "fold" && !whole ? foldX + off.x : null} />
+        ))}
       </svg>
       <figcaption>
-        <b>{piece.name}</b>
-        <span>{cutLabel(piece)}</span>
+        <b>
+          {piece.name}
+          {side ? `, ${side}` : ""}
+        </b>
+        <span>{mirror ? "the other piece of the pair" : cutLabel(piece)}</span>
       </figcaption>
     </figure>
   );
@@ -96,6 +176,7 @@ export default function PatternSheet({ orderId, version, onBack }) {
   const [width, setWidth] = useState("150");
   const [usage, setUsage] = useState(null);
   const [usageState, setUsageState] = useState("idle"); // idle | working | done | failed
+  const [cutouts, setCutouts] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -163,6 +244,7 @@ export default function PatternSheet({ orderId, version, onBack }) {
 
   const opts = mockup.mockup.options || {};
   const accessories = opts.addOns?.accessories || [];
+  const logos = accessories.filter((a) => (a.type === "embroidery" || a.type === "sablon") && a.image && a.width && a.height);
   const pieces = mockup.pieces[size] || [];
   const garmentType = order.garmentType;
   const views = layoutGarmentViews(pieces, {
@@ -172,6 +254,13 @@ export default function PatternSheet({ orderId, version, onBack }) {
     sleeveStyle: opts.sleeveStyle,
     collarStyle: garmentType === "polo_shirt" ? "polo" : opts.collar || garmentType === "school_shirt" ? opts.collarStyle || "convertible" : undefined,
     merchItem: garmentType === "other" ? opts.merch?.item : undefined,
+  });
+  // Where each logo goes on the cut pieces of the size drawn.
+  const marks = printMarks(pieces, accessories, {
+    gender: opts.gender,
+    dartPosition: opts.dartPosition,
+    sleeveStyle: opts.sleeveStyle,
+    collarStyle: garmentType === "polo_shirt" ? "polo" : opts.collar || garmentType === "school_shirt" ? opts.collarStyle || "convertible" : undefined,
   });
   const snapshot = mockup.mockup.sizes || [];
   const fields = measurementFieldsFor(garmentType).filter((f) => snapshot.some((s) => s.measurements?.[f.key]));
@@ -198,7 +287,20 @@ export default function PatternSheet({ orderId, version, onBack }) {
           </select>
         </label>
         <button className="btn-add btn-inline" onClick={() => window.print()}>Print / save as PDF</button>
+        <button className="btn-add btn-inline btn-ghost" onClick={() => setCutouts((v) => !v)} title="Every piece at real size, to print and cut out">
+          Full-size cut-outs (1:1)
+        </button>
       </div>
+      {cutouts && (
+        <CutoutsPanel
+          title={`${GARMENT_LABELS[garmentType] || garmentType} - ${order.customerName || `order ${order.id}`}`}
+          orderRef={`order #${order.id}`}
+          sizes={sizes}
+          piecesBySize={mockup.pieces}
+          currentSize={size}
+          onClose={() => setCutouts(false)}
+        />
+      )}
 
       <article className="sheet">
         <header className="sheet-head">
@@ -208,7 +310,7 @@ export default function PatternSheet({ orderId, version, onBack }) {
           </div>
           <dl>
             <div><dt>Order</dt><dd>#{order.id}</dd></div>
-            <div><dt>Revision</dt><dd>v{mockup.mockup.version}{mockup.mockup.note ? ` · ${mockup.mockup.note}` : ""}</dd></div>
+            <div><dt>Revision</dt><dd>v{mockup.mockup.version}{mockup.mockup.note && mockup.mockup.note.trim().toLowerCase() !== `v${mockup.mockup.version}` ? ` · ${mockup.mockup.note}` : ""}</dd></div>
             <div><dt>Sizes</dt><dd>{sizes.join(", ")}</dd></div>
             <div><dt>Garments</dt><dd>{total}</dd></div>
             <div><dt>Date</dt><dd>{new Date(mockup.mockup.createdAt).toLocaleDateString("id-ID")}</dd></div>
@@ -319,7 +421,7 @@ export default function PatternSheet({ orderId, version, onBack }) {
               <h2>Seam allowances</h2>
               <table className="sheet-table">
                 <tbody>
-                  {seamAllowances(garmentType).map(([k, v]) => (
+                  {seamAllowances(garmentType, opts).map(([k, v]) => (
                     <tr key={k}>
                       <td>{k}</td>
                       <td>{v}</td>
@@ -335,17 +437,50 @@ export default function PatternSheet({ orderId, version, onBack }) {
             <section>
               <h2>Pattern pieces · size {size}</h2>
               <div className="sheet-pieces">
-                {pieces.map((p, i) => (
-                  <SheetPiece key={`${p.name}-${i}`} piece={p} />
-                ))}
+                {pieces.map((p, i) => {
+                  // The two pieces of a pair are drawn apart when a logo goes on
+                  // the right one, so each carries only its own logos.
+                  const all = marks[p.name] || [];
+                  // Each drawing's caption then says which piece it is.
+                  const right = all.filter((m) => m.side === "right").map((m) => ({ ...m, side: "" }));
+                  const own = all.filter((m) => m.side !== "right").map((m) => (right.length && m.side === "left" ? { ...m, side: "" } : m));
+                  return (
+                    <Fragment key={`${p.name}-${i}`}>
+                      <SheetPiece piece={p} marks={own} side={right.length ? "left" : undefined} />
+                      {right.length > 0 && <SheetPiece piece={p} marks={right} mirror side="right" />}
+                    </Fragment>
+                  );
+                })}
               </div>
             </section>
 
             <section>
-              <h2>Technical drawing</h2>
-              <div className="sheet-drawings">
-                <FlatDrawing layout={views.front} label="Front" />
-                <FlatDrawing layout={views.back} label="Back" />
+              <h2>Technical drawing{logos.length > 0 ? " and logos" : ""}</h2>
+              <div className="sheet-drawing-row">
+                <div className="sheet-drawings">
+                  <FlatDrawing layout={views.front} label="Front" />
+                  <FlatDrawing layout={views.back} label="Back" />
+                </div>
+                {logos.length > 0 && (
+                  <div className="sheet-prints">
+                    {logos.map((a) => (
+                      <figure key={a.id} className="sheet-print">
+                        <img src={artworkUrl(a.image)} alt={`Logo for the ${a.segment.replace(/_/g, " ")}`} />
+                        <figcaption>
+                          <b>{a.type === "sablon" ? "Sablon" : "Embroidery"}</b>, {a.segment.replace(/_/g, " ")}
+                          <br />
+                          {+a.width.toFixed(1)} × {+a.height.toFixed(1)} cm
+                          {inkSummary(a.type, a.inkColors, a.fullColour) && (
+                            <>
+                              <br />
+                              {inkSummary(a.type, a.inkColors, a.fullColour)}
+                            </>
+                          )}
+                        </figcaption>
+                      </figure>
+                    ))}
+                  </div>
+                )}
               </div>
             </section>
 
@@ -380,7 +515,7 @@ export default function PatternSheet({ orderId, version, onBack }) {
           </div>
         </div>
 
-        <div className="sheet-bottom">
+        <div className={`sheet-bottom${nestNames.length > 0 ? " has-grading" : ""}`}>
           {nestNames.length > 0 && (
             <section>
               <h2>Grading</h2>

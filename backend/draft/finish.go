@@ -32,6 +32,9 @@ func FinishAll(ps []Piece) []Piece {
 		if out[i].Qty == 0 {
 			out[i].Qty = cutQty(p)
 		}
+		if out[i].CutFull && out[i].CutPathData != "" && out[i].Qty%2 == 0 {
+			out[i].Qty /= 2 // halves counted as mirrored pairs become whole pieces
+		}
 	}
 	return out
 }
@@ -92,7 +95,19 @@ func Finish(p Piece) Piece {
 	for _, q := range poly {
 		minY, maxY = math.Min(minY, q.y), math.Max(maxY, q.y)
 	}
-	hem := hemAllowanceFor(p.Name)
+	hem, seam := hemAllowanceFor(p.Name), seamAllowance
+	if p.HemAllow > 0 {
+		hem = p.HemAllow
+	}
+	if p.SeamAllow > 0 {
+		seam = p.SeamAllow
+		if p.HemAllow == 0 && hem == seamAllowance {
+			hem = seam // an edge that only counts as a seam
+		}
+	}
+	if p.NoAllowance {
+		hem, seam = 0, 0
+	}
 	// The fold is the piece's leftmost edge — at x = 0 for a plain half, but
 	// further left when something is added at the fold (a back pleat).
 	minX := poly[0].x
@@ -104,7 +119,7 @@ func Finish(p Piece) Piece {
 	allow := make([]float64, n) // allowance of edge i: poly[i] -> poly[i+1]
 	for i := range allow {
 		a, b := poly[i], poly[(i+1)%n]
-		allow[i] = seamAllowance
+		allow[i] = seam
 		switch {
 		case p.FoldEdge == "left" && math.Abs(a.x-minX) < 0.05 && math.Abs(b.x-minX) < 0.05:
 			allow[i] = 0
@@ -145,6 +160,40 @@ func Finish(p Piece) Piece {
 		cut[i] = point{cur.x + (d1*n1.x+d2*n2.x)/den, cur.y + (d1*n1.y+d2*n2.y)/den}
 	}
 
+	if p.CutFull && p.FoldEdge == "left" {
+		// Where a seam meets the fold at an angle, its allowance moves the
+		// corner off the fold line: put it back on the line, where the
+		// allowed edge crosses it, so the halves join cleanly.
+		onFold := func(i int) bool {
+			a, b := poly[(i+n)%n], poly[(i+1+n)%n]
+			return math.Abs(a.x-minX) < 0.05 && math.Abs(b.x-minX) < 0.05
+		}
+		for i := 0; i < n; i++ {
+			in, out := onFold(i-1), onFold(i)
+			if in == out {
+				continue
+			}
+			// The other edge at this corner: before it (in) or after it (out).
+			j, k := (i+n-1)%n, i
+			if in {
+				j, k = i, (i+1)%n
+			}
+			d := allow[j]
+			nn := normal(poly[j], poly[k])
+			a := point{poly[j].x + d*nn.x, poly[j].y + d*nn.y}
+			b := point{poly[k].x + d*nn.x, poly[k].y + d*nn.y}
+			if math.Abs(b.x-a.x) > 1e-9 {
+				t := (minX - a.x) / (b.x - a.x)
+				cut[i] = point{minX, a.y + t*(b.y-a.y)}
+			}
+		}
+		if full, ok := unfoldAt(cut, minX); ok {
+			cut = full
+		} else {
+			p.CutFull = false
+		}
+	}
+
 	minX, minCY := cut[0].x, cut[0].y
 	maxX, maxCY := cut[0].x, cut[0].y
 	for _, q := range cut {
@@ -167,6 +216,20 @@ func Finish(p Piece) Piece {
 	p.CutHeight = round1(maxCY - minCY)
 	p.CutOffset = &Point{X: round1(-minX), Y: round1(-minCY)}
 	p.Grainline = grainlineFor(p, minY, maxY)
+	if p.CutFull && p.Grainline != nil {
+		// A whole piece's grainline runs down its centre line, or along its
+		// whole length when it runs across.
+		g := p.Grainline
+		fold := poly[0].x
+		for _, q := range poly {
+			fold = math.Min(fold, q.x)
+		}
+		if math.Abs(g[0]-g[2]) < 0.01 {
+			g[0], g[2] = fold, fold
+		} else {
+			g[0] = 2*fold - g[2]
+		}
+	}
 	return p
 }
 
@@ -238,4 +301,40 @@ func flattenPath(d string) []point {
 		clean = clean[:len(clean)-1]
 	}
 	return clean
+}
+
+// unfoldAt turns a closed half outline whose straight fold edge lies on
+// x = foldX into the whole outline: the half from one end of the fold edge
+// round to the other, then its mirror image back, with no line where the
+// fold was.
+func unfoldAt(half []point, foldX float64) ([]point, bool) {
+	n := len(half)
+	on := func(i int) bool { return math.Abs(half[(i+n)%n].x-foldX) < 0.05 }
+	// Where the outline leaves the fold edge.
+	start := -1
+	for i := 0; i < n; i++ {
+		if on(i) && !on(i+1) {
+			start = i
+			break
+		}
+	}
+	if start < 0 {
+		return nil, false
+	}
+	path := []point{half[start]}
+	for k := 1; k < n; k++ {
+		q := half[(start+k)%n]
+		path = append(path, q)
+		if on(start + k) {
+			break
+		}
+	}
+	if len(path) < 3 || math.Abs(path[len(path)-1].x-foldX) > 0.05 {
+		return nil, false
+	}
+	full := append([]point{}, path...)
+	for i := len(path) - 2; i >= 1; i-- {
+		full = append(full, point{2*foldX - path[i].x, path[i].y})
+	}
+	return full, true
 }

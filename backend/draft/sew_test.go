@@ -301,3 +301,45 @@ func TestBackPleat(t *testing.T) {
 		}
 	}
 }
+
+// Konveksi charts for short-sleeve shirts give the short sleeve's own
+// length. Read as the arm (shoulder to wrist), 22cm drew a 7.7cm stub.
+func TestShortSleeveGivenAsItsOwnLength(t *testing.T) {
+	m := Measurements{Bust: 94, Waist: 86, Hip: 100, BackWaistLength: 43, Shoulder: 16, Neck: 40, Ease: 6, UpperArm: 31, Wrist: 17}
+	sleeveOf := func(sl float64, style string) (float64, Summary) {
+		m.SleeveLength = sl
+		ps := DraftShirt(m, ShirtOptions{Gender: "unisex", Fit: "regular", SleeveStyle: style, Collar: true, CollarStyle: "convertible", FrontStyle: "placket", BackStyle: "yoke"})
+		s := Summarize(ps, m)
+		for _, f := range s.Finished {
+			if f.Key == "sleeve" {
+				return f.CM, s
+			}
+		}
+		t.Fatal("no sleeve length in the summary")
+		return 0, s
+	}
+	got, s := sleeveOf(22, "half")
+	if got < 21.5 || got > 22.5 {
+		t.Errorf("short sleeve given as 22cm came out %.1f", got)
+	}
+	for _, c := range s.Checks {
+		if !c.OK {
+			t.Errorf("check failed: %s: %s", c.Label, c.Detail)
+		}
+	}
+	// The arm's length still gives the usual fraction of it.
+	if got, _ := sleeveOf(60, "half"); got < 20 || got > 22 {
+		t.Errorf("short sleeve from a 60cm arm came out %.1f", got)
+	}
+	// A short sleeve's length for a long sleeve is flagged, not drafted silently.
+	_, s = sleeveOf(22, "full")
+	flagged := false
+	for _, c := range s.Checks {
+		if c.Label == "Sleeve length measured to the wrist" && !c.OK {
+			flagged = true
+		}
+	}
+	if !flagged {
+		t.Error("a 22cm long sleeve wasn't flagged")
+	}
+}

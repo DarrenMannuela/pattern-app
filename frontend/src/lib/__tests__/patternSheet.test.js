@@ -72,6 +72,10 @@ describe("the rest of the sheet", () => {
   it("lists the allowances in the cutting lines", () => {
     expect(seamAllowances("school_shirt")).toContainEqual(["Sleeve hem", "2.5 cm"]);
     expect(seamAllowances("pants")).toContainEqual(["Hem", "4 cm"]);
+    // The shop's uniform block is cut with Dad's allowances.
+    expect(seamAllowances("uniform_shirt", { block: "konveksi" })).toContainEqual(["Seams", "0.5 cm"]);
+    expect(seamAllowances("uniform_shirt", { block: "konveksi" })).toContainEqual(["Shirt hem", "1.5 cm"]);
+    expect(seamAllowances("polo_shirt", { block: "konveksi" })).toContainEqual(["Seams", "1 cm"]);
   });
 
   it("reads fabric per garment and size off a one-garment-per-marker plan", () => {
@@ -90,5 +94,16 @@ describe("the rest of the sheet", () => {
   it("draws the pieces in M, or the middle size", () => {
     expect(sampleSize(["S", "M", "L"])).toBe("M");
     expect(sampleSize(["7", "8", "9", "10"])).toBe("8");
+  });
+});
+
+describe("logos in the design list", () => {
+  it("names a logo print, its size and how many colours it takes", () => {
+    const f = featuresFor("pe_shirt", {}, [], [
+      { type: "sablon", segment: "back", image: "0123456789abcdef0123456789abcdef.png", width: 24, height: 17.3333, inkColors: ["#112233", "#ffffff"] },
+      { type: "embroidery", segment: "left_chest", image: "0123456789abcdef0123456789abcdef.png", width: 8, height: 8, fullColour: true },
+    ]);
+    expect(f).toContain("Screen print of the logo on the back (24 × 17.3 cm), 2 colours");
+    expect(f).toContain("Embroidery of the logo on the left chest (8 × 8 cm), full colour");
   });
 });

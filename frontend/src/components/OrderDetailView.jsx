@@ -16,6 +16,8 @@ import { fabricLabel, fabricSlug } from "../lib/fabricCatalog.js";
 import { measurementFieldsFor } from "../lib/measurementFields.js";
 import { fabricKey } from "../lib/fabricKeys.js";
 import { GARMENT_LABELS } from "../lib/garmentTypes.js";
+import { setLeaveWarning } from "../lib/leaveGuard.js";
+import { clearLocalDraft, makeDraft, readLocalDraft, saveLocalDraft } from "../lib/localDraft.js";
 
 const STATUS_OPTIONS = ["consultation", "mockup", "revision", "approved"];
 
@@ -129,6 +131,10 @@ export default function OrderDetailView({ orderId, onBack }) {
   // How roomy a shirt is: "" keeps only the size chart's ease (how older
   // revisions were made), "regular" and "loose" add the usual shirt ease.
   const [fit, setFit] = useState("regular");
+  // The shirt's cut: "" the classic block, "konveksi" the shop's uniform block,
+  // sized by the shop chart that konveksi re-anchors ({ baseSize, chest, length }).
+  const [block, setBlock] = useState("");
+  const [konveksi, setKonveksi] = useState({});
   const [sleevePlacket, setSleevePlacket] = useState(""); // "" = the pointed tower placket
   const [sleeveStyle, setSleeveStyle] = useState("full");
   const [sleeveFabric, setSleeveFabric] = useState("main");
@@ -173,7 +179,51 @@ export default function OrderDetailView({ orderId, onBack }) {
   // pattern, or the cutting plan. Opens on Design once there are sizes.
   const [step, setStep] = useState("design");
   const [justSaved, setJustSaved] = useState(false); // a mockup was just generated from the Design step
+  // What has changed since the order was loaded or saved: the order itself
+  // (sizes, names, fabric, colours) and the design (parts and extras, which
+  // are kept only when a mockup is generated).
+  const [unsaved, setUnsaved] = useState({ order: false, design: false });
+  // Set when a save was refused because the order was saved elsewhere first.
+  const [conflict, setConflict] = useState(null);
+  // Unsaved changes kept in this browser from last time (a crash, a power
+  // cut), offered back until restored or discarded.
+  const [recovery, setRecovery] = useState(null);
+  const [detailsOpen, setDetailsOpen] = useState(false); // the order's details, on a phone
+  const [historyReady, setHistoryReady] = useState(false);
+  const [settledKey, setSettledKey] = useState(null); // the design as it last settled
+  const [past, setPast] = useState([]); // earlier settled designs, oldest first
+  const [future, setFuture] = useState([]); // undone designs, next first
+  const markUnsaved = (part) => setUnsaved((u) => (u[part] ? u : { ...u, [part]: true }));
+  function editOrder(update) {
+    setOrder(update);
+    markUnsaved("order");
+  }
+  function editColors(c) {
+    setColorHint((prev) => ({ ...prev, ...c }));
+    markUnsaved("order");
+  }
+  const leaveMessage = unsaved.order
+    ? "This order has changes that aren't saved. Leave without saving them?"
+    : unsaved.design
+      ? "The design has changes that aren't in a mockup yet. Leave without generating one?"
+      : null;
+  // While something is unsaved, leaving asks first: the app's own links
+  // through the guard, closing or reloading the tab through the browser.
+  useEffect(() => {
+    setLeaveWarning(leaveMessage);
+    if (!leaveMessage) return undefined;
+    const hold = (e) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", hold);
+    return () => {
+      window.removeEventListener("beforeunload", hold);
+      setLeaveWarning(null);
+    };
+  }, [leaveMessage]);
   const [typeOpen, setTypeOpen] = useState(false); // the garment-type picker, folded away once chosen
+  const [fabricOpen, setFabricOpen] = useState(false); // the fabric grid, folded away behind Choose/Change
   // Each step opens at its top, not wherever the last one was scrolled to.
   useEffect(() => {
     window.scrollTo({ top: 0 });
@@ -186,13 +236,21 @@ export default function OrderDetailView({ orderId, onBack }) {
   async function loadOrder() {
     const mine = ++loadSeq.current;
     const stale = () => mine !== loadSeq.current;
+    const kept = readLocalDraft(orderId);
+    setRecovery(null);
     setOrder(null);
     setActiveMockup(null);
     setError(null);
+    setHistoryReady(false);
+    setConflict(null);
+    setSettledKey(null);
+    setPast([]);
+    setFuture([]);
     try {
       const o = await api.getOrder(orderId);
       if (stale()) return;
       setOrder(o);
+      setUnsaved({ order: false, design: false });
       setStep(o.sizes?.length || o.garmentType === "other" || o.garmentType === "custom" ? "design" : "sizes");
       setJustSaved(false);
       setColorHint(o.previewColors?.main || o.previewColors?.accent ? { ...o.previewColors } : null);
@@ -212,6 +270,8 @@ export default function OrderDetailView({ orderId, onBack }) {
           if (!stale()) setError(`The order opened, but its latest revision couldn't be loaded: ${e.message}`);
         }
       }
+      if (!stale()) setHistoryReady(true); // what was loaded is where undo stops
+      if (!stale() && kept) setRecovery({ ...kept, savedSince: kept.baseUpdatedAt !== o.updatedAt });
     } catch (e) {
       if (!stale()) setError(e.message);
     }
@@ -248,6 +308,8 @@ export default function OrderDetailView({ orderId, onBack }) {
   function restoreOptions(opt) {
     setGender(opt.gender || "unisex");
     setFit(opt.fit || "");
+    setBlock(opt.block || "");
+    setKonveksi(opt.konveksi || {});
     setSleevePlacket(opt.sleevePlacket || "");
     setDartPosition(opt.dartPosition || "waist");
     setSleeveStyle(opt.sleeveStyle || "full");
@@ -277,20 +339,20 @@ export default function OrderDetailView({ orderId, onBack }) {
   }
 
   function updateField(key, value) {
-    setOrder((prev) => ({ ...prev, [key]: value }));
+    editOrder((prev) => ({ ...prev, [key]: value }));
   }
   function updateFabric(key, value) {
-    setOrder((prev) => ({ ...prev, fabric: { ...prev.fabric, [key]: value } }));
+    editOrder((prev) => ({ ...prev, fabric: { ...prev.fabric, [key]: value } }));
   }
   function updateSizeRow(idx, patch) {
-    setOrder((prev) => {
+    editOrder((prev) => {
       const sizes = prev.sizes.slice();
       sizes[idx] = { ...sizes[idx], ...patch };
       return { ...prev, sizes };
     });
   }
   function updateSizeMeasurement(idx, key, value) {
-    setOrder((prev) => {
+    editOrder((prev) => {
       const sizes = prev.sizes.slice();
       const measurements = { ...sizes[idx].measurements };
       if (value === "") delete measurements[key];
@@ -300,10 +362,10 @@ export default function OrderDetailView({ orderId, onBack }) {
     });
   }
   function addSizeRow() {
-    setOrder((prev) => ({ ...prev, sizes: [...(prev.sizes || []), emptySizeRow()] }));
+    editOrder((prev) => ({ ...prev, sizes: [...(prev.sizes || []), emptySizeRow()] }));
   }
   function removeSizeRow(idx) {
-    setOrder((prev) => ({ ...prev, sizes: prev.sizes.filter((_, i) => i !== idx) }));
+    editOrder((prev) => ({ ...prev, sizes: prev.sizes.filter((_, i) => i !== idx) }));
   }
 
   async function prefillStandardChart() {
@@ -314,7 +376,7 @@ export default function OrderDetailView({ orderId, onBack }) {
         quantity: 1,
         measurements: row.measurements,
       }));
-      setOrder((prev) => ({ ...prev, sizes: [...(prev.sizes || []), ...rows] }));
+      editOrder((prev) => ({ ...prev, sizes: [...(prev.sizes || []), ...rows] }));
     } catch (e) {
       setError(e.message);
     }
@@ -332,7 +394,7 @@ export default function OrderDetailView({ orderId, onBack }) {
         quantity: 1,
         measurements: row.measurements,
       }));
-      setOrder((prev) => ({ ...prev, sizes: [...(prev.sizes || []), ...rows] }));
+      editOrder((prev) => ({ ...prev, sizes: [...(prev.sizes || []), ...rows] }));
     } catch (e) {
       setError(e.message);
     }
@@ -344,9 +406,11 @@ export default function OrderDetailView({ orderId, onBack }) {
     try {
       const updated = await api.updateOrder(orderId, { ...order, previewColors: { main: colorHint?.main, accent: colorHint?.accent } });
       setOrder(updated);
+      setUnsaved((u) => ({ ...u, order: false }));
       return updated;
     } catch (e) {
-      setError(e.message);
+      if (e.status === 409) setConflict(e.message);
+      else setError(e.message);
       return null;
     } finally {
       setSaving(false);
@@ -356,8 +420,12 @@ export default function OrderDetailView({ orderId, onBack }) {
   // Saves what the cut really used, along with the rest of the order as it is
   // on screen (the same as Save order). Throws so the form can show the error.
   async function saveActualFabric(actualFabric) {
-    const updated = await api.updateOrder(orderId, { ...order, actualFabric, previewColors: { main: colorHint?.main, accent: colorHint?.accent } });
+    const updated = await api.updateOrder(orderId, { ...order, actualFabric, previewColors: { main: colorHint?.main, accent: colorHint?.accent } }).catch((e) => {
+      if (e.status === 409) setConflict(e.message);
+      throw e;
+    });
     setOrder(updated);
+    setUnsaved((u) => ({ ...u, order: false }));
   }
 
   async function handleGenerate() {
@@ -372,6 +440,8 @@ export default function OrderDetailView({ orderId, onBack }) {
       if (isShirtType) {
         payload.gender = gender;
         payload.fit = fit;
+        payload.block = block;
+        payload.konveksi = konveksi;
         payload.sleevePlacket = sleevePlacket;
         payload.sleeveStyle = sleeveStyle;
         payload.sleeveFabric = sleeveFabric;
@@ -411,6 +481,7 @@ export default function OrderDetailView({ orderId, onBack }) {
       }
       const res = await api.createMockup(orderId, payload);
       setOrder(res.order);
+      setUnsaved({ order: false, design: false });
       setActiveMockup({ mockup: res.mockup, pieces: res.pieces, summaries: res.summaries });
       setJustSaved(true);
       setActiveSizeLabel(res.mockup?.sizes?.find((sz) => res.pieces[sz.label])?.label || Object.keys(res.pieces)[0] || null);
@@ -425,6 +496,7 @@ export default function OrderDetailView({ orderId, onBack }) {
   }
 
   async function viewRevision(version) {
+    if (unsaved.design && !window.confirm("Showing another revision replaces the extras you've changed since the last mockup. Show it anyway?")) return;
     setError(null);
     try {
       const res = await api.getMockup(orderId, version);
@@ -439,6 +511,7 @@ export default function OrderDetailView({ orderId, onBack }) {
   }
 
   function addAccessory(type, segment, position, extra) {
+    markUnsaved("design");
     const id = `acc-${Date.now()}-${Math.round(Math.random() * 1e6)}`;
     const base = { id, type, segment, ...extra };
     // On a sleeve an extra follows the arm unless a specific angle is given.
@@ -450,11 +523,13 @@ export default function OrderDetailView({ orderId, onBack }) {
       base.label = extra?.label || "";
     }
     setAccessories((prev) => [...prev, base]);
+    return id;
   }
 
   // A matching extra on the other side: the left chest pocket's twin on the
   // right, a sleeve pocket's twin on the other sleeve, or a mirrored position.
   function mirrorAccessory(id) {
+    markUnsaved("design");
     const SWAP = { left_chest: "right_chest", right_chest: "left_chest", left_sleeve: "right_sleeve", right_sleeve: "left_sleeve", left_leg: "right_leg", right_leg: "left_leg", left_hem: "right_hem", right_hem: "left_hem" };
     setAccessories((prev) => {
       const a = prev.find((x) => x.id === id);
@@ -474,14 +549,17 @@ export default function OrderDetailView({ orderId, onBack }) {
   }
 
   function updateAccessory(id, patch) {
+    markUnsaved("design");
     setAccessories((prev) => prev.map((a) => (a.id === id ? { ...a, ...patch } : a)));
   }
 
   function removeAccessory(id) {
+    markUnsaved("design");
     setAccessories((prev) => prev.filter((a) => a.id !== id));
   }
 
   function dragAccessory(id, fraction) {
+    markUnsaved("design");
     setAccessories((prev) => prev.map((a) => (a.id === id ? { ...a, position: fraction } : a)));
   }
 
@@ -546,6 +624,137 @@ export default function OrderDetailView({ orderId, onBack }) {
     }
   }
 
+  // A change to the design: parts picked in the maker, or a state put back
+  // by undo or redo.
+  function applyDesign(patch) {
+    markUnsaved("design");
+    if ("gender" in patch) setGender(patch.gender);
+    if ("fit" in patch) setFit(patch.fit);
+    if ("block" in patch) setBlock(patch.block);
+    if ("konveksi" in patch) setKonveksi(patch.konveksi);
+    if ("sleevePlacket" in patch) setSleevePlacket(patch.sleevePlacket);
+    if ("dartPosition" in patch) setDartPosition(patch.dartPosition);
+    if ("sleeveStyle" in patch) setSleeveStyle(patch.sleeveStyle);
+    if ("sleeveFabric" in patch) setSleeveFabric(patch.sleeveFabric);
+    if ("colorBlock" in patch) setColorBlock(patch.colorBlock);
+    if ("motifPatterns" in patch) setMotifPatterns(patch.motifPatterns);
+    if ("collarEnabled" in patch) setCollarEnabled(patch.collarEnabled);
+    if ("collarStyle" in patch) setCollarStyle(patch.collarStyle);
+    if ("frontStyle" in patch) setFrontStyle(patch.frontStyle);
+    if ("backStyle" in patch) setBackStyle(patch.backStyle);
+    if ("hemStyle" in patch) setHemStyle(patch.hemStyle);
+    if ("neckline" in patch) setNeckline(patch.neckline);
+    if ("trim" in patch) setTrim(patch.trim);
+    if ("motifs" in patch) setMotifs(patch.motifs);
+    if ("pattern" in patch) setMotifPattern(patch.pattern);
+    if ("legStyle" in patch) setLegStyle(patch.legStyle);
+    if ("shortsLength" in patch) setShortsLength(patch.shortsLength);
+    if ("frontPocket" in patch) setFrontPocket(patch.frontPocket);
+    if ("backPocket" in patch) setBackPocket(patch.backPocket);
+    if ("beltLoops" in patch) setBeltLoops(patch.beltLoops);
+    if ("fly" in patch) setFly(patch.fly);
+    if ("trouserWaist" in patch) setTrouserWaist(patch.trouserWaist);
+    if ("stripe" in patch) setStripe(patch.stripe);
+    if ("merch" in patch) setMerch((prev) => ({ ...prev, ...patch.merch }));
+    if ("skirt" in patch) setSkirt((prev) => ({ ...prev, ...patch.skirt }));
+  }
+
+  // Undo and redo for the design. Every settled state of the parts and
+  // extras is a step: a drag or a slider counts once, when it stops.
+  const designValue = { gender, fit, block, konveksi, sleevePlacket, dartPosition, sleeveStyle, sleeveFabric, colorBlock, motifPatterns, collarEnabled, collarStyle, frontStyle, backStyle, hemStyle, neckline, trim, motifs, pattern: motifPattern, legStyle, shortsLength, frontPocket, backPocket, beltLoops, fly, trouserWaist, stripe, merch, skirt };
+  const designKey = JSON.stringify({ value: designValue, accessories });
+
+  // Keep unsaved changes in this browser while working, a moment after each
+  // change, and forget them once everything is saved. Nothing is written
+  // while an offer to restore older ones is still open.
+  useEffect(() => {
+    if (!historyReady || recovery) return undefined;
+    if (!unsaved.order && !unsaved.design) {
+      clearLocalDraft(orderId);
+      return undefined;
+    }
+    const t = setTimeout(
+      () => saveLocalDraft(orderId, makeDraft({ order, colorHint, design: designValue, accessories, orderChanged: unsaved.order, designChanged: unsaved.design })),
+      600,
+    );
+    return () => clearTimeout(t);
+    // designValue is rebuilt each render; designKey stands for it
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [historyReady, recovery, unsaved, order, colorHint, designKey, orderId]);
+
+  function restoreDraft() {
+    const k = recovery;
+    if (k.orderChanged && k.order) {
+      editOrder((prev) => ({ ...prev, ...k.order }));
+      if (k.colorHint) setColorHint(k.colorHint);
+    }
+    if (k.designChanged && k.design) {
+      applyDesign(k.design);
+      setAccessories(k.accessories || []);
+    }
+    setRecovery(null);
+  }
+  function discardDraft() {
+    clearLocalDraft(orderId);
+    setRecovery(null);
+  }
+
+  useEffect(() => {
+    if (!historyReady || designKey === settledKey) return undefined;
+    const t = setTimeout(() => {
+      if (settledKey !== null) {
+        setPast((p) => [...p.slice(-59), settledKey]);
+        setFuture([]);
+      }
+      setSettledKey(designKey);
+    }, 400);
+    return () => clearTimeout(t);
+  }, [designKey, settledKey, historyReady]);
+  // A change made but not yet settled is undone first.
+  const changing = settledKey !== null && designKey !== settledKey;
+  function restoreDesign(key) {
+    const snap = JSON.parse(key);
+    applyDesign(snap.value);
+    setAccessories(snap.accessories);
+    setSettledKey(key);
+  }
+  function undo() {
+    if (changing) {
+      setFuture((f) => [designKey, ...f]);
+      restoreDesign(settledKey);
+      return;
+    }
+    if (!past.length) return;
+    setFuture((f) => [designKey, ...f]);
+    setPast((p) => p.slice(0, -1));
+    restoreDesign(past[past.length - 1]);
+  }
+  function redo() {
+    if (!future.length || changing) return;
+    setPast((p) => [...p, designKey]);
+    setFuture((f) => f.slice(1));
+    restoreDesign(future[0]);
+  }
+  // ⌘Z / Ctrl+Z undoes, with Shift (or Ctrl+Y) redoes, on the Design step
+  // and outside text boxes, which keep their own undo.
+  useEffect(() => {
+    if (step !== "design") return undefined;
+    function onKey(e) {
+      if (!(e.metaKey || e.ctrlKey) || e.altKey) return;
+      if (e.target.closest?.("input, textarea, select, [contenteditable]")) return;
+      const k = e.key.toLowerCase();
+      if (k === "z" && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+      } else if ((k === "z" && e.shiftKey) || k === "y") {
+        e.preventDefault();
+        redo();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
+
   if (!order) {
     return (
       <div className="tab-body">
@@ -587,7 +796,7 @@ export default function OrderDetailView({ orderId, onBack }) {
       const pcs = (order.sizes || []).reduce((t, sz) => t + (Number(sz.quantity) || 0), 0);
       return n ? `${n} size${n === 1 ? "" : "s"} · ${pcs} pcs` : "add sizes";
     }
-    if (key === "design") return activeMockup ? `v${activeMockup.mockup.version} saved` : "not saved yet";
+    if (key === "design") return unsaved.design ? "unsaved changes" : activeMockup ? `v${activeMockup.mockup.version} saved` : "not saved yet";
     if (key === "pattern") {
       if (!activeMockup) return "—";
       const checks = Object.values(activeMockup.summaries || {}).flatMap((sm) => sm.checks || []);
@@ -620,14 +829,21 @@ export default function OrderDetailView({ orderId, onBack }) {
         </button>
         <h1>{order.customerName || "Untitled order"}</h1>
         <p className="sub">
-          Order #{order.id} · created {new Date(order.createdAt).toLocaleDateString()}
+          Order #{order.id} · created {new Date(order.createdAt).toLocaleDateString("id-ID")}
         </p>
+        {/* On a phone the order's details fold away, so the steps come first. */}
+        <button type="button" className="phone-only phone-fold-toggle" onClick={() => setDetailsOpen((o) => !o)} aria-expanded={detailsOpen}>
+          Order details: {order.status}
+          {order.fabric?.name ? ` · ${order.fabric.name}` : ""} <span aria-hidden="true">{detailsOpen ? "▴" : "▾"}</span>
+        </button>
+        <div className={`phone-fold${detailsOpen ? " is-open" : ""}`}>
 
         <div className="field">
           <label>Customer / school name</label>
           <input
             type="text"
             value={order.customerName}
+            maxLength={200}
             onChange={(e) => updateField("customerName", e.target.value)}
           />
         </div>
@@ -636,6 +852,7 @@ export default function OrderDetailView({ orderId, onBack }) {
           <input
             type="text"
             value={order.contactInfo}
+            maxLength={400}
             onChange={(e) => updateField("contactInfo", e.target.value)}
           />
         </div>
@@ -675,16 +892,32 @@ export default function OrderDetailView({ orderId, onBack }) {
           <textarea
             rows={4}
             value={order.designNotes}
+            maxLength={20000}
             onChange={(e) => updateField("designNotes", e.target.value)}
           />
         </div>
 
         <div className="divider" />
 
-        <label id="fabric-picker" style={{ display: "block", fontSize: "11.5px", color: "var(--text-3)", marginBottom: 8 }}>
-          Fabric
-        </label>
-        <FabricPicker fabrics={fabrics} currentName={order.fabric?.name} onPick={(name) => updateFabric("name", name)} />
+        <div className="field" id="fabric-picker">
+          <label id="fabric-label">Fabric</label>
+          <div className="type-current" aria-labelledby="fabric-label">
+            <span className={order.fabric?.name ? "" : "type-current-empty"}>{order.fabric?.name || "Not chosen yet"}</span>
+            <button type="button" className="link-btn" onClick={() => setFabricOpen((o) => !o)} aria-expanded={fabricOpen}>
+              {fabricOpen ? "Close" : order.fabric?.name ? "Change" : "Choose"}
+            </button>
+          </div>
+          {fabricOpen && (
+            <FabricPicker
+              fabrics={fabrics}
+              currentName={order.fabric?.name}
+              onPick={(name) => {
+                updateFabric("name", name);
+                setFabricOpen(false);
+              }}
+            />
+          )}
+        </div>
         {matchedFabric && (
           <div className="fabric-detail">
             <FabricImage key={matchedFabric.imageUrl} src={matchedFabric.imageUrl} alt={matchedFabric.name} fallback={null} />
@@ -713,7 +946,7 @@ export default function OrderDetailView({ orderId, onBack }) {
             <FabricColorPicker
               colors={matchedFabricColors}
               colorHint={colorHint}
-              onPick={(slot, hex) => setColorHint((prev) => ({ ...prev, [slot]: hex }))}
+              onPick={(slot, hex) => editColors({ [slot]: hex })}
             />
           </div>
         )}
@@ -722,18 +955,52 @@ export default function OrderDetailView({ orderId, onBack }) {
           <textarea
             rows={2}
             value={order.fabric?.notes || ""}
+            maxLength={20000}
             onChange={(e) => updateFabric("notes", e.target.value)}
           />
         </div>
 
-        <button className="btn-generate" onClick={handleSave} disabled={saving}>
-          {saving ? "Saving…" : "Save order"}
+        </div>
+
+        <button className={`btn-generate${unsaved.order ? " has-changes" : ""}`} onClick={handleSave} disabled={saving}>
+          {saving ? "Saving…" : unsaved.order ? "Save changes" : "Save order"}
         </button>
+        {unsaved.order && !saving && <p className="unsaved-line">Unsaved changes</p>}
 
         {error && <p className="error">{error}</p>}
       </aside>
 
       <main className="order-main">
+        {recovery && (
+          <div className="conflict-banner recovery-banner" role="alert">
+            <p>
+              Changes you hadn't saved were kept from {new Date(recovery.savedAt).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short" })}
+              {recovery.orderChanged && recovery.designChanged ? " (the order and the design)" : recovery.orderChanged ? " (the order)" : " (the design)"}.
+              {recovery.savedSince ? " The order has been saved since then: restoring puts your kept changes over it." : ""}
+            </p>
+            <button type="button" className="btn-add btn-inline" onClick={restoreDraft}>
+              Restore them
+            </button>
+            <button type="button" className="btn-add btn-inline btn-ghost" onClick={discardDraft}>
+              Discard
+            </button>
+          </div>
+        )}
+        {conflict && (
+          <div className="conflict-banner" role="alert">
+            <p>{conflict}</p>
+            <button
+              type="button"
+              className="btn-add btn-inline"
+              onClick={() => {
+                if (!unsaved.order && !unsaved.design) loadOrder();
+                else if (window.confirm("Reload the order? What you changed here since your last save will be lost.")) loadOrder();
+              }}
+            >
+              Reload the order
+            </button>
+          </div>
+        )}
         <nav className="order-steps" aria-label="Order steps">
           {STEPS.map((st, i) => (
             <button
@@ -804,8 +1071,8 @@ export default function OrderDetailView({ orderId, onBack }) {
             <CustomDesigner
               design={order.design}
               image={order.designImage}
-              onDesign={(dd) => setOrder((prev) => ({ ...prev, design: dd }))}
-              onImage={(url) => setOrder((prev) => ({ ...prev, designImage: url }))}
+              onDesign={(dd) => editOrder((prev) => ({ ...prev, design: dd }))}
+              onImage={(url) => editOrder((prev) => ({ ...prev, designImage: url }))}
             />
           )}
           {(isShirtType || isBottomType || isMerchType || isSkirtType) && (
@@ -821,43 +1088,16 @@ export default function OrderDetailView({ orderId, onBack }) {
               onMirrorAccessory={mirrorAccessory}
               onDragAccessory={dragAccessory}
               colorHint={colorHint}
-              onColorHint={(c) => setColorHint((prev) => ({ ...prev, ...c }))}
+              onColorHint={editColors}
               fabricColors={matchedFabricColors}
               fabrics={fabrics}
               fabricName={order.fabric?.name}
               onFabricPick={(name) => updateFabric("name", name)}
               referencePhoto={order.designImage}
-              onReferencePhoto={(url) => setOrder((prev) => ({ ...prev, designImage: url }))}
-              value={{ gender, fit, sleevePlacket, dartPosition, sleeveStyle, sleeveFabric, colorBlock, motifPatterns, collarEnabled, collarStyle, frontStyle, backStyle, hemStyle, neckline, trim, motifs, pattern: motifPattern, legStyle, shortsLength, frontPocket, backPocket, beltLoops, fly, trouserWaist, stripe, merch, skirt }}
-              onChange={(patch) => {
-                if ("gender" in patch) setGender(patch.gender);
-                if ("fit" in patch) setFit(patch.fit);
-                if ("sleevePlacket" in patch) setSleevePlacket(patch.sleevePlacket);
-                if ("dartPosition" in patch) setDartPosition(patch.dartPosition);
-                if ("sleeveStyle" in patch) setSleeveStyle(patch.sleeveStyle);
-                if ("sleeveFabric" in patch) setSleeveFabric(patch.sleeveFabric);
-                if ("colorBlock" in patch) setColorBlock(patch.colorBlock);
-                if ("motifPatterns" in patch) setMotifPatterns(patch.motifPatterns);
-                if ("collarEnabled" in patch) setCollarEnabled(patch.collarEnabled);
-                if ("collarStyle" in patch) setCollarStyle(patch.collarStyle);
-                if ("frontStyle" in patch) setFrontStyle(patch.frontStyle);
-                if ("backStyle" in patch) setBackStyle(patch.backStyle);
-                if ("hemStyle" in patch) setHemStyle(patch.hemStyle);
-                if ("neckline" in patch) setNeckline(patch.neckline);
-                if ("trim" in patch) setTrim(patch.trim);
-                if ("motifs" in patch) setMotifs(patch.motifs);
-                if ("pattern" in patch) setMotifPattern(patch.pattern);
-                if ("legStyle" in patch) setLegStyle(patch.legStyle);
-                if ("shortsLength" in patch) setShortsLength(patch.shortsLength);
-                if ("frontPocket" in patch) setFrontPocket(patch.frontPocket);
-                if ("backPocket" in patch) setBackPocket(patch.backPocket);
-                if ("beltLoops" in patch) setBeltLoops(patch.beltLoops);
-                if ("fly" in patch) setFly(patch.fly);
-                if ("trouserWaist" in patch) setTrouserWaist(patch.trouserWaist);
-                if ("stripe" in patch) setStripe(patch.stripe);
-                if ("merch" in patch) setMerch((prev) => ({ ...prev, ...patch.merch }));
-                if ("skirt" in patch) setSkirt((prev) => ({ ...prev, ...patch.skirt }));
-              }}
+              onReferencePhoto={(url) => editOrder((prev) => ({ ...prev, designImage: url }))}
+              value={designValue}
+              onChange={applyDesign}
+              history={{ canUndo: changing || past.length > 0, canRedo: future.length > 0 && !changing, undo, redo }}
             />
           )}
           <div className="mockup-actions">
@@ -875,7 +1115,7 @@ export default function OrderDetailView({ orderId, onBack }) {
               onClick={handleGenerate}
               disabled={generating || (!order.sizes?.length && !isMerchType && !isCustomType)}
             >
-              {generating ? "Generating…" : "Generate mockup"}
+              {generating ? "Generating…" : unsaved.design ? "Generate mockup with these changes" : "Generate mockup"}
             </button>
           </div>
             {justSaved && activeMockup && (
@@ -904,7 +1144,7 @@ export default function OrderDetailView({ orderId, onBack }) {
                     .map((m) => (
                       <option key={m.version} value={m.version}>
                         v{m.version}
-                        {m.note ? ` — ${m.note}` : ""} · {new Date(m.createdAt).toLocaleDateString()}
+                        {m.note && m.note.trim().toLowerCase() !== `v${m.version}` ? ` — ${m.note}` : ""} · {new Date(m.createdAt).toLocaleDateString("id-ID")}
                       </option>
                     ))}
                 </select>
@@ -929,6 +1169,7 @@ export default function OrderDetailView({ orderId, onBack }) {
                   }
                 >
                   <GarmentFlatPreview
+                    readOnly
                     pieces={activePieces}
                     accessories={accessories}
                     gender={effectiveGender}
@@ -942,7 +1183,7 @@ export default function OrderDetailView({ orderId, onBack }) {
                     onFabricPick={(name) => updateFabric("name", name)}
                     sharedControls={!(isShirtType || isBottomType || isMerchType || isSkirtType)}
                     pattern={activeMockup.mockup.options?.pattern || "solid"}
-                    onColorChange={(c) => setColorHint((prev) => ({ ...prev, ...c }))}
+                    onColorChange={editColors}
                     merchItem={order.garmentType === "other" ? activeMockup.mockup.options?.merch?.item : undefined}
                     onAddAccessory={addAccessory}
                     onRemoveAccessory={removeAccessory}
@@ -1002,6 +1243,7 @@ export default function OrderDetailView({ orderId, onBack }) {
                 version={activeMockup.mockup.version}
                 actualFabric={order.actualFabric}
                 onSaveActual={saveActualFabric}
+                fabric={matchedFabric}
               />
             </ErrorBoundary>
               </>

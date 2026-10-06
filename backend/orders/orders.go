@@ -56,6 +56,18 @@ const (
 // ankle.
 const defaultShortsInseam = 18.0
 
+// ErrConflict is what Update returns when the order was saved by someone
+// else (another tab, another computer) after the copy being saved was
+// loaded: saving it would silently undo their changes.
+var ErrConflict = errors.New("the order was changed elsewhere after it was opened")
+
+// StorageError is a failure to write to where the orders are kept (the
+// file or the database), as opposed to anything wrong with the order.
+type StorageError struct{ Err error }
+
+func (e *StorageError) Error() string { return "storage: " + e.Err.Error() }
+func (e *StorageError) Unwrap() error { return e.Err }
+
 // ErrUnsupportedGarment is returned by GeneratePieces for a garment
 // type with no drafting logic yet.
 var ErrUnsupportedGarment = errors.New("pattern drafting for this garment type isn't available yet")
@@ -172,9 +184,11 @@ func generateBlocks(garmentType string, sizes []OrderSize, opts draft.ShirtOptio
 		opts.Collar = true
 	case GarmentPEShirt:
 		opts.Collar = false
+		opts.Block = "" // a knit T-shirt: the shop's woven uniform block doesn't apply
 	case GarmentPolo:
 		opts.Collar = true
 		opts.CollarStyle = "polo"
+		opts.Block = ""
 	case GarmentUniformShirt:
 		// opts used as given — this type has no preset.
 	case GarmentPants:
@@ -225,7 +239,7 @@ func generateBlocks(garmentType string, sizes []OrderSize, opts draft.ShirtOptio
 	}
 	out := make(map[string][]draft.Piece, len(sizes))
 	for _, sz := range sizes {
-		out[sz.Label] = draft.DraftShirt(sz.Measurements, opts)
+		out[sz.Label] = draft.DraftShirtSize(sz.Label, sz.Measurements, opts)
 	}
 	return out, nil
 }
@@ -241,15 +255,16 @@ func draftEach(sizes []OrderSize, draftFn func(draft.Measurements) []draft.Piece
 	return out
 }
 
-// Store is a mutex-guarded order list persisted to a JSON file on
-// every write — the app has no database, and a small konveksi's order
-// volume doesn't need one, but orders must survive a server restart
-// (nothing in this app persisted before this package).
+// Store is a mutex-guarded order list kept in memory and written through to
+// its Backend on every change: the JSON file when the backend is run by hand,
+// or PostgreSQL under Docker. Orders must survive a server restart. Only one
+// backend process writes the orders, so the in-memory list is always the same
+// as what is kept.
 type Store struct {
-	mu     sync.Mutex
-	path   string
-	nextID int
-	orders map[string]*Order
+	mu      sync.Mutex
+	backend Backend
+	nextID  int
+	orders  map[string]*Order
 }
 
 // NewStore opens (or creates) the JSON file at path as the backing
@@ -257,37 +272,16 @@ type Store struct {
 // exists but can't be read: carrying on with an empty list would let the
 // next save overwrite the orders that are really there.
 func NewStore(path string) (*Store, error) {
-	s := &Store{path: path, orders: make(map[string]*Order), nextID: 1}
-	if err := s.load(); err != nil {
-		return nil, err
-	}
-	return s, nil
+	return NewStoreWith(FileBackend(path))
 }
 
-// load reads the order file. A missing or empty file is a fresh start. A file
-// that isn't valid JSON (a crash mid-write, a bad hand edit) is moved aside,
-// never overwritten, so its contents can still be recovered, and the store
-// starts empty.
-func (s *Store) load() error {
-	data, err := os.ReadFile(s.path)
-	if errors.Is(err, fs.ErrNotExist) {
-		return nil
-	}
+// NewStoreWith keeps orders in b, loading the ones already there.
+func NewStoreWith(b Backend) (*Store, error) {
+	list, err := b.Load()
 	if err != nil {
-		return fmt.Errorf("read orders file: %w", err)
+		return nil, err
 	}
-	if len(bytes.TrimSpace(data)) == 0 {
-		return nil
-	}
-	var list []*Order
-	if err := json.Unmarshal(data, &list); err != nil {
-		aside := fmt.Sprintf("%s.corrupt-%s", s.path, time.Now().Format("20060102-150405"))
-		if rerr := os.Rename(s.path, aside); rerr != nil {
-			return fmt.Errorf("orders file is not valid JSON (%v) and could not be moved aside: %w", err, rerr)
-		}
-		log.Printf("orders: %s is not valid JSON (%v); kept as %s and starting with no orders", s.path, err, aside)
-		return nil
-	}
+	s := &Store{backend: b, orders: make(map[string]*Order), nextID: 1}
 	for _, o := range list {
 		if o == nil {
 			continue
@@ -297,19 +291,91 @@ func (s *Store) load() error {
 			s.nextID = n + 1
 		}
 	}
-	return nil
+	// A backend that remembers the highest number ever given out keeps a
+	// deleted order's number from being given to a new one.
+	if hw, ok := b.(interface{ HighestID() (int, error) }); ok {
+		n, err := hw.HighestID()
+		if err != nil {
+			return nil, err
+		}
+		if n >= s.nextID {
+			s.nextID = n + 1
+		}
+	}
+	return s, nil
 }
 
-// saveLocked writes the current order list to disk. It writes a temporary
-// file beside the real one and renames it into place, so a crash or a full
-// disk mid-write leaves the previous file intact instead of a truncated one.
-// Caller must hold s.mu.
-func (s *Store) saveLocked() error {
-	data, err := json.MarshalIndent(s.listLocked(), "", "  ")
+// Backend is where a Store keeps its orders.
+type Backend interface {
+	// Load returns every order kept.
+	Load() ([]*Order, error)
+	// Put writes o, new or changed. all is every order after the change, for
+	// a backend that can only write them all at once (the JSON file).
+	Put(o *Order, all []*Order) error
+	// Delete removes the order with id. all is every order left.
+	Delete(id string, all []*Order) error
+}
+
+// FileBackend keeps orders in one JSON file at path.
+func FileBackend(path string) Backend { return fileBackend{path: path} }
+
+type fileBackend struct{ path string }
+
+// Load reads the order file. A missing or empty file is a fresh start. A file
+// that isn't valid JSON (a crash mid-write, a bad hand edit) is moved aside,
+// never overwritten, so its contents can still be recovered, and the store
+// starts empty.
+func (f fileBackend) Load() ([]*Order, error) {
+	data, err := os.ReadFile(f.path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("read orders file: %w", err)
+	}
+	if len(bytes.TrimSpace(data)) == 0 {
+		return nil, nil
+	}
+	var list []*Order
+	if err := json.Unmarshal(data, &list); err != nil {
+		aside := fmt.Sprintf("%s.corrupt-%s", f.path, time.Now().Format("20060102-150405"))
+		if rerr := os.Rename(f.path, aside); rerr != nil {
+			return nil, fmt.Errorf("orders file is not valid JSON (%v) and could not be moved aside: %w", err, rerr)
+		}
+		log.Printf("orders: %s is not valid JSON (%v); kept as %s and starting with no orders", f.path, err, aside)
+		return nil, nil
+	}
+	return list, nil
+}
+
+// ReadFile reads the orders in a JSON orders file without changing it.
+func ReadFile(path string) ([]*Order, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	if len(bytes.TrimSpace(data)) == 0 {
+		return nil, nil
+	}
+	var list []*Order
+	if err := json.Unmarshal(data, &list); err != nil {
+		return nil, fmt.Errorf("not a valid orders file: %w", err)
+	}
+	return list, nil
+}
+
+func (f fileBackend) Put(_ *Order, all []*Order) error    { return f.write(all) }
+func (f fileBackend) Delete(_ string, all []*Order) error { return f.write(all) }
+
+// write saves the whole order list. It writes a temporary file beside the
+// real one and renames it into place, so a crash or a full disk mid-write
+// leaves the previous file intact instead of a truncated one.
+func (f fileBackend) write(all []*Order) error {
+	data, err := json.MarshalIndent(all, "", "  ")
 	if err != nil {
 		return err
 	}
-	tmp, err := os.CreateTemp(filepath.Dir(s.path), filepath.Base(s.path)+".tmp-*")
+	tmp, err := os.CreateTemp(filepath.Dir(f.path), filepath.Base(f.path)+".tmp-*")
 	if err != nil {
 		return err
 	}
@@ -328,7 +394,7 @@ func (s *Store) saveLocked() error {
 	if err := os.Chmod(tmp.Name(), 0o644); err != nil {
 		return err
 	}
-	return os.Rename(tmp.Name(), s.path)
+	return os.Rename(tmp.Name(), f.path)
 }
 
 // clone is a shallow copy handed to callers, so a request encoding an order
@@ -347,6 +413,13 @@ func (s *Store) listLocked() []*Order {
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].CreatedAt.Before(out[j].CreatedAt) })
 	return out
+}
+
+// Len is how many orders there are.
+func (s *Store) Len() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.orders)
 }
 
 // List returns every order, oldest first.
@@ -384,22 +457,28 @@ func (s *Store) Create(o *Order) (*Order, error) {
 		o.Status = "consultation"
 	}
 	s.orders[o.ID] = o
-	if err := s.saveLocked(); err != nil {
+	if err := s.backend.Put(o, s.listLocked()); err != nil {
 		delete(s.orders, o.ID)
-		return nil, err
+		return nil, &StorageError{err}
 	}
 	return o.clone(), nil
 }
 
 // Update replaces the editable fields of an existing order (ID,
 // CreatedAt and Mockups are preserved regardless of what patch carries).
-// If the save fails the order goes back to how it was.
+// If the save fails the order goes back to how it was. A patch carrying the
+// UpdatedAt it was loaded with is refused with ErrConflict when the order has
+// been saved since; a patch without one (a script, an old client) is not
+// checked.
 func (s *Store) Update(id string, patch *Order) (*Order, error, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	existing, ok := s.orders[id]
 	if !ok {
 		return nil, nil, false
+	}
+	if !patch.UpdatedAt.IsZero() && !patch.UpdatedAt.Equal(existing.UpdatedAt) {
+		return nil, ErrConflict, true
 	}
 	prev := *existing
 	existing.CustomerName = patch.CustomerName
@@ -416,9 +495,9 @@ func (s *Store) Update(id string, patch *Order) (*Order, error, bool) {
 		existing.Status = patch.Status
 	}
 	existing.UpdatedAt = time.Now()
-	if err := s.saveLocked(); err != nil {
+	if err := s.backend.Put(existing, s.listLocked()); err != nil {
 		*existing = prev
-		return nil, err, true
+		return nil, &StorageError{err}, true
 	}
 	return existing.clone(), nil, true
 }
@@ -433,9 +512,9 @@ func (s *Store) Delete(id string) (bool, error) {
 		return false, nil
 	}
 	delete(s.orders, id)
-	if err := s.saveLocked(); err != nil {
+	if err := s.backend.Delete(id, s.listLocked()); err != nil {
 		s.orders[id] = o
-		return true, err
+		return true, &StorageError{err}
 	}
 	return true, nil
 }
@@ -469,9 +548,9 @@ func (s *Store) AddMockup(id, note string, opts draft.ShirtOptions) (*Order, map
 		o.Status = "revision"
 	}
 	o.UpdatedAt = time.Now()
-	if err := s.saveLocked(); err != nil {
+	if err := s.backend.Put(o, s.listLocked()); err != nil {
 		*o = prev
-		return nil, nil, err, true
+		return nil, nil, &StorageError{err}, true
 	}
 	return o.clone(), pieces, nil, true
 }

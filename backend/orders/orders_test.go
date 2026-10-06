@@ -1,10 +1,13 @@
 package orders
 
 import (
+	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"patternapp/backend/draft"
 )
@@ -188,5 +191,67 @@ func TestActualFabricIsKept(t *testing.T) {
 	got, _ := mustStore(t, path).Get(o.ID)
 	if got.ActualFabric == nil || *got.ActualFabric != *patch.ActualFabric {
 		t.Errorf("not kept: %+v", got.ActualFabric)
+	}
+}
+
+// Two screens open the same order. The second save, made from a copy loaded
+// before the first save, is refused instead of silently undoing it.
+func TestStaleSaveIsRefused(t *testing.T) {
+	s := mustStore(t, filepath.Join(t.TempDir(), "orders.json"))
+	o, err := s.Create(&Order{CustomerName: "SDN 1", GarmentType: GarmentPolo})
+	if err != nil {
+		t.Fatal(err)
+	}
+	mine, theirs := *o, *o
+	theirs.DesignNotes = "theirs"
+	saved, err, _ := s.Update(o.ID, &theirs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mine.DesignNotes = "mine"
+	if _, err, ok := s.Update(o.ID, &mine); !ok || !errors.Is(err, ErrConflict) {
+		t.Fatalf("stale save: %v %v, want ErrConflict", ok, err)
+	}
+	if got, _ := s.Get(o.ID); got.DesignNotes != "theirs" {
+		t.Errorf("the stale save changed the order: %q", got.DesignNotes)
+	}
+	// Saving again from the fresh copy works, as the browser does after a
+	// save: it sends back the order it got, through JSON.
+	var fresh Order
+	data, _ := json.Marshal(saved)
+	if err := json.Unmarshal(data, &fresh); err != nil {
+		t.Fatal(err)
+	}
+	fresh.DesignNotes = "mine, after reloading"
+	if _, err, _ := s.Update(o.ID, &fresh); err != nil {
+		t.Fatalf("save from a fresh copy: %v", err)
+	}
+	// A client that sends no updatedAt (a script) isn't checked.
+	blind := fresh
+	blind.UpdatedAt = time.Time{}
+	if _, err, _ := s.Update(o.ID, &blind); err != nil {
+		t.Errorf("save without updatedAt: %v", err)
+	}
+}
+
+type brokenBackend struct{}
+
+func (brokenBackend) Load() ([]*Order, error)       { return nil, nil }
+func (brokenBackend) Put(*Order, []*Order) error    { return errors.New("disk full") }
+func (brokenBackend) Delete(string, []*Order) error { return errors.New("disk full") }
+
+// A store that can't write says so as a StorageError, and keeps nothing it
+// couldn't write.
+func TestStorageFailureIsReportedAsSuch(t *testing.T) {
+	s, err := NewStoreWith(brokenBackend{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var se *StorageError
+	if _, err := s.Create(&Order{CustomerName: "x", GarmentType: GarmentPolo}); !errors.As(err, &se) {
+		t.Fatalf("create: %v, want a StorageError", err)
+	}
+	if s.Len() != 0 {
+		t.Errorf("kept an order it couldn't write")
 	}
 }

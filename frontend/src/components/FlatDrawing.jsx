@@ -1,5 +1,6 @@
 import { useId } from "react";
 import { pocketPath } from "../lib/pocketShapes";
+import { artworkUrl } from "../api.js";
 
 const INK = "#1d1d1f";
 const PAPER = "#ffffff";
@@ -38,8 +39,9 @@ export default function FlatDrawing({ layout, label, height = 260 }) {
       const extra = it.category === "embroidery" || it.category === "sablon";
       return (
         <g key={it.key} transform={it.rotation ? `rotate(${it.rotation} ${it.x + it.width / 2} ${it.y + it.height / 2})` : undefined}>
-          <rect x={it.x} y={it.y} width={it.width} height={it.height} rx={it.rx || 0} fill={extra ? "none" : PAPER} stroke={INK} strokeWidth={0.28} strokeDasharray={extra ? "1,0.8" : undefined} />
-          {it.label && (
+          {extra && it.image && <image href={artworkUrl(it.image)} x={it.x} y={it.y} width={it.width} height={it.height} preserveAspectRatio="xMidYMid meet" />}
+          <rect x={it.x} y={it.y} width={it.width} height={it.height} rx={it.rx || 0} fill={extra ? "none" : PAPER} stroke={INK} strokeWidth={it.image ? 0.16 : 0.28} strokeDasharray={extra ? "1,0.8" : undefined} />
+          {it.label && !it.image && (
             <text x={it.x + it.width / 2} y={it.y + it.height / 2} fontSize={Math.min(2.4, it.height * 0.35)} textAnchor="middle" dominantBaseline="middle" fill={INK}>
               {it.label}
             </text>

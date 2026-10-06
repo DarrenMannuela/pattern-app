@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"unicode/utf8"
@@ -109,7 +110,12 @@ func AnalyzeText(svc *vision.Service) http.HandlerFunc {
 }
 
 func decodePhoto(req analyzeRequest) ([]byte, string, error) {
-	raw, mediaType := req.Image, req.MediaType
+	return decodeDataURL(req.Image, req.MediaType, maxPhotoBytes)
+}
+
+// decodeDataURL reads a picture sent as a data URL ("data:image/png;base64,...")
+// or as bare base64 with its mediaType, refusing one over limit bytes.
+func decodeDataURL(raw, mediaType string, limit int) ([]byte, string, error) {
 	if strings.HasPrefix(raw, "data:") {
 		head, body, ok := strings.Cut(raw, ",")
 		if !ok {
@@ -127,8 +133,8 @@ func decodePhoto(req analyzeRequest) ([]byte, string, error) {
 	if len(data) == 0 {
 		return nil, "", errors.New("no picture sent")
 	}
-	if len(data) > maxPhotoBytes {
-		return nil, "", errors.New("the picture is too large (over 6 MB)")
+	if len(data) > limit {
+		return nil, "", fmt.Errorf("the picture is too large (over %d MB)", limit>>20)
 	}
 	return data, mediaType, nil
 }

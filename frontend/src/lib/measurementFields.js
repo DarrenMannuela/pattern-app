@@ -7,11 +7,14 @@ export const SHIRT_FIELDS = [
   // A shirt hangs to the hip: its hem is cut to go over it.
   { key: "hip", label: "Hip (cm)", local: "Lingkar panggul" },
   { key: "backWaistLength", label: "Back length, nape to waist (cm)", local: "Panjang punggung" },
-  { key: "shirtLength", label: "Shirt length, nape to hem (cm, 0 = auto)", local: "Panjang baju" },
+  // Optional: left blank (or 0), the length is worked out from the back length.
+  { key: "shirtLength", label: "Shirt length, nape to hem (cm)", local: "Panjang baju", optional: true },
   { key: "shoulder", label: "Shoulder seam (cm)", local: "Panjang bahu" },
   { key: "neck", label: "Neck circumference (cm)", local: "Lingkar leher" },
   { key: "ease", label: "Wearing ease (cm) — the shirt's Fit adds to it", local: "Kelonggaran" },
-  { key: "sleeveLength", label: "Sleeve length, cuff included (cm)", local: "Panjang lengan" },
+  // Shoulder to wrist. A short-sleeve shirt can be given its short sleeve's
+  // own length instead (30 cm or less), as konveksi charts do.
+  { key: "sleeveLength", label: "Sleeve length, cuff included (cm)", local: "Panjang lengan", note: "to the wrist, or the short sleeve itself" },
   { key: "upperArm", label: "Upper arm (cm)", local: "Lingkar lengan atas" },
   { key: "wrist", label: "Wrist (cm)", local: "Lingkar pergelangan" },
 ];
@@ -21,7 +24,7 @@ export const PANTS_FIELDS = [
   { key: "hip", label: "Hip (cm)", local: "Lingkar panggul" },
   { key: "rise", label: "Rise / crotch depth (cm)", local: "Tinggi duduk" },
   { key: "inseam", label: "Inseam (cm)", local: "Panjang dalam" },
-  { key: "hemWidth", label: "Leg opening, half (cm) — optional", local: "Lebar kaki" },
+  { key: "hemWidth", label: "Leg opening, half (cm)", local: "Lebar kaki", optional: true },
   { key: "ease", label: "Wearing ease (cm)", local: "Kelonggaran" },
 ];
 

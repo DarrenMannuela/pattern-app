@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import TopNav from "./components/TopNav";
 import OrdersView from "./components/OrdersView";
 import OrderDetailView from "./components/OrderDetailView";
 import LayoutView from "./components/LayoutView";
 import ErrorBoundary from "./components/ErrorBoundary";
 import PatternSheet from "./components/PatternSheet.jsx";
+import { confirmLeave } from "./lib/leaveGuard.js";
 
 const hashOrderId = () => window.location.hash.match(/^#order-(\w+)$/)?.[1] || null;
 // A pattern sheet opens in its own tab: #sheet-12-v3 is order 12, revision 3.
@@ -62,6 +63,13 @@ function Studio() {
   // An order can be opened by link: http://localhost:5175/#order-12
   const [openOrderId, setOpenOrderIdState] = useState(hashOrderId);
 
+  // The order on screen, for putting the address back when the person
+  // decides to stay after the browser's back button.
+  const shownOrder = useRef(openOrderId);
+  useEffect(() => {
+    shownOrder.current = openOrderId;
+  }, [openOrderId]);
+
   // The app writes the hash itself (below) whenever the user opens or closes
   // an order — but the hash can also change without the app's own doing: the
   // browser's back/forward buttons, or a link to a different order pasted or
@@ -71,6 +79,10 @@ function Studio() {
   useEffect(() => {
     function onHashChange() {
       const id = hashOrderId();
+      if (id !== shownOrder.current && !confirmLeave()) {
+        window.history.replaceState(null, "", shownOrder.current ? `#order-${shownOrder.current}` : window.location.pathname);
+        return;
+      }
       setOpenOrderIdState(id);
       setTab("orders"); // an order link always means "show me that order"
     }
@@ -84,6 +96,8 @@ function Studio() {
   }
 
   function handleSetTab(next) {
+    if (next === tab && !openOrderId) return;
+    if (!confirmLeave()) return;
     setOpenOrderId(null);
     setTab(next);
   }
@@ -106,7 +120,7 @@ function Studio() {
       >
         {tab === "orders" && !openOrderId && <OrdersView onOpenOrder={setOpenOrderId} />}
         {tab === "orders" && openOrderId && (
-          <OrderDetailView orderId={openOrderId} onBack={() => setOpenOrderId(null)} />
+          <OrderDetailView orderId={openOrderId} onBack={() => confirmLeave() && setOpenOrderId(null)} />
         )}
         {tab === "layout" && <LayoutView />}
       </ErrorBoundary>

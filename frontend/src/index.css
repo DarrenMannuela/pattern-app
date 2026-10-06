@@ -660,11 +660,14 @@ main.order-main {
   gap: 16px;
 }
 
+/* Front and back side by side, as a reference sheet lays them out, each
+   scaling to its half; they stack only when there's no room for two. */
 .flat-views {
-  display: flex;
-  gap: 20px;
-  flex-wrap: wrap;
-  justify-content: center;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  align-items: end;
+  justify-items: center;
+  gap: 12px 20px;
   flex: 1;
   min-width: 0;
   /* A plain white "spec sheet" page, like a real technical-drawing
@@ -694,11 +697,15 @@ main.order-main {
   height: auto;
   cursor: crosshair;
 }
+.flat-svg.is-static {
+  cursor: default;
+}
 
 .flat-view-label {
-  font-size: var(--fs-3);
-  color: #5b6165;
-  letter-spacing: 0.03em;
+  font-size: var(--fs-2);
+  font-weight: 600;
+  color: #6b7176;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
 }
 
@@ -1434,33 +1441,13 @@ textarea:focus {
 .pm-thumb-loading {
   background: linear-gradient(90deg, #d9dcd9, #eceeec, #d9dcd9);
 }
-.pm-burger {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  z-index: 3;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 11px;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-sm);
-  background: var(--surface-raised);
-  color: var(--text-1);
-  font-size: var(--fs-4);
-  cursor: pointer;
-}
-.pm-burger-icon {
-  font-size: 15px;
-  line-height: 1;
-}
 .pm-drawer {
   position: absolute;
-  top: 48px;
-  right: 10px;
+  top: calc(100% + 6px);
+  right: 0;
   z-index: 3;
   width: 290px;
-  max-height: 80%;
+  max-height: 70vh;
   overflow-y: auto;
   padding: 12px;
   border: 1px solid var(--border-strong);
@@ -1643,9 +1630,12 @@ textarea:focus {
 .pm-toolbar {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 6px;
   flex-wrap: wrap;
-  padding: 10px 150px 6px 10px;
+  padding: 10px 10px 6px;
+}
+.pm-toolbar .pm-tool {
+  padding: 5px 8px;
 }
 .pm-seg {
   display: flex;
@@ -1672,24 +1662,62 @@ textarea:focus {
   background: var(--accent-fill);
   border-color: var(--accent-line);
 }
-.pm-starters {
-  display: flex;
-  flex-wrap: nowrap;
-  gap: 6px;
+.pm-tool:hover:not(:disabled) {
+  border-color: var(--border-hover);
 }
-.pm-starters .pm-tool {
-  white-space: nowrap;
+.pm-tool:disabled {
+  color: var(--text-3);
+  cursor: default;
+}
+.pm-seg .pm-tool + .pm-tool {
+  margin-left: -1px;
+}
+.pm-zoom-value {
+  min-width: 46px;
+  font-variant-numeric: tabular-nums;
+}
+.pm-menu {
+  position: relative;
+}
+.pm-menu > .pm-tool {
   border-radius: var(--radius-sm);
 }
-.pm-zoom {
+.pm-menu-list {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 4;
   display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: var(--fs-4);
-  color: var(--text-3);
+  flex-direction: column;
+  width: 260px;
+  padding: 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
 }
-.pm-zoom span {
-  width: 36px;
+.pm-menu-list > button,
+.pm-menu-list > label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-1);
+  font: inherit;
+  font-size: var(--fs-4);
+  text-align: left;
+  cursor: pointer;
+}
+.pm-menu-list > button:hover,
+.pm-menu-list > label:hover {
+  background: var(--accent-fill);
+}
+.pm-menu-list small {
+  font-size: var(--fs-3);
+  color: var(--text-3);
 }
 .pm-stage .flat-views {
   overflow: auto;
@@ -1706,11 +1734,6 @@ textarea:focus {
 }
 
 /* Pattern maker: reference photo beside the preview */
-.pm-toolbar > .pm-photo-btn {
-  border-radius: var(--radius-sm);
-  display: inline-flex;
-  align-items: center;
-}
 .pm-compare-on {
   display: grid;
   grid-template-columns: minmax(230px, 30%) minmax(0, 1fr);
@@ -1792,6 +1815,11 @@ textarea:focus {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 8px;
+}
+
+.pm-ref-actions {
+  display: flex;
+  gap: 14px;
 }
 .pm-ref-img {
   display: block;
@@ -2026,6 +2054,45 @@ textarea:focus {
 .sheet-toolbar .link-btn {
   color: #2d3035;
 }
+.cutouts-panel {
+  max-width: 1180px;
+  margin: 0 auto 16px;
+  padding: 14px 16px;
+  border: 1px solid #d8dbe0;
+  border-radius: 10px;
+  background: #fff;
+  color: #2d3035;
+  display: grid;
+  gap: 10px;
+}
+.cutouts-panel .select {
+  width: auto;
+}
+.cutouts-panel .check,
+.cutouts-panel .pm-hint,
+.cutouts-panel .link-btn {
+  color: #2d3035;
+}
+.cutouts-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.cutouts-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
+.cutouts-row > span:first-child {
+  min-width: 64px;
+  font-size: 13px;
+  color: #5b6068;
+}
+.cutouts-panel ul.error {
+  margin: 0;
+  padding-left: 18px;
+}
 .sheet-toolbar .cutplan-field span {
   color: #2d3035;
 }
@@ -2233,8 +2300,16 @@ textarea:focus {
     max-width: none;
     zoom: 0.86;
   }
-  /* The cutting notes are the longest list: give them the widest column. */
+  /* The cutting notes are the longest list: give them the widest column,
+     and with no grading nests (one size) the whole rest of the row. */
   .sheet-bottom {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  }
+  .sheet-bottom:not(.has-grading) .sheet-notes {
+    columns: 2;
+    column-gap: 20px;
+  }
+  .sheet-bottom.has-grading {
     grid-template-columns: minmax(0, 0.8fr) minmax(0, 1fr) minmax(0, 1.5fr);
   }
   /* Tight table rows help keep the whole sheet to one A3 page. */
@@ -2391,6 +2466,12 @@ textarea:focus {
   font-size: var(--fs-4);
 }
 
+.type-current-empty {
+  color: var(--text-3);
+}
+.type-current + .fabric-picker {
+  margin-top: 10px;
+}
 .type-current {
   display: flex;
   justify-content: space-between;
@@ -2766,4 +2847,788 @@ textarea:focus {
   font-size: 9px;
   font-style: italic;
   color: #6b7176;
+}
+
+/* ---------- PREVIEW TOOLBAR ---------- */
+.preview-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  margin-bottom: 12px;
+}
+.toolbar-spacer {
+  flex: 1;
+}
+.swatch-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: var(--fs-4);
+  color: var(--text-2);
+  cursor: pointer;
+}
+.swatch-control input[type="color"] {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
+  background: none;
+  cursor: pointer;
+  overflow: hidden;
+}
+.swatch-control input[type="color"]::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+.swatch-control input[type="color"]::-webkit-color-swatch {
+  border: none;
+  border-radius: 50%;
+}
+.toolbar-btn {
+  padding: 5px 11px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--surface-raised);
+  color: var(--text-1);
+  font-size: var(--fs-4);
+  cursor: pointer;
+}
+.toolbar-btn:hover {
+  border-color: var(--border-hover);
+}
+.toolbar-label {
+  display: block;
+  font-size: var(--fs-3);
+  color: var(--text-3);
+  margin-bottom: 4px;
+}
+.preview-toolbar .check {
+  margin: 0;
+  font-size: var(--fs-4);
+  color: var(--text-2);
+}
+.preview-hint {
+  margin: 10px 0 0;
+  font-size: var(--fs-3);
+  color: var(--text-3);
+}
+.garment-preview.is-readonly {
+  padding: 0;
+  background: none;
+  box-shadow: none;
+  border: none;
+  margin-bottom: 0;
+}
+
+/* ---------- LOGOS ON PRINTS ---------- */
+label.pm-tile,
+label.btn-file {
+  cursor: pointer;
+}
+.is-busy {
+  opacity: 0.6;
+  cursor: progress;
+}
+.pm-drawer-hint {
+  margin: 6px 0 0;
+  font-size: var(--fs-3);
+  color: var(--text-3);
+}
+.pm-logo-note {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0 10px 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--accent-line);
+  border-radius: var(--radius-sm);
+  background: var(--accent-fill);
+  font-size: var(--fs-4);
+  color: var(--text-1);
+}
+.pm-logo-note .link-btn {
+  margin-left: auto;
+  flex: none;
+}
+.pm-logo-note.is-error {
+  border-color: #b4545a;
+  background: #b4545a22;
+}
+.print-art {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 8px 0 4px;
+}
+.print-art-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+/* A checkerboard behind the logo, so a cleared background shows as cleared. */
+.print-art-thumb {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+  padding: 4px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: repeating-conic-gradient(#d9dcd9 0% 25%, #f4f5f3 0% 50%) 50% / 12px 12px;
+}
+.print-art-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  font-size: var(--fs-3);
+}
+.print-art-actions label.link-btn {
+  cursor: pointer;
+}
+.print-art-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.print-art-upload {
+  align-self: flex-start;
+  border-radius: var(--radius-sm);
+}
+.print-art-text {
+  font-size: var(--fs-4);
+  padding: 6px 8px;
+}
+.print-art-inks {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--fs-3);
+  color: var(--text-2);
+}
+.print-art-ink {
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
+}
+.print-art-inks span:last-child {
+  margin-left: 4px;
+}
+/* The drawings with the logos listed beside them. */
+.sheet-drawing-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px 24px;
+}
+.sheet-prints {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 0 1 230px;
+}
+.sheet-print {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.35;
+}
+.sheet-print img {
+  width: 46px;
+  height: 46px;
+  flex: none;
+  object-fit: contain;
+  border: 1px solid #d5d8dc;
+  border-radius: 4px;
+  padding: 2px;
+  background: #fff;
+}
+
+/* ---------- UNSAVED CHANGES ---------- */
+.btn-generate.has-changes {
+  box-shadow: 0 0 0 2px var(--accent-line);
+}
+.unsaved-line {
+  margin: 6px 0 0;
+  font-size: var(--fs-3);
+  color: var(--text-3);
+  text-align: center;
+}
+.unsaved-line::before {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: #e0a84f;
+  vertical-align: 1px;
+}
+
+/* ---------- ORDERS LIST: search and filter ---------- */
+.orders-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  margin-bottom: 14px;
+}
+.orders-search {
+  flex: 1 1 260px;
+  max-width: 420px;
+  padding: 8px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--ink-2);
+  color: var(--text-light);
+  font: inherit;
+  font-size: var(--fs-4);
+}
+.orders-search:focus {
+  outline: none;
+  border-color: var(--teal);
+  box-shadow: 0 0 0 3px var(--teal-glow);
+}
+.orders-chip-count {
+  margin-left: 4px;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+button.order-row-name {
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  font-size: 15px;
+  text-align: left;
+  cursor: pointer;
+}
+button.order-row-name:focus-visible {
+  outline: 2px solid var(--teal);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+.order-row-date {
+  min-width: 52px;
+  font-size: var(--fs-3);
+  color: var(--text-3);
+  text-align: right;
+}
+
+/* ---------- PREVIEW INTERACTION ---------- */
+/* The drawing's own box, so tools placed on it in percentages sit on the
+   right spot at any size or zoom. */
+.flat-svg-wrap {
+  position: relative;
+  width: fit-content;
+  max-width: 100%;
+}
+
+/* The picked extra's tools, floating just above it. */
+.extra-toolbar {
+  position: absolute;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  transform: translate(calc(-50% + var(--nudge, 0px)), calc(-100% - 10px));
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: rgba(24, 27, 30, 0.94);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+  white-space: nowrap;
+  animation: extra-toolbar-in 0.12s ease-out;
+}
+.extra-toolbar.is-below {
+  transform: translate(calc(-50% + var(--nudge, 0px)), 10px);
+}
+@keyframes extra-toolbar-in {
+  from {
+    opacity: 0;
+  }
+}
+.extra-toolbar-name {
+  padding: 0 8px 0 9px;
+  font-size: var(--fs-3);
+  color: var(--text-3);
+}
+.extra-toolbar button {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: var(--text-1);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+.extra-toolbar button:hover {
+  background: var(--accent-fill);
+}
+.extra-toolbar button.is-danger:hover {
+  background: #b4545a33;
+  color: #ff8f8f;
+}
+.pick-handle {
+  cursor: nwse-resize;
+}
+
+/* The list of extras follows the one picked on the drawing. */
+.pm-extras li.is-selected {
+  border-color: var(--accent-line);
+  box-shadow: 0 0 0 1px var(--accent-line);
+}
+
+/* "Change the collar" in the menu that opens on a click. */
+.popover-jump {
+  display: block;
+  margin: -2px 0 8px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--teal);
+  font: inherit;
+  font-size: var(--fs-3);
+  cursor: pointer;
+}
+.popover-jump:hover {
+  text-decoration: underline;
+}
+
+/* The part list jumped to from the drawing glows for a moment. */
+.pm-slot-flash {
+  animation: pm-slot-flash 1.6s ease-out;
+  border-radius: var(--radius);
+}
+@keyframes pm-slot-flash {
+  0%,
+  30% {
+    box-shadow: 0 0 0 2px var(--accent-line);
+    background: var(--accent-fill);
+  }
+  100% {
+    box-shadow: 0 0 0 2px transparent;
+    background: transparent;
+  }
+}
+
+/* While a new draft is on its way: a thin moving line over the drawing,
+   shown only when the wait is long enough to notice. */
+.pm-compare-main {
+  position: relative;
+}
+.pm-drawing-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  height: 2px;
+  opacity: 0;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, var(--teal), transparent) no-repeat;
+  background-size: 40% 100%;
+}
+.is-drawing .pm-drawing-bar {
+  opacity: 1;
+  transition: opacity 0.1s 0.15s;
+  animation: pm-drawing 0.9s linear infinite;
+}
+@keyframes pm-drawing {
+  from {
+    background-position: -40% 0;
+  }
+  to {
+    background-position: 140% 0;
+  }
+}
+
+/* Undo and redo. */
+.pm-icon {
+  min-width: 30px;
+  font-size: 16px;
+  line-height: 1;
+}
+
+/* A new part eases in: the old drawing fades into the new one. Only the
+   drawing; the rest of the page changes at once. */
+.pm-stage .flat-views {
+  view-transition-name: garment-drawing;
+}
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+}
+::view-transition-old(garment-drawing),
+::view-transition-new(garment-drawing) {
+  animation-duration: 120ms;
+}
+
+/* ---------- BACKUP STATUS ---------- */
+.backup-status {
+  margin: 18px 0 0;
+  padding-left: 14px;
+  position: relative;
+  font-size: var(--fs-3);
+  color: var(--text-3);
+}
+.backup-status::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.45em;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #6fbf8a;
+}
+.backup-status.is-bad {
+  color: #f0b26a;
+}
+.backup-status.is-bad::before {
+  background: #e0a84f;
+}
+
+/* A save refused because the order was saved on another screen first. */
+.conflict-banner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border: 1px solid #e0a84f;
+  border-radius: var(--radius);
+  background: #e0a84f1f;
+  color: var(--text-1);
+  font-size: var(--fs-4);
+}
+.conflict-banner p {
+  margin: 0;
+  flex: 1;
+}
+
+/* ---------- PHONES ---------- */
+/* Shown only on a phone, and what folds away there. On a computer the
+   toggles are hidden and the folds always open. */
+.phone-only {
+  display: none;
+}
+.sheet-backdrop {
+  display: none;
+}
+.sheet-head {
+  align-items: center;
+  justify-content: space-between;
+  margin: -4px 0 10px;
+}
+.sidebar-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+/* Dragging an extra or its corner handle moves it, not the page. */
+.flat-draggable,
+.pick-handle {
+  touch-action: none;
+}
+/* Fingers need bigger buttons than a mouse does. */
+@media (pointer: coarse) {
+  .extra-toolbar button {
+    width: 38px;
+    height: 38px;
+    font-size: 17px;
+  }
+}
+
+@media (max-width: 760px) {
+  .phone-only {
+    display: block;
+  }
+  .phone-hide {
+    display: none;
+  }
+  .phone-fold:not(.is-open) {
+    display: none;
+  }
+
+  /* The top bar. */
+  .topnav {
+    padding: 8px 12px;
+    gap: 8px;
+  }
+  .topnav .tab {
+    padding: 8px 12px;
+  }
+
+  /* The sidebar sits above the page instead of beside it. */
+  .tab-body {
+    flex-direction: column;
+  }
+  .sidebar {
+    width: auto;
+    position: static;
+    max-height: none;
+    overflow: visible;
+    padding: 16px 16px 14px;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .sidebar .sub {
+    margin-bottom: 10px;
+  }
+  .sidebar-head h1 {
+    margin: 0;
+  }
+  .sidebar .btn-generate {
+    margin-top: 12px;
+  }
+  .phone-fold-toggle {
+    width: 100%;
+    margin: 0 0 4px;
+    padding: 10px 12px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    background: var(--surface-raised);
+    color: var(--text-1);
+    font: inherit;
+    font-size: var(--fs-4);
+    text-align: left;
+    text-transform: capitalize;
+  }
+  main,
+  main.order-main {
+    padding: 14px 12px 24px;
+  }
+
+  /* iPhone zooms into any text box smaller than 16px when it's tapped. */
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+
+  /* The four steps: one short row, the status left for the step itself. */
+  .order-steps {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 4px;
+    margin: -14px 0 14px;
+    padding: 8px 0;
+  }
+  .order-step {
+    flex-direction: column;
+    gap: 2px;
+    padding: 6px 2px;
+    text-align: center;
+  }
+  .order-step-status {
+    display: none;
+  }
+  .order-step-num {
+    width: 20px;
+    height: 20px;
+    font-size: 11px;
+  }
+
+  /* Orders list. */
+  .orders-toolbar {
+    gap: 8px;
+  }
+  .orders-search {
+    max-width: none;
+  }
+  .order-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    padding: 12px 14px;
+  }
+  .order-row-meta {
+    flex-wrap: wrap;
+    gap: 8px 12px;
+  }
+  .order-row-delete {
+    margin-left: auto;
+  }
+
+  /* Design: the drawing first, the part tiles under it. */
+  .pattern-maker {
+    gap: 10px;
+  }
+  .pm-stage {
+    order: -1;
+  }
+  .pm-toolbar {
+    padding: 6px 0;
+  }
+  .pm-toolbar > .pm-tool:first-child, /* "Parts": the tiles are always under the drawing here */
+  .pm-seg[aria-label="Zoom"] {
+    display: none;
+  }
+  .pm-stage .flat-views {
+    max-height: none;
+  }
+  .pm-stage-hint {
+    margin: 6px 0;
+  }
+  .garment-preview {
+    padding: 10px;
+  }
+  .pm-tile {
+    width: 76px;
+  }
+
+  .sheet-head.phone-only {
+    display: flex;
+  }
+  .sheet-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 29;
+    background: rgba(0, 0, 0, 0.45);
+  }
+
+  /* Extras and "Start from" open as sheets from the bottom of the screen. */
+  .pm-drawer,
+  .pm-menu-list {
+    position: fixed;
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    max-height: 70vh;
+    border-radius: 14px 14px 0 0;
+    padding-bottom: calc(14px + env(safe-area-inset-bottom));
+    z-index: 30;
+  }
+  .accessory-popover {
+    position: fixed;
+    left: 8px !important;
+    right: 8px;
+    top: auto !important;
+    bottom: calc(8px + env(safe-area-inset-bottom));
+    transform: none;
+  }
+
+  /* Front and back side by side, small, rather than one under the other. */
+  .flat-views {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  /* Revision note and "Generate mockup" stack, at the end of the step
+     rather than pinned over the page. */
+  .mockup-actions {
+    position: static;
+  }
+  .mockup-actions .field {
+    flex-basis: 100%;
+    max-width: none;
+  }
+  .mockup-actions .btn-generate {
+    width: 100%;
+  }
+
+  /* Pattern step: tables scroll sideways rather than squeeze. */
+  .pattern-summary {
+    overflow-x: auto;
+  }
+  .pattern-step-head {
+    align-items: stretch;
+  }
+
+  /* Cutting. */
+  .cutplan-form {
+    gap: 10px;
+  }
+
+  .conflict-banner {
+    flex-wrap: wrap;
+  }
+}
+
+/* ---------- The shop's uniform block: its size chart ---------- */
+.pm-hint {
+  margin: 4px 0 8px;
+  color: var(--text-3);
+  font-size: var(--fs-3);
+  line-height: 1.4;
+}
+.pm-konveksi-base {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px 14px;
+}
+.pm-cm {
+  display: grid;
+  grid-template-columns: auto auto;
+  align-items: center;
+  column-gap: 6px;
+}
+.pm-cm > span {
+  grid-column: 1 / -1;
+  color: var(--text-2);
+  font-size: var(--fs-3);
+}
+.pm-cm input,
+.pm-cm select {
+  width: 5.5em;
+  padding: 6px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunken);
+  color: var(--text-1);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+}
+.pm-cm em {
+  font-style: normal;
+  color: var(--text-3);
+  font-size: var(--fs-3);
+}
+.pm-konveksi-table-wrap {
+  margin-top: 10px;
+  overflow-x: auto;
+}
+.pm-konveksi-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-3);
+  font-variant-numeric: tabular-nums;
+}
+.pm-konveksi-table th,
+.pm-konveksi-table td {
+  padding: 4px 6px;
+  text-align: right;
+  border-bottom: 1px solid var(--border-soft);
+  white-space: nowrap;
+}
+.pm-konveksi-table thead th {
+  color: var(--text-3);
+  font-weight: 500;
+}
+.pm-konveksi-table th[scope="row"] {
+  text-align: left;
+  color: var(--text-2);
+}
+.pm-konveksi-table tr.is-base td,
+.pm-konveksi-table tr.is-base th {
+  color: var(--text-1);
+  font-weight: 700;
+}
+.pm-konveksi-table tr.is-shown {
+  background: var(--surface-raised);
 }

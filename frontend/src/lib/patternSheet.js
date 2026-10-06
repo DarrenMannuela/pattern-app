@@ -25,9 +25,14 @@ const isBottoms = (t) => t === "pants" || t === "shorts";
 function extrasList(accessories) {
   const where = (seg) => String(seg || "").replace(/_/g, " ");
   return (accessories || []).map((a) => {
-    const size = a.width && a.height ? ` (${a.width} × ${a.height} cm)` : "";
+    const size = a.width && a.height ? ` (${+a.width.toFixed(1)} × ${+a.height.toFixed(1)} cm)` : "";
     if (a.type === "pocket") return `Pocket on the ${where(a.segment)}${size}`;
     const kind = a.type === "sablon" ? "Screen print" : "Embroidery";
+    if (a.image) {
+      const n = a.inkColors?.length || 0;
+      const inks = a.fullColour ? ", full colour" : n ? `, ${n} colour${n === 1 ? "" : "s"}` : "";
+      return `${kind} of the logo on the ${where(a.segment)}${size}${inks}`;
+    }
     return `${kind} on the ${where(a.segment)}${a.label ? `: "${a.label}"` : ""}${size}`;
   });
 }
@@ -95,15 +100,27 @@ export function featuresFor(garmentType, opts = {}, pieces = [], accessories = [
 // How many to cut, as a cutting room writes it.
 export function cutLabel(piece) {
   const qty = Math.max(1, piece.qty || 1);
-  const fold = piece.foldEdge === "left" || piece.foldEdge === "bottom";
+  const fold = !piece.cutFull && (piece.foldEdge === "left" || piece.foldEdge === "bottom");
   let label = fold && qty % 2 === 0 ? `Cut ${qty / 2} on the fold` : `Cut ${qty}`;
+  if (piece.cutFull) label += " whole (not on a fold)";
   if (!fold && qty === 2 && /front|sleeve|leg|pants|shorts|cuff/i.test(piece.name)) label += " (a pair)";
   if (piece.fabric === "contrast") label += " · contrast fabric";
   return label;
 }
 
-// The allowances already in the cutting lines (backend/draft/finish.go).
-export function seamAllowances(garmentType) {
+// The allowances already in the cutting lines (backend/draft/finish.go). The
+// shop's uniform block is cut with Dad's own (backend/draft/konveksi.go).
+export function seamAllowances(garmentType, opts = {}) {
+  if (opts.block === "konveksi" && (garmentType === "school_shirt" || garmentType === "uniform_shirt")) {
+    return [
+      ["Seams", "0.5 cm"],
+      ["On the fold", "0"],
+      ["Shirt hem", "1.5 cm"],
+      ["Sleeve hem", "2.5 cm"],
+      ["Front edge", "2.5 cm, folded back as its own facing"],
+      ["Collar interfacing", "0: cut to the finished size"],
+    ];
+  }
   const rows = [
     ["Seams", "1 cm"],
     ["On the fold", "0"],

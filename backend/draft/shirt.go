@@ -108,7 +108,12 @@ type ShirtOptions struct {
 	MotifPatterns map[string]string `json:"motifPatterns,omitempty"`
 	// AddOns are extras independent of style/collar — a chest pocket,
 	// an embroidery placement.
-	AddOns AddOns `json:"addOns"`
+	// Block picks the shirt's cut: "" is the classic block below,
+	// BlockKonveksi the shop's own uniform block (konveksi.go), sized by the
+	// shop chart that Konveksi re-anchors.
+	Block    string          `json:"block,omitempty"`
+	Konveksi KonveksiOptions `json:"konveksi,omitempty"`
+	AddOns   AddOns          `json:"addOns"`
 }
 
 // shirtScye is the underarm depth measured down from the neck-point
@@ -163,6 +168,38 @@ func fitEase(fit string) float64 {
 		return 14
 	}
 	return 0
+}
+
+// DraftShirtSize drafts one size of a shirt. The size's label matters only
+// to the shop's uniform block, which sizes chart sizes (S, M, L...) by the
+// shop chart rather than by their measurements.
+func DraftShirtSize(label string, m Measurements, opts ShirtOptions) []Piece {
+	if opts.Block == BlockKonveksi && opts.CollarStyle != "polo" {
+		return wholeCollars(draftKonveksiShirt(konveksiSpecFor(label, m, opts.Konveksi), m, opts))
+	}
+	return wholeCollars(DraftShirt(m, opts))
+}
+
+// wholeCollars marks every collar piece to be cut as one whole piece, as the
+// shop cuts them, rather than a half on the fold. They stay drafted as halves
+// (centre back at x = 0); Finish unfolds the cutting line.
+func wholeCollars(ps []Piece) []Piece {
+	for i := range ps {
+		p := &ps[i]
+		if p.FoldEdge != "left" || !strings.Contains(strings.ToLower(p.Name), "collar") {
+			continue
+		}
+		p.CutFull = true
+		p.Notes = strings.NewReplacer(
+			"Half collar", "Collar",
+			"Half spread-collar", "Spread-collar",
+			"Half Peter Pan collar", "Peter Pan collar",
+			", center back (left edge) on fold.", ", cut as one whole piece (not on a fold).",
+			", on the fold.", ", whole (not on a fold).",
+			" on the fold.", " whole (not on a fold).",
+		).Replace(p.Notes)
+	}
+	return ps
 }
 
 // DraftShirt returns [front, back, sleeve] and, when opts.Collar is

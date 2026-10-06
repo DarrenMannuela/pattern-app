@@ -27,7 +27,6 @@ type shape struct {
 	rows, cols int
 	base       [][]uint64 // rows of bits at offset 0
 	shifted    [64][][]uint64
-	area       float64 // the piece's own area, in cm², for the efficiency figure
 }
 
 func newShape(m mask, cols, rows int) *shape {
@@ -106,8 +105,6 @@ type placeRule struct {
 }
 
 var freePlacement = placeRule{xOnly: -1}
-
-func (r placeRule) rowOK(fy int) bool { return r.yStep <= 0 || fy%r.yStep == r.yPhase }
 
 // findPlacement scans the fabric bottom-left first (lowest row, then lowest
 // column) for the first spot the piece fits within the rule. maxRows bounds

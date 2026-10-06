@@ -1,8 +1,11 @@
 package handlers
 
 import (
+	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
+	"sort"
 	"strconv"
 	"sync"
 
@@ -33,13 +36,42 @@ type StoredPiece struct {
 	FoldEdge string `json:"foldEdge,omitempty"`
 }
 
-// Store is a simple thread-safe in-memory piece list. Swap this out
-// for a real database-backed implementation later without touching
-// the HTTP layer.
+// Store is the thread-safe piece list of the Cutting Layout tab. On its own
+// it lives in memory and starts again from the samples on every restart;
+// given PieceDocs (the database) it writes every change through, so the
+// pieces survive a restart.
 type Store struct {
 	mu     sync.Mutex
 	nextID int
 	pieces map[string]StoredPiece
+	docs   PieceDocs
+}
+
+// PieceDocs keeps layout pieces as JSON documents keyed by their numeric ID.
+type PieceDocs interface {
+	LoadPieceDocs() ([][]byte, error)
+	PutPieceDoc(id string, doc []byte) error
+	DeletePieceDoc(id string) error
+}
+
+// NewStoreWith keeps the pieces in docs, starting with the ones already there.
+func NewStoreWith(docs PieceDocs) (*Store, error) {
+	raw, err := docs.LoadPieceDocs()
+	if err != nil {
+		return nil, err
+	}
+	s := &Store{pieces: make(map[string]StoredPiece), docs: docs}
+	for _, doc := range raw {
+		var p StoredPiece
+		if err := json.Unmarshal(doc, &p); err != nil {
+			return nil, fmt.Errorf("a stored layout piece isn't valid: %w", err)
+		}
+		s.pieces[p.ID] = p
+		if n, err := strconv.Atoi(p.ID); err == nil && n > s.nextID {
+			s.nextID = n
+		}
+	}
+	return s, nil
 }
 
 func NewStore() *Store {
@@ -50,23 +82,40 @@ func NewStore() *Store {
 		{Name: "Bodice back", Width: 32, Height: 42, Qty: 2, Color: "#B5453D", GrainLocked: true},
 		{Name: "Sleeve", Width: 28, Height: 34, Qty: 2, Color: "#C79A3E", GrainLocked: false},
 	} {
-		s.add(p)
+		s.add(p) // in memory: cannot fail
 	}
 	return s
 }
 
-func (s *Store) add(p StoredPiece) StoredPiece {
+// add gives p the next ID and keeps it. When the pieces are written through
+// and the write fails, nothing is kept.
+func (s *Store) add(p StoredPiece) (StoredPiece, error) {
+	p.ID = strconv.Itoa(s.nextID + 1)
+	if s.docs != nil {
+		doc, err := json.Marshal(p)
+		if err != nil {
+			return StoredPiece{}, err
+		}
+		if err := s.docs.PutPieceDoc(p.ID, doc); err != nil {
+			return StoredPiece{}, err
+		}
+	}
 	s.nextID++
-	p.ID = strconv.Itoa(s.nextID)
 	s.pieces[p.ID] = p
-	return p
+	return p, nil
 }
 
+// list is the pieces in the order they were added.
 func (s *Store) list() []StoredPiece {
 	out := make([]StoredPiece, 0, len(s.pieces))
 	for _, p := range s.pieces {
 		out = append(out, p)
 	}
+	sort.Slice(out, func(i, j int) bool {
+		a, _ := strconv.Atoi(out[i].ID)
+		b, _ := strconv.Atoi(out[j].ID)
+		return a < b
+	})
 	return out
 }
 
@@ -92,8 +141,13 @@ func (s *Store) Pieces(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		s.mu.Lock()
-		created := s.add(p)
+		created, err := s.add(p)
 		s.mu.Unlock()
+		if err != nil {
+			log.Printf("pieces: save: %v", err)
+			http.Error(w, "couldn't save the piece", http.StatusInternalServerError)
+			return
+		}
 		writeJSON(w, http.StatusCreated, created)
 
 	default:
@@ -112,6 +166,13 @@ func (s *Store) PieceByID(w http.ResponseWriter, r *http.Request, id string) {
 	if _, ok := s.pieces[id]; !ok {
 		http.Error(w, "piece not found", http.StatusNotFound)
 		return
+	}
+	if s.docs != nil {
+		if err := s.docs.DeletePieceDoc(id); err != nil {
+			log.Printf("pieces: delete %s: %v", id, err)
+			http.Error(w, "couldn't delete the piece", http.StatusInternalServerError)
+			return
+		}
 	}
 	delete(s.pieces, id)
 	w.WriteHeader(http.StatusNoContent)

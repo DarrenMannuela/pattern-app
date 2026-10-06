@@ -89,3 +89,20 @@ func TestOrderWithAbsurdSizeIsRefused(t *testing.T) {
 		t.Error("accepted")
 	}
 }
+
+func TestOrderTextIsBounded(t *testing.T) {
+	ok := &orders.Order{CustomerName: "SDN 01 Menteng", GarmentType: "school_shirt", DesignNotes: strings.Repeat("navy ", 1000)}
+	if msg := validateOrder(ok); msg != "" {
+		t.Fatalf("a normal order was refused: %s", msg)
+	}
+	long := *ok
+	long.DesignNotes = strings.Repeat("x", maxNotesChars+1)
+	if msg := validateOrder(&long); !strings.Contains(msg, "design notes is too long") {
+		t.Errorf("long notes: %q", msg)
+	}
+	many := *ok
+	many.Sizes = make([]orders.OrderSize, maxSizes+1)
+	if msg := validateOrder(&many); msg == "" {
+		t.Error("an endless size chart was accepted")
+	}
+}

@@ -4,3 +4,27 @@ dist/
 backend/orders.json
 backend/orders.json.*
 .claude/
+backend/uploads/
+.env
+backups/
+
+# Data and secrets beyond the ones above: database dumps, certificates and
+# keys (e.g. from `tailscale cert`), and any other env file. The
+# repository is public, and anything committed stays in its history.
+.env.*
+!.env.example
+*.dump
+*.sqlite
+*.sqlite3
+*.db
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+*.jks
+*.keystore
+.netrc
+.npmrc
+.DS_Store

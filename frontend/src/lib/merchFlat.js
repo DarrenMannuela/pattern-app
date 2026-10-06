@@ -235,6 +235,7 @@ export function layoutMerchView(pieces, viewName, opts) {
       height: h,
       category: acc.type,
       label: acc.label,
+      image: acc.image,
       rotation: acc.rotation || 0,
       fraction: { x: fx, y: fy },
       fractionKind: "signed",

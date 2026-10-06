@@ -1,4 +1,7 @@
-const BASE = import.meta.env.VITE_API_URL || "http://localhost:8080";
+// Where the backend is. Left unset in development it is the Go server on
+// :8080; the Docker build sets it to "" so the API is asked on the page's own
+// address, where nginx passes /api on to the backend.
+const BASE = import.meta.env.VITE_API_URL ?? "http://localhost:8080";
 
 // An error from the backend, or from failing to reach it. status is the HTTP
 // status, or 0 when there was no answer at all.
@@ -21,7 +24,12 @@ const STATUS_TEXT = {
   404: "That wasn't found. It may have been deleted.",
   413: "That is too large to send.",
   501: "That isn't set up on the server.",
+  502: "The app's server isn't answering. It may be restarting: try again in a moment.",
+  504: "The app's server took too long to answer. Try again in a moment.",
 };
+
+// Answers that mean the server is restarting or briefly unavailable.
+const RETRY_STATUS = new Set([502, 503, 504]);
 
 // The message to show for a failed response. The backend answers with plain
 // text; a JSON error body is understood too, and an HTML page (an error page
@@ -43,11 +51,28 @@ async function errorMessage(res) {
   }
   if (text.startsWith("<")) text = "";
   if (text) return text;
+  if (STATUS_TEXT[res.status]) return STATUS_TEXT[res.status];
   if (res.status >= 500) return "The server ran into a problem. Try again in a moment.";
-  return STATUS_TEXT[res.status] || `The request failed (${res.status}).`;
+  return `The request failed (${res.status}).`;
 }
 
-async function request(path, { timeoutMs = DEFAULT_TIMEOUT_MS, ...options } = {}) {
+// Sends one request. A read (GET) that finds the server briefly away (no
+// answer, or a 502-504 while Docker restarts it) is asked once more a moment
+// later; a change is never sent twice.
+async function request(path, options = {}) {
+  try {
+    return await attempt(path, options);
+  } catch (e) {
+    const read = !options.method || options.method === "GET";
+    if (read && !e.timedOut && (e.status === 0 || RETRY_STATUS.has(e.status))) {
+      await new Promise((r) => setTimeout(r, 800));
+      return attempt(path, options);
+    }
+    throw e;
+  }
+}
+
+async function attempt(path, { timeoutMs = DEFAULT_TIMEOUT_MS, ...options } = {}) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -60,9 +85,9 @@ async function request(path, { timeoutMs = DEFAULT_TIMEOUT_MS, ...options } = {}
       });
     } catch (e) {
       if (e.name === "AbortError") {
-        throw new ApiError("The server took too long to answer. Try again.", { cause: e });
+        throw Object.assign(new ApiError("The server took too long to answer. Try again.", { cause: e }), { timedOut: true });
       }
-      throw new ApiError(`Can't reach the server at ${BASE}. Is the backend running?`, { cause: e });
+      throw new ApiError(`Can't reach the app's server at ${BASE || window.location.origin}. Is it running?`, { cause: e });
     }
     if (!res.ok) throw new ApiError(await errorMessage(res), { status: res.status });
     if (res.status === 204) return null;
@@ -94,6 +119,11 @@ async function fetchStatic(path) {
   } catch (e) {
     throw new ApiError(`${path} isn't in the expected format.`, { cause: e });
   }
+}
+
+// Where an uploaded logo is served, from the id the upload answered.
+export function artworkUrl(id) {
+  return id ? `${BASE}/api/artwork/${encodeURIComponent(id)}` : "";
 }
 
 export const api = {
@@ -173,6 +203,12 @@ export const api = {
   getMockup: (id, version) => request(`/api/orders/${id}/mockups/${version}`),
 
   fabrics: () => request("/api/fabrics"),
+
+  // When the newest backup was taken (Docker), so the app can say when backups stop.
+  backupStatus: () => request("/api/backups"),
+
+  // Stores a logo (a PNG data URL) for an embroidery or sablon; answers { id }.
+  uploadArtwork: (image) => request("/api/artwork", { method: "POST", body: JSON.stringify({ image }), timeoutMs: 60_000 }),
 
   fabricColors: () => fetchStatic("/fabric-catalog/colors.json"),
 };

@@ -161,6 +161,7 @@ function accessoryItem(accessory, pieces, front, back, sleeve, frame, segments) 
     height: h,
     category: accessory.type,
     label: accessory.label,
+    image: accessory.image,
     rotation: accessory.rotation || 0,
     fraction: { x: fracX, y: fracY },
     fractionKind: "signed",
@@ -345,8 +346,11 @@ function layoutTorsoView(pieces, view, opts) {
   // seam itself would just sit on top of the silhouette's own edge and
   // disappear.
   if (body.landmarks?.ventTop) {
-    const { x: vx, y: vy } = body.landmarks.ventTop;
-    line("vent", vx - 1.4, vy, vx + 1.4, vy, "seam");
+    // The bar-tack sits just inside the side seam as drawn, never past it:
+    // a tick sticking out beyond the shirt reads as a stray line.
+    const vy = body.landmarks.ventTop.y;
+    const sx = sil.hemSide[0];
+    line("vent", sx - 1.8, vy, sx - 0.25, vy, "seam");
   }
 
   // A contrast insert panel down one side of the front (the viewer's left, like

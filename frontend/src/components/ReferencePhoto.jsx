@@ -6,7 +6,10 @@ import { formatElapsed, useElapsed } from "../lib/useElapsed.js";
 // the photo (or one of its main colours) to set the fabric or trim colour. When
 // a photo reader is available (the Claude API or a local model) it can also
 // match the parts for you.
-export default function ReferencePhoto({ photo, colors, status, analyzing, result, error, onPick, onMatch, onClose }) {
+// Hide only folds the panel away; the photo stays with the order. Remove
+// takes it off the order. (One "Close" used to do both, so closing the
+// panel to see the design deleted the photo at the next save.)
+export default function ReferencePhoto({ photo, colors, status, analyzing, result, error, onPick, onMatch, onHide, onRemove }) {
   const [armed, setArmed] = useState("main"); // which colour the next pick sets
   const [swatches, setSwatches] = useState([]);
   const elapsed = useElapsed(analyzing);
@@ -44,7 +47,10 @@ export default function ReferencePhoto({ photo, colors, status, analyzing, resul
     <aside className="pm-ref">
       <div className="pm-ref-head">
         <div className="pm-slot-title" style={{ margin: 0 }}>Reference photo</div>
-        <button type="button" className="link-btn" onClick={onClose}>Close</button>
+        <span className="pm-ref-actions">
+          <button type="button" className="link-btn" onClick={onHide}>Hide</button>
+          <button type="button" className="link-btn link-btn-danger" onClick={onRemove}>Remove photo</button>
+        </span>
       </div>
       <img className="pm-ref-img" src={photo.url} alt="Reference uniform" onClick={pickFromPhoto} title={`Click to set the ${armed === "main" ? "fabric" : "trim"} colour`} />
 

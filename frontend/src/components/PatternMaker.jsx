@@ -1,5 +1,9 @@
 import { useEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { api } from "../api.js";
+import { prepareArtwork, printSize } from "../lib/artworkImage.js";
+import PrintArtwork from "./PrintArtwork.jsx";
+import { cachedDraft, draftKey, draftedExtras, fetchDraft, lookOf, payloadOf } from "../lib/draftCache.js";
 import GarmentFlatPreview from "./GarmentFlatPreview.jsx";
 import ErrorBoundary from "./ErrorBoundary.jsx";
 import { PartThumb, PocketThumb, ExtraThumb, usePartThumbs } from "./PartThumbs.jsx";
@@ -275,6 +279,30 @@ function patchFor(slotKey, part) {
   }
 }
 
+// Which part list each area of the drawing belongs to.
+const SEGMENT_SLOT = {
+  collar: "collar",
+  cuffs: "sleeve",
+  left_sleeve: "sleeve",
+  right_sleeve: "sleeve",
+  center_front: "front",
+  left_chest: "front",
+  right_chest: "front",
+  back: "back",
+  left_hem: "hem",
+  right_hem: "hem",
+};
+const BOTTOM_SEGMENT_SLOT = {
+  waistband: "trouserWaist",
+  left_leg: "leg",
+  right_leg: "leg",
+  legs: "leg",
+  back: "backPocket",
+  center_front: "fly",
+  left_hem: "length",
+  right_hem: "length",
+};
+
 // The request the backend drafts from, following the same rules as
 // "Generate mockup" (a polo always has its knit collar, a school shirt
 // always a collar, a PE shirt never).
@@ -311,8 +339,17 @@ function previewPayload(garmentType, value, size, accessories) {
     payload.collar = true;
     payload.collarStyle = "polo";
   }
+  // The shop's uniform block: only sent when chosen, so a classic design's
+  // drafts (and their cache) stay exactly as they were.
+  if (value.block && hasBlocks(garmentType)) {
+    payload.block = value.block;
+    payload.konveksi = value.konveksi || {};
+  }
   return payload;
 }
+
+// The woven shirts can be cut in either block; polo and PE shirts are knits.
+const hasBlocks = (garmentType) => garmentType === "school_shirt" || garmentType === "uniform_shirt";
 
 const EXTRA_LABELS = { pocket: "Pocket", embroidery: "Embroidery", sablon: "Sablon" };
 const DEFAULT_POCKET = { width: 10, height: 11.5 };
@@ -349,6 +386,21 @@ function turnBy(rotation, by) {
   return r;
 }
 
+// A logo is usually embroidered on a shirt or polo (the school badge) and
+// screen printed on anything else (a PE shirt, merch).
+const EMBROIDERED_LOGO = new Set(["school_shirt", "uniform_shirt", "polo_shirt"]);
+const logoType = (garmentType) => (EMBROIDERED_LOGO.has(garmentType) ? "embroidery" : "sablon");
+
+// Where a logo goes when no spot was picked: the left chest of a top (the
+// right chest when the left already has something, a pocket say), else the
+// garment's usual print spot.
+function logoSegment(garmentType, accessories) {
+  if (isBottoms(garmentType) || isSkirt(garmentType) || isMerch(garmentType)) return defaultSegment(garmentType, "sablon");
+  return accessories.some((a) => a.segment === "left_chest") ? "right_chest" : "left_chest";
+}
+
+const toHalfCm = (v) => Math.max(1, Math.round(v * 2) / 2);
+
 function startExtraDrag(e, extra) {
   e.dataTransfer.setData("text/plain", JSON.stringify({ slot: "extra", ...extra }));
   e.dataTransfer.effectAllowed = "copy";
@@ -364,6 +416,95 @@ const FITS = [
 
 const LIVE_KEYS = ["chest", "length", "shoulder", "sleeve"];
 
+// The shirt's cut. The shop's block is Dad's own uniform pattern.
+const BLOCKS = [
+  { value: "", label: "Classic", hint: "The classic shirt block, sized from each size's body measurements" },
+  { value: "konveksi", label: "Konveksi uniform", hint: "The shop's own uniform cut (Dad's size M pattern), sized by the shop chart" },
+];
+const CHART_SIZES = ["XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL"];
+// Picking the shop's block puts on the rest of Dad's uniform too: a short
+// sleeve, the stand collar, the lidah front, a plain back, a straight hem.
+// Any of them can still be changed after.
+const KONVEKSI_UNIFORM = { sleeveStyle: "half", collarEnabled: true, collarStyle: "standing", frontStyle: "hidden_placket", backStyle: "plain", hemStyle: "straight" };
+
+// A number box that keeps what's being typed and passes on only a number in
+// range, so typing "104" doesn't draft a 1cm and a 10cm shirt on the way.
+function CmField({ id, label, title, value, min, max, onCommit }) {
+  const [text, setText] = useState(value ? String(value).replace(".", ",") : "");
+  const [focused, setFocused] = useState(false);
+  const shown = focused ? text : value ? String(value).replace(".", ",") : "";
+  return (
+    <label className="pm-cm" htmlFor={id} title={title}>
+      <span>{label}</span>
+      <input
+        id={id}
+        inputMode="decimal"
+        value={shown}
+        onFocus={() => { setText(shown); setFocused(true); }}
+        onBlur={() => setFocused(false)}
+        onChange={(e) => {
+          setText(e.target.value);
+          const n = Number(e.target.value.replace(",", "."));
+          if (Number.isFinite(n) && n >= min && n <= max) onCommit(n);
+        }}
+      />
+      <em>cm</em>
+    </label>
+  );
+}
+
+// The shop chart: one size anchored (Dad's numbers unless changed) and every
+// size up and down graded from it, as the backend drafts them.
+function KonveksiChart({ value, chart, onChange, sizeLabel }) {
+  const k = value || {};
+  const base = CHART_SIZES.includes(k.baseSize) ? k.baseSize : "M";
+  const row = (chart || []).find((r) => r.size === base);
+  const changed = Boolean(k.chest || k.length);
+  return (
+    <div className="pm-slot">
+      <div className="pm-slot-title">Shop size chart</div>
+      <p className="pm-hint">Dad's size M, each size 3 cm wider laid flat (6 cm round). Change one size's chest or length and every size up and down follows.</p>
+      <div className="pm-konveksi-base">
+        <label className="pm-cm" htmlFor="pm-k-base">
+          <span>Size</span>
+          <select id="pm-k-base" value={base} onChange={(e) => onChange({ baseSize: e.target.value })}>
+            {CHART_SIZES.map((sz) => (
+              <option key={sz} value={sz}>{sz}</option>
+            ))}
+          </select>
+        </label>
+        <CmField key={`c-${base}`} id="pm-k-chest" label="Chest" value={k.chest || row?.chest} min={60} max={170} onCommit={(chest) => onChange({ ...k, baseSize: base, chest })} />
+        <CmField key={`l-${base}`} id="pm-k-length" label="Length" title="From the shoulder by the neck down to the hem" value={k.length || row?.length} min={45} max={110} onCommit={(length) => onChange({ ...k, baseSize: base, length })} />
+        {changed && (
+          <button type="button" className="link-btn" onClick={() => onChange({ baseSize: base })}>Shop's numbers</button>
+        )}
+      </div>
+      {chart?.length > 0 && (
+        <div className="pm-konveksi-table-wrap">
+          <table className="pm-konveksi-table">
+            <thead>
+              <tr><th>Size</th><th>Chest</th><th>Flat</th><th>Length</th><th>Shoulder</th><th>Sleeve</th></tr>
+            </thead>
+            <tbody>
+              {chart.map((r) => (
+                <tr key={r.size} className={`${r.size === base ? "is-base" : ""}${r.size === sizeLabel ? " is-shown" : ""}`}>
+                  <th scope="row">{r.size}</th>
+                  <td>{r.chest.toFixed(1)}</td>
+                  <td>{(r.chest / 2).toFixed(1)}</td>
+                  <td>{r.length.toFixed(1)}</td>
+                  <td>{r.shoulder.toFixed(1)}</td>
+                  <td>{r.sleeve.toFixed(1)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="pm-hint">Finished sizes in cm; the length is from the shoulder by the neck down to the hem. Sizes named XS to 7XL in the size chart are cut from this chart; any other size by its chest plus 6 cm.</p>
+    </div>
+  );
+}
+
 // How the opening above a cuff is finished.
 const SLEEVE_OPENINGS = [
   { value: "", label: "Pointed placket", hint: "Tower placket with a point, as the shop makes kemeja" },
@@ -372,13 +513,16 @@ const SLEEVE_OPENINGS = [
 
 // The shirt's Fit, and what the drafted size comes out at: the finished
 // measurements a size chart lists, and whether its seams all check out.
-function FitPicker({ value, onChange, summary, sizeLabel }) {
+function FitPicker({ value, onChange, summary, sizeLabel, chartFit }) {
   const shown = (summary?.finished || []).filter((f) => LIVE_KEYS.includes(f.key));
   const checks = summary?.checks || [];
   const failing = checks.filter((c) => !c.ok);
   return (
     <div className="pm-slot">
       <div className="pm-slot-title">Fit</div>
+      {chartFit ? (
+        <p className="pm-hint">Set by the shop size chart below.</p>
+      ) : (
       <div className="pm-fit-chips" role="radiogroup" aria-label="Fit">
         {FITS.map((f) => (
           <button
@@ -394,6 +538,7 @@ function FitPicker({ value, onChange, summary, sizeLabel }) {
           </button>
         ))}
       </div>
+      )}
       {shown.length > 0 && (
         <div className="pm-live">
           <div className="pm-live-head">Finished size {sizeLabel}</div>
@@ -416,10 +561,21 @@ function FitPicker({ value, onChange, summary, sizeLabel }) {
   );
 }
 
-export default function PatternMaker({ orderId, garmentType, sizes, value, onChange, dartPositions, accessories = [], onAddAccessory, onRemoveAccessory, onUpdateAccessory, onMirrorAccessory, onDragAccessory, colorHint, onColorHint, fabricColors, fabrics, fabricName, onFabricPick, referencePhoto, onReferencePhoto }) {
-  const [pieces, setPieces] = useState(null);
-  const [liveSummary, setLiveSummary] = useState(null); // the previewed size's finished measurements and seam checks
+// The modifier key shown in shortcut hints: ⌘ on a Mac, Ctrl elsewhere.
+const MOD_KEY = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent) ? "⌘" : "Ctrl+";
+
+// The preview's zoom, in percent: − and + step through it, the number resets it.
+const ZOOM_MIN = 60;
+const ZOOM_MAX = 220;
+const ZOOM_STEP = 20;
+
+export default function PatternMaker({ orderId, garmentType, sizes, value, onChange, dartPositions, accessories = [], onAddAccessory, onRemoveAccessory, onUpdateAccessory, onMirrorAccessory, onDragAccessory, colorHint, onColorHint, fabricColors, fabrics, fabricName, onFabricPick, referencePhoto, onReferencePhoto, history }) {
+  // The draft on screen. A new choice shows as soon as its draft is in (at
+  // once when it was drafted before); until then the last one stays up.
+  const [shownKey, setShownKey] = useState(null);
   const [error, setError] = useState(null);
+  const [selectedExtra, setSelectedExtra] = useState(null); // the extra picked on the drawing
+  const [flashSlot, setFlashSlot] = useState(null); // the part list jumped to from the drawing
   const [dragging, setDragging] = useState(null); // { slot, value }
   const [over, setOver] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -429,6 +585,9 @@ export default function PatternMaker({ orderId, garmentType, sizes, value, onCha
   const [patternTarget, setPatternTarget] = useState("all");
   const [partsOpen, setPartsOpen] = useState(true);
   const [photo, setPhoto] = useState(referencePhoto ? { url: referencePhoto } : null); // the reference photo: { url }, kept with the order
+  // The photo panel folded away (the photo stays with the order). On a phone
+  // it starts folded: there it fills the screen above the design.
+  const [photoHidden, setPhotoHidden] = useState(() => window.matchMedia?.("(max-width: 760px)").matches ?? false);
   const [photoResult, setPhotoResult] = useState(null); // what a reader made of it
   const [matching, setMatching] = useState(false);
   const [matchError, setMatchError] = useState(null);
@@ -437,33 +596,100 @@ export default function PatternMaker({ orderId, garmentType, sizes, value, onCha
   const [describing, setDescribing] = useState(false);
   const [describeResult, setDescribeResult] = useState(null);
   const [describeError, setDescribeError] = useState(null);
+  const [startOpen, setStartOpen] = useState(false); // the "Start from" menu: words or a photo
+  const [logoBusy, setLogoBusy] = useState(null); // the print whose logo is uploading ("new" for a new one)
+  const [logoNote, setLogoNote] = useState(null); // { text, error } about the last logo added
+  // The file each uploaded logo came from, this session, so a cleared
+  // background can be put back without picking the file again.
+  const [logoFiles, setLogoFiles] = useState({}); // image id -> { file, backgroundRemoved }
+  const startRef = useRef(null);
   const seq = useRef(0);
+  // The next redraft is for a click (a tile, a chip): send it at once rather
+  // than waiting for more typing or sliding.
+  const immediate = useRef(false);
+  const hoverTimer = useRef(null);
+
+  // A click anywhere outside the "Start from" menu closes it.
+  useEffect(() => {
+    if (!startOpen) return undefined;
+    const close = (e) => {
+      if (!startRef.current?.contains(e.target)) setStartOpen(false);
+    };
+    document.addEventListener("pointerdown", close);
+    return () => document.removeEventListener("pointerdown", close);
+  }, [startOpen]);
 
   const hasSleeveViews = !isBottoms(garmentType) && !isSkirt(garmentType) && !isMerch(garmentType);
   const slots = slotsFor(garmentType, value);
   const size = isMerch(garmentType) ? sizes?.[0] || { label: "One size", quantity: 1, measurements: {} } : sizes?.[0];
-  const request = size ? JSON.stringify(previewPayload(garmentType, value, size, accessories)) : null;
+  const keyFor = (v) => (size ? draftKey(orderId, previewPayload(garmentType, v, size, draftedExtras(accessories))) : null);
+  const key = keyFor(value);
+  const hit = cachedDraft(key);
+  // On screen: this choice's draft when it is in, else the last one shown.
+  const shown = hit ? { draft: hit, key } : shownKey && cachedDraft(shownKey) ? { draft: cachedDraft(shownKey), key: shownKey } : null;
+  const shownPieces = shown ? shown.draft.pieces[size?.label] || Object.values(shown.draft.pieces)[0] || null : null;
+  const liveSummary = shown ? shown.draft.summaries?.[size?.label] || Object.values(shown.draft.summaries || {})[0] || null : null;
+  const look = shown ? lookOf(payloadOf(shown.key)) : null;
+  const drawing = Boolean(key) && !hit;
   const thumbFor = usePartThumbs(orderId, size, slots.flatMap((s) => s.parts.map((p) => ({ slot: s.key, value: p.value }))), garmentType, isMerch(garmentType) ? value.merch : isSkirt(garmentType) ? value.skirt : undefined);
 
-  // Redraft shortly after the last change.
+  // Draft the current choices: at once after a click, shortly after the last
+  // keystroke or slider move otherwise. A choice drafted before is already on
+  // screen; it only needs remembering as the last one shown.
   useEffect(() => {
-    if (!request) return undefined;
+    if (!key) return undefined;
     const mine = ++seq.current;
-    const timer = setTimeout(async () => {
-      try {
-        const res = await api.previewPieces(orderId, JSON.parse(request));
-        if (mine !== seq.current) return; // a newer change is already in flight
-        setPieces(res.pieces[size.label] || Object.values(res.pieces)[0] || null);
-        setLiveSummary(res.summaries?.[size.label] || Object.values(res.summaries || {})[0] || null);
-        setError(null);
-      } catch (e) {
-        if (mine === seq.current) setError(e.message);
-      }
-    }, 120);
+    const now = immediate.current;
+    immediate.current = false;
+    const timer = setTimeout(
+      () => {
+        fetchDraft(key, orderId)
+          .then(() => {
+            if (mine !== seq.current) return; // a newer choice has been made
+            setShownKey(key);
+            setError(null);
+          })
+          .catch((e) => {
+            if (mine === seq.current) setError(e.message);
+          });
+      },
+      cachedDraft(key) || now ? 0 : 120,
+    );
     return () => clearTimeout(timer);
-  }, [request, orderId, size?.label]);
+  }, [key, orderId]);
 
-  function apply(slotKey, part) {
+  // The choices a tile would make, for drafting it before it is clicked.
+  function valueWith(patch) {
+    const next = { ...value, ...patch };
+    if (patch.merch) next.merch = { ...value.merch, ...patch.merch };
+    if (patch.skirt) next.skirt = { ...value.skirt, ...patch.skirt };
+    return next;
+  }
+
+  // Hovering a tile drafts what clicking it would show, so the click redraws
+  // at once. A short pause first, so sweeping across tiles drafts nothing.
+  function prefetch(slotKey, part) {
+    clearTimeout(hoverTimer.current);
+    hoverTimer.current = setTimeout(() => {
+      const k = keyFor(valueWith(pickPatch(slotKey, part)));
+      if (k && !cachedDraft(k)) fetchDraft(k, orderId).catch(() => {});
+    }, 60);
+  }
+
+  // A choice made by clicking: drafted at once, and, when its draft is
+  // already in, eased in with a short cross-fade.
+  function choose(patch) {
+    immediate.current = true;
+    const ready = cachedDraft(keyFor(valueWith(patch)));
+    const calm = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    if (ready && document.startViewTransition && !calm) {
+      // A quicker next click cuts this fade short, which is fine: say nothing.
+      document.startViewTransition(() => flushSync(() => onChange(patch))).ready.catch(() => {});
+    } else onChange(patch);
+  }
+
+  // What picking part in slotKey changes.
+  function pickPatch(slotKey, part) {
     if (slotKey === "bands") {
       // Bands can be combined; one streak or two, not both.
       const has = value.motifs.includes(part);
@@ -471,17 +697,20 @@ export default function PatternMaker({ orderId, garmentType, sizes, value, onCha
       if (!has && part === "centre") next = next.filter((m) => m !== "double");
       if (!has && part === "double") next = next.filter((m) => m !== "centre");
       const kept = Object.fromEntries(Object.entries(value.motifPatterns || {}).filter(([band]) => next.includes(band)));
-      onChange({ motifs: next, motifPatterns: kept });
-      if (!next.includes(patternTarget)) setPatternTarget("all");
-      return;
+      return { motifs: next, motifPatterns: kept };
     }
     if (slotKey === "pattern") {
       // One pattern for every band, or just the band picked above the tiles.
-      if (patternTarget === "all") onChange({ pattern: part, motifPatterns: {} });
-      else onChange({ motifPatterns: { ...(value.motifPatterns || {}), [patternTarget]: part } });
-      return;
+      if (patternTarget === "all") return { pattern: part, motifPatterns: {} };
+      return { motifPatterns: { ...(value.motifPatterns || {}), [patternTarget]: part } };
     }
-    onChange(patchFor(slotKey, part));
+    return patchFor(slotKey, part);
+  }
+
+  function apply(slotKey, part) {
+    const patch = pickPatch(slotKey, part);
+    choose(patch);
+    if (slotKey === "bands" && !patch.motifs.includes(patternTarget)) setPatternTarget("all");
   }
 
   function onDragStart(e, slot, part) {
@@ -494,6 +723,11 @@ export default function PatternMaker({ orderId, garmentType, sizes, value, onCha
     e.preventDefault();
     setOver(false);
     setDragging(null);
+    const file = [...(e.dataTransfer.files || [])].find((f) => /^image\//.test(f.type));
+    if (file) {
+      addLogo(file);
+      return;
+    }
     try {
       const { slot, value: part } = JSON.parse(e.dataTransfer.getData("text/plain"));
       if (slots.some((s) => s.key === slot)) apply(slot, part);
@@ -511,6 +745,7 @@ export default function PatternMaker({ orderId, garmentType, sizes, value, onCha
     try {
       const { dataUrl } = await fileToDataUrl(file, 1400);
       setPhoto({ url: dataUrl });
+      setPhotoHidden(false);
       onReferencePhoto?.(dataUrl);
       setPhotoResult(null);
       const status = await api.photoStatus().catch(() => null);
@@ -583,18 +818,112 @@ export default function PatternMaker({ orderId, garmentType, sizes, value, onCha
     return runMatch(photo.url, readerStatus);
   }
 
-  function addExtra(type, extra, presetKey) {
-    onAddAccessory?.(type, defaultSegment(garmentType, type, presetKey), undefined, extra);
+  // Gets a logo file ready and uploads it. Resolves to the print's fields:
+  // the picture, its proportions (height / width) and its colours.
+  async function uploadLogo(file, keepBackground = false) {
+    const art = await prepareArtwork(file, { keepBackground });
+    const { id } = await api.uploadArtwork(art.dataUrl);
+    setLogoFiles((prev) => ({ ...prev, [id]: { file, backgroundRemoved: art.backgroundRemoved } }));
+    return { image: id, aspect: art.aspect, inkColors: art.colors.length ? art.colors : undefined, fullColour: art.fullColour || undefined };
   }
 
-  const effectiveCollarStyle =
-    garmentType === "polo_shirt" ? "polo" : garmentType === "pe_shirt" ? undefined : value.collarEnabled || garmentType === "school_shirt" ? value.collarStyle : undefined;
+  // Puts a logo on the garment where it was clicked or dropped
+  // ({ segment, position, view }), or in the usual place for this garment.
+  async function addLogo(file, placement) {
+    if (!file || logoBusy) return;
+    setLogoBusy("new");
+    setLogoNote(null);
+    try {
+      const segment = placement?.segment || logoSegment(garmentType, accessories);
+      const { aspect, ...art } = await uploadLogo(file);
+      const type = logoType(garmentType);
+      const id = onAddAccessory?.(type, segment, placement?.position, { ...art, ...printSize(segment, aspect), ...(placement?.view ? { view: placement.view } : {}) });
+      if (id) setSelectedExtra(id);
+      setLogoNote({ text: `Logo added as ${type === "sablon" ? "a sablon print" : "embroidery"} on the ${segment.replace(/_/g, " ")}. Drag it to move it; Extras changes its size, or makes it ${type === "sablon" ? "embroidery" : "a sablon print"}.` });
+    } catch (e) {
+      setLogoNote({ text: e.message, error: true });
+    } finally {
+      setLogoBusy(null);
+    }
+  }
+
+  // A new logo for a print that is already on the garment. It keeps the width
+  // it was given; a print that had no logo yet gets the usual size.
+  async function replaceLogo(a, file, keepBackground = false) {
+    if (!file || logoBusy) return;
+    setLogoBusy(a.id);
+    setLogoNote(null);
+    try {
+      const { aspect, ...art } = await uploadLogo(file, keepBackground);
+      const size = a.image && a.width ? { width: a.width, height: toHalfCm(a.width * aspect) } : printSize(a.segment, aspect);
+      onUpdateAccessory?.(a.id, { inkColors: undefined, fullColour: undefined, ...art, ...size, label: "" });
+    } catch (e) {
+      setLogoNote({ text: e.message, error: true });
+    } finally {
+      setLogoBusy(null);
+    }
+  }
+
+  function addExtra(type, extra, presetKey) {
+    const id = onAddAccessory?.(type, defaultSegment(garmentType, type, presetKey), undefined, extra);
+    if (id) setSelectedExtra(id);
+  }
+
+  // The part list each area of the drawing is changed in: clicking the
+  // collar on the drawing offers the collar tiles, and so on.
+  function slotForSegment(segment) {
+    const want = (isBottoms(garmentType) ? BOTTOM_SEGMENT_SLOT : SEGMENT_SLOT)[segment];
+    return slots.find((sl) => sl.key === want) || null;
+  }
+
+  function jumpToPart(segment) {
+    const slot = slotForSegment(segment);
+    if (!slot) return;
+    setPartsOpen(true);
+    setFlashSlot(slot.key);
+    // After the part list is shown again (when it was hidden).
+    setTimeout(() => document.getElementById(`pm-slot-${slot.key}`)?.scrollIntoView({ behavior: "smooth", block: "center" }), 30);
+    setTimeout(() => setFlashSlot((k) => (k === slot.key ? null : k)), 1800);
+  }
+
+  // "More" on an extra picked on the drawing: its full settings in Extras.
+  function editExtra(id) {
+    setSelectedExtra(id);
+    setDrawerOpen(true);
+    setTimeout(() => document.getElementById(`pm-extra-${id}`)?.scrollIntoView({ behavior: "smooth", block: "nearest" }), 30);
+  }
+  const selected = accessories.some((a) => a.id === selectedExtra) ? selectedExtra : null;
 
   return (
     <div className={`pattern-maker${partsOpen ? "" : " pattern-maker-wide"}`}>
       {partsOpen && <div className="pm-palette">
         {!isBottoms(garmentType) && !isSkirt(garmentType) && !isMerch(garmentType) && (
-          <FitPicker value={value.fit || ""} onChange={(fit) => onChange({ fit })} summary={liveSummary} sizeLabel={size?.label} />
+          <>
+            {hasBlocks(garmentType) && (
+              <div className="pm-slot">
+                <div className="pm-slot-title">Block</div>
+                <div className="pm-fit-chips" role="radiogroup" aria-label="Block">
+                  {BLOCKS.map((b) => (
+                    <button
+                      type="button"
+                      key={b.value || "classic"}
+                      role="radio"
+                      aria-checked={(value.block || "") === b.value}
+                      className={`pm-ref-chip${(value.block || "") === b.value ? " pm-ref-chip-on" : ""}`}
+                      onClick={() => choose(b.value === "konveksi" && value.block !== "konveksi" ? { block: "konveksi", ...KONVEKSI_UNIFORM } : { block: b.value })}
+                      title={b.hint}
+                    >
+                      {b.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            <FitPicker value={value.fit || ""} onChange={(fit) => choose({ fit })} summary={liveSummary} sizeLabel={size?.label} chartFit={value.block === "konveksi" && hasBlocks(garmentType)} />
+            {value.block === "konveksi" && hasBlocks(garmentType) && (
+              <KonveksiChart value={value.konveksi} chart={shown?.draft?.konveksiChart} onChange={(konveksi) => onChange({ konveksi })} sizeLabel={size?.label} />
+            )}
+          </>
         )}
         {!isBottoms(garmentType) && !isSkirt(garmentType) && !isMerch(garmentType) && garmentType !== "polo_shirt" && value.sleeveStyle !== "half" && (
           <div className="pm-slot">
@@ -603,7 +932,7 @@ export default function PatternMaker({ orderId, garmentType, sizes, value, onCha
               {SLEEVE_OPENINGS.map((o) => {
                 const on = (value.sleevePlacket || "") === o.value;
                 return (
-                  <button type="button" key={o.value || "tower"} role="radio" aria-checked={on} className={`pm-ref-chip${on ? " pm-ref-chip-on" : ""}`} onClick={() => onChange({ sleevePlacket: o.value })} title={o.hint}>
+                  <button type="button" key={o.value || "tower"} role="radio" aria-checked={on} className={`pm-ref-chip${on ? " pm-ref-chip-on" : ""}`} onClick={() => choose({ sleevePlacket: o.value })} title={o.hint}>
                     {o.label}
                   </button>
                 );
@@ -612,7 +941,7 @@ export default function PatternMaker({ orderId, garmentType, sizes, value, onCha
           </div>
         )}
         {slots.map((slot) => (
-          <div key={slot.key} className="pm-slot">
+          <div key={slot.key} id={`pm-slot-${slot.key}`} className={`pm-slot${flashSlot === slot.key ? " pm-slot-flash" : ""}`}>
             <div className="pm-slot-title">{slot.label}</div>
             <div className="pm-parts">
               {slot.key === "pattern" && value.motifs.length > 1 && (
@@ -650,6 +979,9 @@ export default function PatternMaker({ orderId, garmentType, sizes, value, onCha
                       setOver(false);
                     }}
                     onClick={() => apply(slot.key, part.value)}
+                    onPointerEnter={() => prefetch(slot.key, part.value)}
+                    onPointerLeave={() => clearTimeout(hoverTimer.current)}
+                    onFocus={() => prefetch(slot.key, part.value)}
                     title={part.hint}
                   >
                     <PartThumb slot={slot.key} value={part.value} thumb={thumbFor(slot.key, part.value)} />
@@ -680,7 +1012,7 @@ export default function PatternMaker({ orderId, garmentType, sizes, value, onCha
                   type="button"
                   key={d.key}
                   className={`pm-part${value.dartPosition === d.key ? " pm-part-active" : ""}`}
-                  onClick={() => onChange({ dartPosition: d.key })}
+                  onClick={() => choose({ dartPosition: d.key })}
                 >
                   <span className="pm-part-label">{d.label}</span>
                 </button>
@@ -700,147 +1032,265 @@ export default function PatternMaker({ orderId, garmentType, sizes, value, onCha
         onDrop={onDrop}
       >
         <div className="pm-toolbar">
-          <button type="button" className="pm-tool" onClick={() => setPartsOpen((o) => !o)}>
-            {partsOpen ? "◂ Hide parts" : "▸ Show parts"}
+          <button type="button" className="pm-tool" onClick={() => setPartsOpen((o) => !o)} title={partsOpen ? "Hide the parts list for a bigger drawing" : "Show the parts list"}>
+            {partsOpen ? "◂ Parts" : "▸ Parts"}
           </button>
           <div className="pm-seg" role="group" aria-label="View">
-            {[["both", "Front + back"], ["front", "Front"], ["back", "Back"], ...(hasSleeveViews ? [["sleeves", "Sleeves"], ["all", "All"]] : [])].map(([v, label]) => (
-              <button type="button" key={v} className={`pm-tool${viewMode === v ? " pm-tool-on" : ""}`} onClick={() => setViewMode(v)}>
+            {[["both", "Both"], ["front", "Front"], ["back", "Back"], ...(hasSleeveViews ? [["sleeves", "Sleeves"], ["all", "All"]] : [])].map(([v, label]) => (
+              <button type="button" key={v} className={`pm-tool${viewMode === v ? " pm-tool-on" : ""}`} onClick={() => setViewMode(v)} aria-pressed={viewMode === v}>
                 {label}
               </button>
             ))}
           </div>
-          {!isMerch(garmentType) && (
-            <div className="pm-starters" role="group" aria-label="Start from something">
-              <button type="button" className={`pm-tool${describeOpen ? " pm-tool-on" : ""}`} onClick={toggleDescribe} aria-expanded={describeOpen} title="Describe the uniform in words and get a rough first design">
-                Describe design
+          {history && (
+            <div className="pm-seg" role="group" aria-label="Undo and redo">
+              <button type="button" className="pm-tool pm-icon" onClick={history.undo} disabled={!history.canUndo} aria-label="Undo" title={`Undo (${MOD_KEY}Z)`}>
+                ↶
               </button>
-              <label className={`pm-tool pm-photo-btn${photo ? " pm-tool-on" : ""}`} title="Put a photo of an existing uniform beside the preview to match it by eye, and take its colours">
-                Reference photo
-                <input
-                  type="file"
-                  accept="image/*"
-                  hidden
-                  onChange={(e) => {
-                    loadPhoto(e.target.files?.[0]);
-                    e.target.value = "";
-                  }}
-                />
-              </label>
+              <button type="button" className="pm-tool pm-icon" onClick={history.redo} disabled={!history.canRedo} aria-label="Redo" title={`Redo (${MOD_KEY}⇧Z)`}>
+                ↷
+              </button>
             </div>
           )}
-          <label className="pm-zoom">
-            Size
-            <input type="range" min="60" max="220" step="10" value={zoom} onChange={(e) => setZoom(Number(e.target.value))} />
-            <span>{zoom}%</span>
-          </label>
-        </div>
-        <button type="button" className="pm-burger" onClick={() => setDrawerOpen((o) => !o)} aria-expanded={drawerOpen} aria-label="Extras menu">
-          <span className="pm-burger-icon" aria-hidden="true">☰</span> Extras{accessories.length > 0 ? ` (${accessories.length})` : ""}
-        </button>
+          <div className="pm-seg" role="group" aria-label="Zoom">
+            <button type="button" className="pm-tool" onClick={() => setZoom((z) => Math.max(ZOOM_MIN, z - ZOOM_STEP))} disabled={zoom <= ZOOM_MIN} aria-label="Zoom out">
+              −
+            </button>
+            <button type="button" className="pm-tool pm-zoom-value" onClick={() => setZoom(100)} title="Back to 100%">
+              {zoom}%
+            </button>
+            <button type="button" className="pm-tool" onClick={() => setZoom((z) => Math.min(ZOOM_MAX, z + ZOOM_STEP))} disabled={zoom >= ZOOM_MAX} aria-label="Zoom in">
+              +
+            </button>
+          </div>
+          <span className="toolbar-spacer" />
+          {!isMerch(garmentType) && (
+            <div className="pm-menu" ref={startRef}>
+              <button type="button" className={`pm-tool${startOpen || describeOpen || photo ? " pm-tool-on" : ""}`} onClick={() => setStartOpen((o) => !o)} aria-expanded={startOpen} aria-haspopup="menu">
+                Start from ▾
+              </button>
+              {startOpen && (
+                <div className="pm-menu-list" role="menu">
+                  {photo && photoHidden && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setStartOpen(false);
+                        setPhotoHidden(false);
+                      }}
+                    >
+                      Show the reference photo
+                      <small>The one kept with this order</small>
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setStartOpen(false);
+                      if (!describeOpen) toggleDescribe();
+                    }}
+                  >
+                    A description
+                    <small>Type the uniform in words for a rough first design</small>
+                  </button>
+                  <label role="menuitem">
+                    A reference photo
+                    <small>Match the parts and colours of an existing uniform</small>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      hidden
+                      onChange={(e) => {
+                        setStartOpen(false);
+                        loadPhoto(e.target.files?.[0]);
+                        e.target.value = "";
+                      }}
+                    />
+                  </label>
+                </div>
+              )}
+            </div>
+          )}
+          <div className="pm-menu">
+            <button type="button" className={`pm-tool${drawerOpen ? " pm-tool-on" : ""}`} onClick={() => setDrawerOpen((o) => !o)} aria-expanded={drawerOpen}>
+              Extras{accessories.length > 0 ? ` (${accessories.length})` : ""}
+            </button>
+            {drawerOpen && (
+              // On a phone the drawer is a sheet over the page: a tap on the
+              // dimmed page or "Done" closes it.
+              <div className="sheet-backdrop" onClick={() => setDrawerOpen(false)} aria-hidden="true" />
+            )}
+            {drawerOpen && (
+              <div className="pm-drawer">
+                <div className="sheet-head phone-only">
+                  <b>Extras</b>
+                  <button type="button" className="btn-add btn-inline" onClick={() => setDrawerOpen(false)}>
+                    Done
+                  </button>
+                </div>
+                {!isMerch(garmentType) && <div className="pm-slot-title">Pockets — drag onto the garment</div>}
+                {!isMerch(garmentType) && (
+                  <div className="pm-parts">
+                    {POCKET_PRESETS.map((pp) => (
+                      <button
+                        type="button"
+                        key={pp.key}
+                        draggable
+                        className="pm-tile pm-tile-small"
+                        onDragStart={(e) => startExtraDrag(e, { value: "pocket", extra: pp.extra })}
+                        onClick={() => addExtra("pocket", pp.extra, pp.key)}
+                        title={pp.hint}
+                      >
+                        <PocketThumb shape={pp.extra.shape} ratio={pp.extra.width / pp.extra.height} />
+                        <span className="pm-tile-label">{pp.label}</span>
+                      </button>
+                    ))}
+                    {POCKET_SHAPES.filter((s) => s.value !== "classic").map((s) => (
+                      <button
+                        type="button"
+                        key={s.value}
+                        draggable
+                        className="pm-tile pm-tile-small"
+                        onDragStart={(e) => startExtraDrag(e, { value: "pocket", extra: { shape: s.value, ...DEFAULT_POCKET } })}
+                        onClick={() => addExtra("pocket", { shape: s.value, ...DEFAULT_POCKET }, "chest")}
+                      >
+                        <PocketThumb shape={s.value} />
+                        <span className="pm-tile-label">{s.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <div className="pm-slot-title" style={{ marginTop: isMerch(garmentType) ? 0 : 12 }}>Prints</div>
+                <div className="pm-parts">
+                  {["embroidery", "sablon"].map((k) => (
+                    <button type="button" key={k} draggable className="pm-tile pm-tile-small" onDragStart={(e) => startExtraDrag(e, { value: k })} onClick={() => addExtra(k, undefined)}>
+                      <ExtraThumb kind={k} />
+                      <span className="pm-tile-label">{EXTRA_LABELS[k]}</span>
+                    </button>
+                  ))}
+                  <label className={`pm-tile pm-tile-small${logoBusy === "new" ? " is-busy" : ""}`} title="A PNG, JPG or SVG of the logo. A plain background round it is cleared.">
+                    <ExtraThumb kind="logo" />
+                    <span className="pm-tile-label">{logoBusy === "new" ? "Adding…" : "Logo file"}</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      hidden
+                      disabled={Boolean(logoBusy)}
+                      onChange={(e) => {
+                        addLogo(e.target.files?.[0]);
+                        e.target.value = "";
+                      }}
+                    />
+                  </label>
+                </div>
+                <p className="pm-drawer-hint">You can also drop a logo file straight onto the garment.</p>
 
-        {drawerOpen && (
-          <div className="pm-drawer">
-            {!isMerch(garmentType) && <div className="pm-slot-title">Pockets — drag onto the garment</div>}
-            {!isMerch(garmentType) && (
-              <div className="pm-parts">
-                {POCKET_PRESETS.map((pp) => (
-                  <button
-                    type="button"
-                    key={pp.key}
-                    draggable
-                    className="pm-tile pm-tile-small"
-                    onDragStart={(e) => startExtraDrag(e, { value: "pocket", extra: pp.extra })}
-                    onClick={() => addExtra("pocket", pp.extra, pp.key)}
-                    title={pp.hint}
-                  >
-                    <PocketThumb shape={pp.extra.shape} ratio={pp.extra.width / pp.extra.height} />
-                    <span className="pm-tile-label">{pp.label}</span>
-                  </button>
-                ))}
-                {POCKET_SHAPES.filter((s) => s.value !== "classic").map((s) => (
-                  <button
-                    type="button"
-                    key={s.value}
-                    draggable
-                    className="pm-tile pm-tile-small"
-                    onDragStart={(e) => startExtraDrag(e, { value: "pocket", extra: { shape: s.value, ...DEFAULT_POCKET } })}
-                    onClick={() => addExtra("pocket", { shape: s.value, ...DEFAULT_POCKET }, "chest")}
-                  >
-                    <PocketThumb shape={s.value} />
-                    <span className="pm-tile-label">{s.label}</span>
-                  </button>
-                ))}
+                {accessories.length > 0 && <div className="pm-slot-title" style={{ marginTop: 12 }}>On the garment</div>}
+                <ul className="pm-extras">
+                  {accessories.map((a) => (
+                    <li key={a.id} id={`pm-extra-${a.id}`} className={selected === a.id ? "is-selected" : undefined} onPointerDown={() => setSelectedExtra(a.id)}>
+                      <div className="pm-extra-head">
+                        <span>{EXTRA_LABELS[a.type] || a.type} · {a.segment.replace("_", " ")}{sleeveFace(a)}</span>
+                        <button type="button" className="link-btn link-btn-danger" onClick={() => onRemoveAccessory?.(a.id)}>
+                          Remove
+                        </button>
+                      </div>
+                      {(a.type === "embroidery" || a.type === "sablon") && (
+                        <PrintArtwork
+                          accessory={a}
+                          busy={logoBusy === a.id}
+                          canKeepBackground={Boolean(a.image && logoFiles[a.image]?.backgroundRemoved)}
+                          onPickFile={(file) => replaceLogo(a, file)}
+                          onKeepBackground={() => replaceLogo(a, logoFiles[a.image]?.file, true)}
+                          onRemoveImage={() => onUpdateAccessory?.(a.id, { image: undefined, inkColors: undefined, fullColour: undefined })}
+                          onUpdate={(patch) => onUpdateAccessory?.(a.id, patch)}
+                        />
+                      )}
+                      {a.type === "pocket" && (
+                        <div className="pm-extra-row">
+                          <label>Shape</label>
+                          <select className="select" value={a.shape || "classic"} onChange={(e) => onUpdateAccessory?.(a.id, { shape: e.target.value })}>
+                            {POCKET_SHAPES.map((s) => (
+                              <option key={s.value} value={s.value}>{s.label}</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+                      {a.type === "pocket" && (
+                        <div className="pm-extra-row">
+                          <label>Fabric</label>
+                          <select className="select" value={a.fabric === "contrast" ? "contrast" : "main"} onChange={(e) => onUpdateAccessory?.(a.id, { fabric: e.target.value === "contrast" ? "contrast" : undefined })} title="A contrast pocket is cut from the trim/motif fabric, batik included">
+                            <option value="main">Main fabric</option>
+                            <option value="contrast">Contrast fabric</option>
+                          </select>
+                        </div>
+                      )}
+                      <div className="pm-extra-row">
+                        <label>Rotation {Math.round(a.rotation || 0)}°</label>
+                        <input type="range" min="-180" max="180" step="5" value={a.rotation || 0} onChange={(e) => onUpdateAccessory?.(a.id, { rotation: Number(e.target.value) })} />
+                      </div>
+                      <div className="pm-extra-row pm-rot-buttons">
+                        <button type="button" className="pm-tool" onClick={() => onUpdateAccessory?.(a.id, { rotation: turnBy(a.rotation, -45) })} title="Turn 45° anticlockwise">↺ 45°</button>
+                        <button type="button" className="pm-tool" onClick={() => onUpdateAccessory?.(a.id, { rotation: turnBy(a.rotation, 45) })} title="Turn 45° clockwise">↻ 45°</button>
+                        <button type="button" className="pm-tool" onClick={() => onUpdateAccessory?.(a.id, { rotation: 0 })}>Upright</button>
+                        {onMirrorAccessory && (/left|right/.test(a.segment) || a.position) && (
+                          <button type="button" className="pm-tool" onClick={() => onMirrorAccessory(a.id)} title="Add a matching one on the other side">Copy to other side</button>
+                        )}
+                        {/sleeve/.test(a.segment) && (
+                          <button type="button" className="pm-tool" onClick={() => onUpdateAccessory?.(a.id, { rotation: sleeveAlignment(a.segment, a.view, value.sleeveStyle) })} title="Turn it to follow the arm">Fit sleeve</button>
+                        )}
+                      </div>
+                      {a.image ? (
+                        // A logo keeps its proportions: one slider sets its size.
+                        <div className="pm-extra-row">
+                          <label>
+                            Size {a.width.toFixed(1)} × {a.height.toFixed(1)} cm
+                          </label>
+                          <input
+                            type="range"
+                            min="2"
+                            max="36"
+                            step="0.5"
+                            value={a.width}
+                            onChange={(e) => {
+                              const width = Number(e.target.value);
+                              onUpdateAccessory?.(a.id, { width, height: Math.round(((a.height * width) / a.width) * 10) / 10 });
+                            }}
+                          />
+                        </div>
+                      ) : (
+                        <>
+                          <div className="pm-extra-row">
+                            <label>Width {(a.width || DEFAULT_POCKET.width).toFixed(1)} cm</label>
+                            <input type="range" min="3" max={a.type === "pocket" ? 18 : 30} step="0.5" value={a.width || (a.type === "pocket" ? DEFAULT_POCKET.width : 6)} onChange={(e) => onUpdateAccessory?.(a.id, { width: Number(e.target.value) })} />
+                          </div>
+                          <div className="pm-extra-row">
+                            <label>Height {(a.height || DEFAULT_POCKET.height).toFixed(1)} cm</label>
+                            <input type="range" min="3" max={a.type === "pocket" ? 20 : 30} step="0.5" value={a.height || (a.type === "pocket" ? DEFAULT_POCKET.height : 6)} onChange={(e) => onUpdateAccessory?.(a.id, { height: Number(e.target.value) })} />
+                          </div>
+                        </>
+                      )}
+                    </li>
+                  ))}
+                </ul>
               </div>
             )}
-            <div className="pm-slot-title" style={{ marginTop: isMerch(garmentType) ? 0 : 12 }}>Prints</div>
-            <div className="pm-parts">
-              {["embroidery", "sablon"].map((k) => (
-                <button type="button" key={k} draggable className="pm-tile pm-tile-small" onDragStart={(e) => startExtraDrag(e, { value: k })} onClick={() => addExtra(k, undefined)}>
-                  <ExtraThumb kind={k} />
-                  <span className="pm-tile-label">{EXTRA_LABELS[k]}</span>
-                </button>
-              ))}
-            </div>
-
-            {accessories.length > 0 && <div className="pm-slot-title" style={{ marginTop: 12 }}>On the garment</div>}
-            <ul className="pm-extras">
-              {accessories.map((a) => (
-                <li key={a.id}>
-                  <div className="pm-extra-head">
-                    <span>{EXTRA_LABELS[a.type] || a.type} · {a.segment.replace("_", " ")}{sleeveFace(a)}</span>
-                    <button type="button" className="link-btn link-btn-danger" onClick={() => onRemoveAccessory?.(a.id)}>
-                      Remove
-                    </button>
-                  </div>
-                  {a.type === "pocket" && (
-                    <div className="pm-extra-row">
-                      <label>Shape</label>
-                      <select className="select" value={a.shape || "classic"} onChange={(e) => onUpdateAccessory?.(a.id, { shape: e.target.value })}>
-                        {POCKET_SHAPES.map((s) => (
-                          <option key={s.value} value={s.value}>{s.label}</option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-                  {a.type === "pocket" && (
-                    <div className="pm-extra-row">
-                      <label>Fabric</label>
-                      <select className="select" value={a.fabric === "contrast" ? "contrast" : "main"} onChange={(e) => onUpdateAccessory?.(a.id, { fabric: e.target.value === "contrast" ? "contrast" : undefined })} title="A contrast pocket is cut from the trim/motif fabric, batik included">
-                        <option value="main">Main fabric</option>
-                        <option value="contrast">Contrast fabric</option>
-                      </select>
-                    </div>
-                  )}
-                  <div className="pm-extra-row">
-                    <label>Rotation {Math.round(a.rotation || 0)}°</label>
-                    <input type="range" min="-180" max="180" step="5" value={a.rotation || 0} onChange={(e) => onUpdateAccessory?.(a.id, { rotation: Number(e.target.value) })} />
-                  </div>
-                  <div className="pm-extra-row pm-rot-buttons">
-                    <button type="button" className="pm-tool" onClick={() => onUpdateAccessory?.(a.id, { rotation: turnBy(a.rotation, -45) })} title="Turn 45° anticlockwise">↺ 45°</button>
-                    <button type="button" className="pm-tool" onClick={() => onUpdateAccessory?.(a.id, { rotation: turnBy(a.rotation, 45) })} title="Turn 45° clockwise">↻ 45°</button>
-                    <button type="button" className="pm-tool" onClick={() => onUpdateAccessory?.(a.id, { rotation: 0 })}>Upright</button>
-                    {onMirrorAccessory && (/left|right/.test(a.segment) || a.position) && (
-                      <button type="button" className="pm-tool" onClick={() => onMirrorAccessory(a.id)} title="Add a matching one on the other side">Copy to other side</button>
-                    )}
-                    {/sleeve/.test(a.segment) && (
-                      <button type="button" className="pm-tool" onClick={() => onUpdateAccessory?.(a.id, { rotation: sleeveAlignment(a.segment, a.view, value.sleeveStyle) })} title="Turn it to follow the arm">Fit sleeve</button>
-                    )}
-                  </div>
-                  <div className="pm-extra-row">
-                    <label>Width {(a.width || DEFAULT_POCKET.width).toFixed(1)} cm</label>
-                    <input type="range" min="3" max={a.type === "pocket" ? 18 : 30} step="0.5" value={a.width || (a.type === "pocket" ? DEFAULT_POCKET.width : 6)} onChange={(e) => onUpdateAccessory?.(a.id, { width: Number(e.target.value) })} />
-                  </div>
-                  <div className="pm-extra-row">
-                    <label>Height {(a.height || DEFAULT_POCKET.height).toFixed(1)} cm</label>
-                    <input type="range" min="3" max={a.type === "pocket" ? 20 : 30} step="0.5" value={a.height || (a.type === "pocket" ? DEFAULT_POCKET.height : 6)} onChange={(e) => onUpdateAccessory?.(a.id, { height: Number(e.target.value) })} />
-                  </div>
-                </li>
-              ))}
-            </ul>
           </div>
-        )}
+        </div>
 
+
+        {(logoBusy === "new" || logoNote) && (
+          <p className={`pm-logo-note${logoNote?.error ? " is-error" : ""}`} role="status">
+            {logoBusy === "new" ? "Getting the logo ready…" : logoNote.text}
+            {logoNote && (
+              <button type="button" className="link-btn" onClick={() => setLogoNote(null)}>
+                Dismiss
+              </button>
+            )}
+          </p>
+        )}
         <div className={`pm-compare${photo || describeOpen ? " pm-compare-on" : ""}`}>
           {(photo || describeOpen) && (
             <div className="pm-side">
@@ -854,7 +1304,7 @@ export default function PatternMaker({ orderId, garmentType, sizes, value, onCha
                   onClose={() => setDescribeOpen(false)}
                 />
               )}
-              {photo && (
+              {photo && !photoHidden && (
                 <ReferencePhoto
                   photo={photo}
                   colors={colorHint || {}}
@@ -864,7 +1314,9 @@ export default function PatternMaker({ orderId, garmentType, sizes, value, onCha
                   error={matchError}
                   onPick={pickColor}
                   onMatch={matchPhoto}
-                  onClose={() => {
+                  onHide={() => setPhotoHidden(true)}
+                  onRemove={() => {
+                    if (!confirm("Remove the reference photo from this order?")) return;
                     setPhoto(null);
                     setPhotoResult(null);
                     onReferencePhoto?.("");
@@ -873,41 +1325,49 @@ export default function PatternMaker({ orderId, garmentType, sizes, value, onCha
               )}
             </div>
           )}
-          <div className="pm-compare-main">
+          <div className={`pm-compare-main${drawing ? " is-drawing" : ""}`}>
+            <div className="pm-drawing-bar" aria-hidden="true" />
             {!photo && matchError && <p className="error">{matchError}</p>}
             {!size && <p className="empty">Add a size to see the garment build up.</p>}
             {error && <p className="error">{error}</p>}
-            {size && pieces && (
+            {size && shownPieces && (
               <ErrorBoundary fallback={<p className="empty">The preview couldn't be displayed.</p>}>
                 <GarmentFlatPreview
                   compact
                   views={viewMode}
                   zoom={zoom}
-                  pieces={pieces}
-                  gender={value.gender}
-                  dartPosition={value.dartPosition}
-                  sleeveStyle={value.sleeveStyle}
-                  collarStyle={effectiveCollarStyle}
-                  merchItem={isMerch(garmentType) ? value.merch.item : undefined}
+                  pieces={shownPieces}
+                  gender={look.gender}
+                  dartPosition={look.dartPosition}
+                  sleeveStyle={look.sleeveStyle}
+                  collarStyle={look.collarStyle}
+                  merchItem={look.merchItem}
                   accessories={accessories}
+                  selectedId={selected}
+                  onSelect={setSelectedExtra}
+                  onUpdateAccessory={onUpdateAccessory}
+                  onRemoveAccessory={onRemoveAccessory}
+                  onMirrorAccessory={onMirrorAccessory}
+                  onEditAccessory={editExtra}
+                  partFor={(segment) => slotForSegment(segment)?.label}
+                  onJumpToPart={jumpToPart}
                   colorHint={colorHint}
                   fabricColors={fabricColors}
                   fabrics={fabrics}
                   fabricName={fabricName}
                   onFabricPick={onFabricPick}
                   onColorChange={onColorHint}
-                  pattern={value.pattern}
+                  pattern={look.pattern}
                   onAddAccessory={onAddAccessory}
                   onDragAccessory={onDragAccessory}
                   onDropAccessory={onAddAccessory ? () => {} : undefined}
+                  onLogoFile={onAddAccessory ? addLogo : undefined}
                 />
               </ErrorBoundary>
             )}
           </div>
         </div>
-        <p className="pm-stage-hint">
-          Click anywhere on the garment to add a pocket, pen pocket, embroidery or sablon exactly there — on the collar, cuffs, chest, sleeves, back, legs, waistband or hem. Drag an extra to move it; open Extras to resize it or change its shape.
-        </p>
+        <p className="pm-stage-hint">Click the garment to add a pocket or print there, or to change that part. Click an extra to pick it: drag it, pull its corner to size it, or use the arrow keys. {MOD_KEY}Z undoes.</p>
         {dragging && <div className="pm-drop-hint">Drop to set {slots.find((s) => s.key === dragging.slot)?.label.toLowerCase()}</div>}
       </div>
     </div>

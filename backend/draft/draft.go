@@ -111,6 +111,10 @@ type Piece struct {
 	Width    float64 `json:"width"`    // bounding box, for nesting/yardage estimates
 	Height   float64 `json:"height"`
 	FoldEdge string  `json:"foldEdge"` // "left" if that edge is placed on the fabric fold
+	// CutFull marks a half drafted against a fold that is cut as one whole
+	// piece instead (the shop's backs and collars): Finish unfolds its
+	// cutting line, and it counts as one piece rather than a mirrored pair.
+	CutFull bool `json:"cutFull,omitempty"`
 	// Fabric is "" (the garment's main fabric) or "contrast" — a motif band,
 	// an insert panel, a V-neck/collar trim, or a side stripe, cut from a
 	// second fabric. The cutting layout nests and counts yardage per fabric,
@@ -153,6 +157,13 @@ type Piece struct {
 	// a dart cut into an edge as [leg, tip, leg], a fish-eye dart inside the
 	// piece as a closed loop [top, side, bottom, side, top].
 	Darts [][]Point `json:"darts,omitempty"`
+	// SeamAllow and HemAllow, when set, replace the standard allowances for
+	// this piece (the shop's uniform block is cut with 0.5cm seams and a
+	// 1.5cm hem). NoAllowance cuts it on the sewing line: a stiff interfacing
+	// cut to the finished size.
+	SeamAllow   float64 `json:"seamAllowance,omitempty"`
+	HemAllow    float64 `json:"hemAllowance,omitempty"`
+	NoAllowance bool    `json:"noAllowance,omitempty"`
 }
 
 type point struct{ x, y float64 }
@@ -265,26 +276,6 @@ func splitCubic(p0, p1, p2, p3 point, t float64) (a, d, f, e, c point) {
 	return
 }
 
-// tForY finds the parameter t where a cubic bezier's y-coordinate
-// equals targetY, via binary search — used to split a curve (like an
-// armhole) at a specific height rather than by t directly, e.g. where
-// a back yoke seam crosses the armhole curve. Assumes y is monotonic
-// along the curve from p0 to p3, which holds for every armhole curve
-// this package drafts (shoulder to underarm, y only increasing).
-func tForY(p0, c1, c2, p3 point, targetY float64) float64 {
-	lo, hi := 0.0, 1.0
-	for i := 0; i < 30; i++ {
-		mid := (lo + hi) / 2
-		_, _, f, _, _ := splitCubic(p0, c1, c2, p3, mid)
-		if f.y < targetY {
-			lo = mid
-		} else {
-			hi = mid
-		}
-	}
-	return (lo + hi) / 2
-}
-
 // cubicLength approximates the arc length of a cubic bezier by
 // sampling points along it and summing the straight-line segments
 // between them — accurate enough to size a sleeve cap to an armhole,
@@ -380,6 +371,11 @@ func neckControls(centre, neck, shoulderTip point) (point, point) {
 // approximated as a fraction of the full one, the same way a real
 // pattern maker eyeballs a short-sleeve length off a long-sleeve
 // block when no separate spec is given.
+// MaxShortSleeve is the longest sleeve length (cm) read as a short sleeve's
+// own length rather than the arm's, shoulder to wrist. A kindergartener's arm
+// is already about 33cm; an adult short sleeve is 20-28.
+const MaxShortSleeve = 30.0
+
 func sleeveLengthFraction(style string) float64 {
 	switch style {
 	case "half":
@@ -439,6 +435,12 @@ func draftSleeve(armhole, sleeveLen, upperArm, wrist, ease, across float64, styl
 	// width than the full sleeve's wrist width — interpolate the hem
 	// by the same fraction used to shorten the length.
 	fraction := sleeveLengthFraction(style)
+	// A short sleeve given as itself: konveksi charts for kemeja pendek list
+	// the short sleeve's own length (20-25cm), not the arm's, and no arm is
+	// that short. Read as the arm, a 22cm entry made a 7.7cm sleeve.
+	if style == "half" && sleeveLen > 0 && sleeveLen <= MaxShortSleeve {
+		sleeveLen /= fraction
+	}
 	halfWrist := halfBicep - (halfBicep-halfWristFull)*fraction
 
 	// The cap is drafted the way the charts draw it: a fairly low dome

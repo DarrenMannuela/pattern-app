@@ -272,11 +272,18 @@ func draftArmhole(neckPoint, shoulderTip, underarm, sideTo point, back bool) []s
 	if back {
 		inset, level, scoop = backAcrossInset, backAcrossLevel, backScoop
 	}
-	depth := underarm.y - shoulderTip.y
 	// The inset is jarumjahit's 1cm on an adult's 15cm shoulder; a child's
 	// shorter shoulder is hollowed proportionally less.
 	inset *= math.Min(1, math.Hypot(shoulderTip.x-neckPoint.x, shoulderTip.y-neckPoint.y)/15)
-	acrossX := math.Min(shoulderTip.x-inset, underarm.x-2.5)
+	return shapedArmhole(neckPoint, shoulderTip, underarm, sideTo, inset, 2.5, level, scoop)
+}
+
+// shapedArmhole draws the armhole through an across point inset in from the
+// shoulder tip (and at least underIn in from the underarm), level of the way
+// down, scooping under the arm by scoop.
+func shapedArmhole(neckPoint, shoulderTip, underarm, sideTo point, inset, underIn, level, scoop float64) []seg {
+	depth := underarm.y - shoulderTip.y
+	acrossX := math.Min(shoulderTip.x-inset, underarm.x-underIn)
 	across := point{acrossX, shoulderTip.y + depth*level}
 
 	// Square off the shoulder: the perpendicular to the seam, pointing down.

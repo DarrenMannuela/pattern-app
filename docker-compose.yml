@@ -1,0 +1,177 @@
+# Konveksi Studio in Docker: the app, its PostgreSQL database, and a backup
+# job that dumps the database every week.
+#
+#   cp .env.example .env    # then set POSTGRES_PASSWORD (letters and digits)
+#   docker compose up -d --build
+#   open http://localhost:8000
+#
+# The first start copies backend/orders.json and backend/uploads/artwork into
+# the new database. Backups land in ./backups. See README.md, "Running in Docker".
+name: konveksi
+
+# Logs rotate: at most 5 files of 10 MB per service, so months of running
+# never fill the disk.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    logging: *logging
+    # Time to finish writing and shut down cleanly before Docker stops it hard.
+    stop_grace_period: 1m
+    environment:
+      POSTGRES_DB: konveksi
+      POSTGRES_USER: konveksi
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env (copy .env.example)}
+      TZ: ${TZ:-Asia/Jakarta}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    # Only this computer can reach the database (for a database app or
+    # `go run .` with DATABASE_URL); the shop's network can't.
+    ports:
+      - "127.0.0.1:${DB_PORT:-5433}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U konveksi -d konveksi"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    logging: *logging
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://konveksi:${POSTGRES_PASSWORD}@db:5432/konveksi?sslmode=disable
+      # Read once, on the first start: the orders and logos kept before the database.
+      IMPORT_DIR: /import
+      # Read only, so the app can show when the last backup ran.
+      BACKUP_DIR: /backups
+      BACKUP_WARN_DAYS: ${BACKUP_WARN_DAYS:-8}
+      # Extra names this computer is reached by on the shop's network, if not
+      # an IP address or a .local name (comma-separated).
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-}
+      TZ: ${TZ:-Asia/Jakarta}
+      # Photo reading (optional): a Claude API key, or Ollama running on this computer.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OLLAMA_HOST: ${OLLAMA_HOST:-http://host.docker.internal:11434}
+      OLLAMA_VISION_MODEL: ${OLLAMA_VISION_MODEL:-}
+      VISION_PROVIDER: ${VISION_PROVIDER:-}
+    volumes:
+      - ./backend:/import:ro
+      - ./backups:/backups:ro
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/api/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+
+  web:
+    build: ./frontend
+    restart: unless-stopped
+    logging: *logging
+    depends_on:
+      backend:
+        condition: service_healthy
+    # 127.0.0.1: this computer only. Set WEB_BIND=0.0.0.0 in .env to open it to
+    # the shop's network (there is no login, so only on a network you trust).
+    ports:
+      - "${WEB_BIND:-127.0.0.1}:${WEB_PORT:-8000}:80"
+    healthcheck:
+      test: ["CMD", "wget", "-qO", "/dev/null", "http://127.0.0.1/"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+
+  backup:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    logging: *logging
+    # A small init passes Docker's stop signal on: the scheduler alone
+    # ignores it and was killed after 10 seconds, mid-backup if unlucky.
+    init: true
+    # After the backend: on the first start it fills the database (the import),
+    # and the first backup should have that in it.
+    depends_on:
+      db:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "/scripts/entrypoint.sh"]
+    environment:
+      PGHOST: db
+      PGUSER: konveksi
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: konveksi
+      # Cron syntax: minute hour day-of-month month day-of-week. Sunday 02:00.
+      BACKUP_SCHEDULE: ${BACKUP_SCHEDULE:-0 2 * * 0}
+      BACKUP_KEEP: ${BACKUP_KEEP:-8}
+      # Hourly, and at start: take one when the newest is this many days old
+      # (catches up a scheduled backup the Mac slept through).
+      BACKUP_MAX_AGE_DAYS: ${BACKUP_MAX_AGE_DAYS:-7}
+      # "on" when BACKUP_COPY_DIR is set: each backup is also copied there.
+      BACKUP_COPY: ${BACKUP_COPY_DIR:+on}
+      TZ: ${TZ:-Asia/Jakarta}
+    volumes:
+      - ./backups:/backups
+      - ./docker/backup:/scripts:ro
+      # The second place for copies (BACKUP_COPY_DIR); without one this is
+      # just the backups folder again and nothing is copied.
+      - ${BACKUP_COPY_DIR:-./backups}:/backups-copy
+    # Healthy while the scheduler runs and the database answers.
+    healthcheck:
+      test: ["CMD-SHELL", "pidof crond >/dev/null && pg_isready -q"]
+      interval: 1m
+      timeout: 5s
+      retries: 3
+
+  # The app's own address on your tailnet, https://konveksi.<tailnet>.ts.net:
+  # a small Tailscale node that joins the tailnet as its own device and
+  # passes visits on to the app (docker/tailscale/serve.json). Tailnet only,
+  # never the internet. Runs only with COMPOSE_PROFILES=tailscale in .env;
+  # see README.md, "On a phone, and from outside the shop".
+  tailscale:
+    image: tailscale/tailscale:stable
+    profiles: ["tailscale"]
+    restart: unless-stopped
+    logging: *logging
+    depends_on:
+      web:
+        condition: service_healthy
+    environment:
+      # The device's name, and so the address: konveksi.<tailnet>.ts.net.
+      TS_HOSTNAME: ${TS_HOSTNAME:-konveksi}
+      # Used to sign in on the first start only. Leave it empty to sign in
+      # with the link in `docker compose logs tailscale` instead.
+      TS_AUTHKEY: ${TS_AUTHKEY:-}
+      TS_AUTH_ONCE: "true"
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_SERVE_CONFIG: /config/serve.json
+      # Tailscale without a network device of its own: works as is on
+      # Docker Desktop, no extra permissions.
+      TS_USERSPACE: "true"
+      TS_ENABLE_HEALTH_CHECK: "true"
+      TS_LOCAL_ADDR_PORT: 127.0.0.1:9002
+    volumes:
+      # Its identity on the tailnet. Keep it: without it, it signs in again
+      # as a new device (konveksi-1).
+      - tailscale:/var/lib/tailscale
+      - ./docker/tailscale/serve.json:/config/serve.json:ro
+    # Healthy once it's signed in and on the tailnet.
+    healthcheck:
+      test: ["CMD", "wget", "-qO", "/dev/null", "http://127.0.0.1:9002/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  pgdata:
+  tailscale:

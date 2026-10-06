@@ -49,7 +49,7 @@ export default function SizeChartTable({ sizes, fields, onSize, onMeasurement, o
             <tr key={f.key}>
               <th scope="row">
                 {f.label.replace(/ \(cm[^)]*\)/, "")}
-                {f.local && <span className="sc-sub">{f.local}</span>}
+                {f.local && <span className="sc-sub">{f.local}{f.optional ? " · optional" : ""}{f.note ? ` · ${f.note}` : ""}</span>}
               </th>
               {sizes.map((sz, i) => (
                 <td key={i}>
@@ -57,7 +57,9 @@ export default function SizeChartTable({ sizes, fields, onSize, onMeasurement, o
                     type="number"
                     step="0.5"
                     inputMode="decimal"
-                    value={num(sz.measurements?.[f.key])}
+                    // An optional measurement left at 0 is worked out by the draft: shown blank, as "auto".
+                    value={f.optional && !sz.measurements?.[f.key] ? "" : num(sz.measurements?.[f.key])}
+                    placeholder={f.optional ? "auto" : undefined}
                     aria-label={`${sz.label || `Size ${i + 1}`} ${f.label}`}
                     onChange={(e) => onMeasurement(i, f.key, e.target.value)}
                   />
@@ -77,7 +79,7 @@ export default function SizeChartTable({ sizes, fields, onSize, onMeasurement, o
           </tr>
         </tbody>
       </table>
-      <p className="note sc-note">All measurements in cm, taken on the body. Remember to save the order (or generate a mockup) after editing.</p>
+      <p className="note sc-note">All measurements in cm, taken on the body. Leave an optional one blank to have it worked out.</p>
     </div>
   );
 }

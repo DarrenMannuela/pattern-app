@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"runtime/debug"
+	"time"
 )
 
 // Request body ceilings. Ordinary requests are small JSON; an order can also
@@ -71,5 +72,30 @@ func Recover(next http.Handler) http.Handler {
 			http.Error(w, "something went wrong on the server; the request was not completed", http.StatusInternalServerError)
 		}()
 		next.ServeHTTP(w, r)
+	})
+}
+
+// statusRecorder notes the status a handler answered with.
+type statusRecorder struct {
+	http.ResponseWriter
+	status int
+}
+
+func (r *statusRecorder) WriteHeader(code int) {
+	r.status = code
+	r.ResponseWriter.WriteHeader(code)
+}
+
+// LogProblems logs every request the server failed (5xx) and every one that
+// took longer than slow, so a problem someone ran into can be found
+// afterwards. Ordinary requests are not logged.
+func LogProblems(slow time.Duration, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
+		next.ServeHTTP(rec, r)
+		if took := time.Since(start); rec.status >= 500 || took > slow {
+			log.Printf("%s %s -> %d in %s", r.Method, r.URL.Path, rec.status, took.Round(time.Millisecond))
+		}
 	})
 }

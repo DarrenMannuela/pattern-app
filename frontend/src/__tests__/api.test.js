@@ -42,7 +42,7 @@ describe("api request handling", () => {
     stubFetch(async () => reply("<html><body>Bad gateway</body></html>", { status: 502 }));
     const err = await api.listOrders().catch((e) => e);
     expect(err.message).not.toContain("<");
-    expect(err.message).toMatch(/server ran into a problem/i);
+    expect(err.message).toMatch(/isn't answering/i);
   });
 
   it("explains a missing thing when the body is empty", async () => {
@@ -57,7 +57,7 @@ describe("api request handling", () => {
     const err = await api.listOrders().catch((e) => e);
     expect(err).toBeInstanceOf(ApiError);
     expect(err.status).toBe(0);
-    expect(err.message).toMatch(/can't reach the server/i);
+    expect(err.message).toMatch(/can't reach the app's server/i);
   });
 
   it("times out instead of waiting forever", async () => {
@@ -107,5 +107,31 @@ describe("static files", () => {
     await expect(api.fabricColors()).rejects.toThrow(/expected format/i);
     stubFetch(async () => reply("", { status: 404 }));
     await expect(api.fabricColors()).rejects.toThrow(/couldn't load/i);
+  });
+
+  it("asks a read once more when the server was briefly away", async () => {
+    let calls = 0;
+    stubFetch(async () => {
+      calls++;
+      if (calls === 1) throw new TypeError("Failed to fetch");
+      return reply(JSON.stringify([{ id: "1" }]));
+    });
+    expect(await api.listOrders()).toEqual([{ id: "1" }]);
+    expect(calls).toBe(2);
+  });
+
+  it("asks a read once more after a 503 while restarting, but no more", async () => {
+    const fn = stubFetch(async () => reply("", { status: 503 }));
+    await expect(api.listOrders()).rejects.toBeInstanceOf(ApiError);
+    expect(fn).toHaveBeenCalledTimes(2);
+  });
+
+  it("never sends a change twice", async () => {
+    const fn = stubFetch(async () => {
+      throw new TypeError("Failed to fetch");
+    });
+    await expect(api.deleteOrder("1")).rejects.toBeInstanceOf(ApiError);
+    await expect(api.createOrder({ customerName: "x" })).rejects.toBeInstanceOf(ApiError);
+    expect(fn).toHaveBeenCalledTimes(2);
   });
 });

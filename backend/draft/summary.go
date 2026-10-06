@@ -254,6 +254,15 @@ func summarizeShirt(front, back Piece, yoke, sleeve, cuff, placket *Piece, m Mea
 	fSide, okFS := seamBetween(fo, fUnder, fHem)
 	bSide, okBS := seamBetween(bo, bUnder, bHem)
 	s.Checks = append(s.Checks, seamsMatch("Side seams the same length", fSide, bSide, okFS, okBS, 0.4))
+	// A cuffed (3/4 or long) sleeve is drafted from the arm, shoulder to
+	// wrist. A short sleeve's own length entered instead leaves a stub.
+	if cuff != nil && m.SleeveLength > 0 && m.SleeveLength <= MaxShortSleeve {
+		s.Checks = append(s.Checks, Check{
+			Label:  "Sleeve length measured to the wrist",
+			OK:     false,
+			Detail: fmt.Sprintf("%.0f cm is a short sleeve's length: for 3/4 and long sleeves, measure from the shoulder to the wrist", m.SleeveLength),
+		})
+	}
 
 	var angles []float64
 	for _, c := range []struct {

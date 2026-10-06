@@ -5,6 +5,7 @@ import (
 	"math"
 	"reflect"
 	"strings"
+	"unicode/utf8"
 
 	"patternapp/backend/draft"
 	"patternapp/backend/orders"
@@ -32,9 +33,42 @@ func checkMeasurements(m draft.Measurements) string {
 	return ""
 }
 
+// Text fields have room for anything real (a long school name, pages of
+// notes) but not for a payload that would bloat every backup.
+const (
+	maxNameChars  = 200
+	maxNotesChars = 20000
+	maxSizes      = 200
+)
+
+// checkText returns what is wrong with an order's free-text fields, or "".
+func checkText(o *orders.Order) string {
+	for _, f := range []struct {
+		name, value string
+		max         int
+	}{
+		{"customer name", o.CustomerName, maxNameChars},
+		{"contact", o.ContactInfo, maxNameChars * 2},
+		{"design notes", o.DesignNotes, maxNotesChars},
+		{"fabric", o.Fabric.Name, maxNameChars},
+		{"fabric notes", o.Fabric.Notes, maxNotesChars},
+	} {
+		if n := utf8.RuneCountInString(f.value); n > f.max {
+			return fmt.Sprintf("the %s is too long (%d characters; at most %d)", f.name, n, f.max)
+		}
+	}
+	return ""
+}
+
 // checkSizes checks every row of a size chart.
 func checkSizes(sizes []orders.OrderSize) string {
+	if len(sizes) > maxSizes {
+		return fmt.Sprintf("a size chart can have at most %d sizes", maxSizes)
+	}
 	for _, sz := range sizes {
+		if utf8.RuneCountInString(sz.Label) > 60 {
+			return "a size name is too long (at most 60 characters)"
+		}
 		if msg := checkMeasurements(sz.Measurements); msg != "" {
 			return fmt.Sprintf("size %q: %s", sz.Label, msg)
 		}
