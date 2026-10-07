@@ -129,6 +129,28 @@ func Finish(p Piece) Piece {
 			allow[i] = hem
 		}
 	}
+	// A hem isn't always level: a shirttail curves up to the side, and a hem
+	// can sit a few millimetres off the bottom. The hem is the run of edges
+	// either side of the piece's lowest point that stay within 60° of level;
+	// the side seams it meets are steeper.
+	if hem != seam && p.FoldEdge != "bottom" {
+		low := 0
+		for i, q := range poly {
+			if q.y > poly[low].y {
+				low = i
+			}
+		}
+		level := func(i int) bool {
+			a, b := poly[(i+n)%n], poly[(i+1+n)%n]
+			return allow[(i+n)%n] != 0 && math.Abs(b.y-a.y) <= 1.732*math.Abs(b.x-a.x)
+		}
+		for i, k := low, 0; k < n && level(i); i, k = i+1, k+1 {
+			allow[(i+n)%n] = hem
+		}
+		for i, k := low-1, 0; k < n && level(i); i, k = i-1, k+1 {
+			allow[(i+n)%n] = hem
+		}
+	}
 
 	area := 0.0
 	for i := 0; i < n; i++ {
@@ -149,6 +171,9 @@ func Finish(p Piece) Piece {
 	}
 
 	cut := make([]point, n)
+	// The point where a mirrored hem corner's side turns outward, on the hem
+	// line: added to the cutting line before (or after) that corner.
+	foldBefore, foldAfter := map[int]point{}, map[int]point{}
 	for i := 0; i < n; i++ {
 		prev, cur, next := poly[(i+n-1)%n], poly[i], poly[(i+1)%n]
 		n1, n2 := normal(prev, cur), normal(cur, next)
@@ -158,8 +183,66 @@ func Finish(p Piece) Piece {
 			den = 0.25
 		}
 		cut[i] = point{cur.x + (d1*n1.x+d2*n2.x)/den, cur.y + (d1*n1.y+d2*n2.y)/den}
+		// Where a hem meets a side seam at an angle (a straight hem on a
+		// tapering sleeve), its allowance is the side seam mirrored in the
+		// hem line, as if the paper were folded up along the hem and the side
+		// traced: turned up, the allowance then lies flat against the side,
+		// and the cut corner sticks out in a point. A hem square to its side
+		// gets the same corner as before.
+		if hem > seam && d1 != d2 && (d1 == hem || d2 == hem) && (d1 == seam || d2 == seam) {
+			side, hemEdge := prev, next // the far ends of the two edges at this corner
+			ns, nh := n1, n2
+			if d1 == hem {
+				side, hemEdge, ns, nh = next, prev, n2, n1
+			}
+			u := sub(side, cur) // up the side, away from the hem
+			if l := math.Hypot(u.x, u.y); l > 0 {
+				u = point{u.x / l, u.y / l}
+			}
+			h := sub(hemEdge, cur)
+			if l := math.Hypot(h.x, h.y); l > 0 {
+				h = point{h.x / l, h.y / l}
+			}
+			un := u.x*nh.x + u.y*nh.y
+			if math.Abs(un) > 1e-6 {
+				// Where the side's sewing line, moved out by its allowance,
+				// crosses the hem line...
+				t := -seam * (ns.x*nh.x + ns.y*nh.y) / un
+				f := point{cur.x + ns.x*seam + t*u.x, cur.y + ns.y*seam + t*u.y}
+				// ...the side carries on below the hem line as its mirror image.
+				uh := u.x*h.x + u.y*h.y
+				v := point{2*uh*h.x - u.x, 2*uh*h.y - u.y}
+				if vn := v.x*nh.x + v.y*nh.y; vn > 1e-6 && math.Abs(uh) > 0.01 {
+					cut[i] = point{f.x + v.x*hem/vn, f.y + v.y*hem/vn}
+					if d1 == seam {
+						foldBefore[i] = f
+					} else {
+						foldAfter[i] = f
+					}
+				}
+			}
+		}
 	}
 
+	withHemFolds := func() []point {
+		if len(foldBefore)+len(foldAfter) == 0 {
+			return cut
+		}
+		out := make([]point, 0, len(cut)+len(foldBefore)+len(foldAfter))
+		for i, q := range cut {
+			if f, ok := foldBefore[i]; ok {
+				out = append(out, f)
+			}
+			out = append(out, q)
+			if f, ok := foldAfter[i]; ok {
+				out = append(out, f)
+			}
+		}
+		return out
+	}
+	if !p.CutFull || p.FoldEdge != "left" {
+		cut = withHemFolds()
+	}
 	if p.CutFull && p.FoldEdge == "left" {
 		// Where a seam meets the fold at an angle, its allowance moves the
 		// corner off the fold line: put it back on the line, where the
@@ -187,6 +270,7 @@ func Finish(p Piece) Piece {
 				cut[i] = point{minX, a.y + t*(b.y-a.y)}
 			}
 		}
+		cut = withHemFolds()
 		if full, ok := unfoldAt(cut, minX); ok {
 			cut = full
 		} else {

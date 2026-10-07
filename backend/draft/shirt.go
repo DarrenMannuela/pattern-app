@@ -306,6 +306,11 @@ func DraftShirt(m Measurements, opts ShirtOptions) []Piece {
 	if opts.SleeveFabric == "contrast" {
 		sleeve.Fabric = "contrast"
 	}
+	// A sleeve sewn to a cuff (a woven long or 3/4 sleeve) or to a rib (a
+	// polo's short sleeve) ends in a seam, not a turned-up hem.
+	if isPolo == (opts.SleeveStyle == "half") {
+		sleeve.HemAllow = seamAllowance
+	}
 	pieces := []Piece{front, yoke, back, sleeve}
 	if yoke.PathData == "" {
 		pieces = []Piece{front, back, sleeve}

@@ -53,6 +53,11 @@ const (
 	kSleeveWidthM = 44.5 // across the sleeve at the underarm
 	kSleeveHemM   = 39.5 // across the sleeve hem
 	kSleeveLenM   = 26.0 // cap top to hem
+	// A long sleeve, size L, across at the underarm, off Dad's long-sleeve
+	// kemeja. The uniform's shoulders are wider and flatter than that shirt's,
+	// so the shoulder rule draftSleeve uses (shoulder width less 2) would cut
+	// an S wider than his L; long sleeves take his width, graded by the chart.
+	kLongSleeveL = 44.0
 	// The back shoulder seam is eased onto the front's: Dad's measures 0.2cm
 	// longer; 0.4 keeps it clear of the 0.3 the seam checks count as eased.
 	kShoulderEase = 0.4
@@ -289,16 +294,42 @@ func konveksiPanel(neckDepth, width, underY, hemY float64, tip point, neckW floa
 // konveksiSleeve drafts the short sleeve: the shop's width and hem, the cap
 // made just as low as it can be while still running the armhole plus
 // kCapEase. The hem meets the underarm seams square, as in draftSleeve.
+// The shop's cap curve, fitted to a top-down photo of Dad's paper sleeve
+// (October 2026): it leaves each underarm steeply, after a short start
+// square to the side seam, and rounds over a broad dome, where the classic
+// cap stays flat near the underarm and peaks like a bell. On size M it
+// stands 8.5 finished, about 9 as cut, at the length of Dad's (51 as cut).
+const (
+	kCapCornerHandle = 0.15 // of the half width: the short squared start at the underarm
+	kCapCrownHandle  = 0.60 // of the half width: how broad the dome is at the top
+)
+
+// konveksiCapControls are the Bézier controls of the shop cap: crown to back
+// underarm (backC1, backC2), then front underarm to crown (frontC1, frontC2).
+func konveksiCapControls(halfBicep, capHeight, tilt float64) (backC1, backC2, frontC1, frontC2 point) {
+	handle := kCapCornerHandle * halfBicep
+	backC1 = point{round1(halfBicep * (1 - kCapCrownHandle)), 0}
+	backC2 = point{round1(handle * math.Cos(tilt)), round1(capHeight - handle*math.Sin(tilt))}
+	frontC1 = point{round1(2*halfBicep - handle*math.Cos(tilt)), round1(capHeight - handle*math.Sin(tilt))}
+	frontC2 = point{round1(halfBicep * (1 + kCapCrownHandle)), 0}
+	return
+}
+
+func konveksiCapLength(halfBicep, capHeight, tilt float64) float64 {
+	b1, b2, f1, f2 := konveksiCapControls(halfBicep, capHeight, tilt)
+	return cubicLength(point{halfBicep, 0}, b1, b2, point{0, capHeight}) +
+		cubicLength(point{2 * halfBicep, capHeight}, f1, f2, point{halfBicep, 0})
+}
+
 func konveksiSleeve(g konveksiGeom, armhole, length float64) Piece {
 	halfBicep, halfHem := g.halfBicep, math.Min(g.halfHem, g.halfBicep)
 	target := armhole + kCapEase
-	const fullness = 0.5
-	tilt, rise, capHeight := 0.0, 0.0, 0.0
+	tilt, capHeight := 0.0, 0.0
 	for i := 0; i < 3; i++ {
 		lo, hi := 1.0, armhole*0.5
 		for j := 0; j < 50; j++ {
 			mid := (lo + hi) / 2
-			if sleeveCapLength(halfBicep, mid, fullness, tilt) < target {
+			if konveksiCapLength(halfBicep, mid, tilt) < target {
 				lo = mid
 			} else {
 				hi = mid
@@ -306,24 +337,24 @@ func konveksiSleeve(g konveksiGeom, armhole, length float64) Piece {
 		}
 		capHeight = (lo + hi) / 2
 		length = math.Max(length, capHeight+3)
-		tilt = math.Atan2(halfBicep-halfHem, length+rise-capHeight)
-		rise = halfHem * math.Tan(tilt) / 2
+		tilt = math.Atan2(halfBicep-halfHem, length-capHeight)
 	}
 	width := 2 * halfBicep
 	crown := point{round1(halfBicep), 0}
 	backUnderarm := point{0, round1(capHeight)}
 	frontUnderarm := point{round1(width), round1(capHeight)}
-	backHem := point{round1(halfBicep - halfHem), round1(length + rise)}
-	frontHem := point{round1(halfBicep + halfHem), round1(length + rise)}
-	reach := halfHem * 2 / 3
-	hemC1 := point{round1(backHem.x + reach), round1(backHem.y - reach*math.Tan(tilt))}
-	hemC2 := point{round1(frontHem.x - reach), round1(frontHem.y - reach*math.Tan(tilt))}
-	backC1, backC2, frontC1, frontC2 := sleeveCapControls(halfBicep, capHeight, fullness, tilt)
+	// Dad's hem is straight across, the sides tapering in to it. Its
+	// allowance is cut the Japanese way (see Finish): the side mirrored below
+	// the hem line, so the turned-up hem lies flat at the underarm seam and
+	// the cut corners stick out in two points.
+	backHem := point{round1(halfBicep - halfHem), round1(length)}
+	frontHem := point{round1(halfBicep + halfHem), round1(length)}
+	backC1, backC2, frontC1, frontC2 := konveksiCapControls(halfBicep, capHeight, tilt)
 	pb := &pathBuilder{}
 	pb.moveTo(crown).
 		curveTo(backC1, backC2, backUnderarm).
 		lineTo(backHem).
-		curveTo(hemC1, hemC2, frontHem).
+		lineTo(frontHem).
 		lineTo(frontUnderarm).
 		curveTo(frontC1, frontC2, crown).
 		close()
@@ -331,7 +362,7 @@ func konveksiSleeve(g konveksiGeom, armhole, length float64) Piece {
 		Name:     "Sleeve",
 		PathData: pb.String(),
 		Width:    round1(width),
-		Height:   round1(length + rise),
+		Height:   round1(length),
 		Landmarks: map[string]Point{
 			"backUnderarm":  {X: backUnderarm.x, Y: backUnderarm.y},
 			"frontUnderarm": {X: frontUnderarm.x, Y: frontUnderarm.y},
@@ -341,7 +372,7 @@ func konveksiSleeve(g konveksiGeom, armhole, length float64) Piece {
 		Crown:     &Point{X: crown.x, Y: crown.y},
 		SeamAllow: kSeamAllow,
 		HemAllow:  kSleeveHemAllow,
-		Notes:     fmt.Sprintf("Full piece, cut once per arm (not on fold). The shop's short sleeve: a low, flat cap (%.1fcm) eased into the armhole by only %.1fcm, and a wide hem. The flatter edge (left) is the back.", capHeight, kCapEase),
+		Notes:     fmt.Sprintf("Full piece, cut once per arm (not on fold). The shop's short sleeve: a round cap (%.1fcm) that rises steeply from the underarm, eased into the armhole by only %.1fcm, a wide sleeve and a straight hem.", capHeight, kCapEase),
 	}
 }
 
@@ -458,8 +489,11 @@ func draftKonveksiShirt(sp konveksiSpec, m Measurements, opts ShirtOptions) []Pi
 	} else {
 		mm := m.withDefaults()
 		sleeveLen := mm.SleeveLength - cuffDepth/sleeveLengthFraction(opts.SleeveStyle)
-		sleeve = draftSleeve(frontArm+backArm, sleeveLen, mm.UpperArm, mm.Wrist, kBodyEase, 2*g.backTip.x, opts.SleeveStyle, "Sleeve")
-		sleeve.SeamAllow, sleeve.HemAllow = kSeamAllow, kSleeveHemAllow
+		// draftSleeve cuts a uniform sleeve the shoulder width less 2 wide: give
+		// it the width that comes out at Dad's (L is one step above M).
+		across := kLongSleeveL + kSleeveWidthStep*(sp.step-1) + 2
+		sleeve = draftSleeve(frontArm+backArm, sleeveLen, mm.UpperArm, mm.Wrist, kBodyEase, across, opts.SleeveStyle, "Sleeve")
+		sleeve.SeamAllow, sleeve.HemAllow = kSeamAllow, kSeamAllow // sewn to the cuff
 		cuff := draftCuff(mm.Wrist)
 		cuff.SeamAllow = kSeamAllow
 		sleeveExtras = append(sleeveExtras, cuff)

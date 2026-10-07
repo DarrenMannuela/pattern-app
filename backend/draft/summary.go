@@ -240,7 +240,16 @@ func summarizeShirt(front, back Piece, yoke, sleeve, cuff, placket *Piece, m Mea
 			}
 			if a1, ok1 := cornerAngle(so, point{sleeve.Landmarks["backUnderarm"].X, sleeve.Landmarks["backUnderarm"].Y}); ok1 {
 				a2, _ := cornerAngle(so, point{sleeve.Landmarks["backWrist"].X, sleeve.Landmarks["backWrist"].Y})
-				s.Checks = append(s.Checks, squareCorners("Sleeve meets its underarm seam square (cap, hem)", a1, a2))
+				c := squareCorners("Sleeve meets its underarm seam square (cap, hem)", a1, a2)
+				// A straight hem across a tapering sleeve (the shop's) meets the
+				// side off square, more so on the big sizes (9° on an L, 14° on a
+				// 7XL). Its allowance is cut mirrored, so it still turns up flat;
+				// it only leaves a slight point at the seam. The cap must still be
+				// square.
+				if !so.segs[2].curve {
+					c.OK = math.Abs(a1-90) <= 5 && math.Abs(a2-90) <= 15
+				}
+				s.Checks = append(s.Checks, c)
 			}
 		}
 	}

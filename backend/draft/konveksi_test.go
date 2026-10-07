@@ -41,9 +41,38 @@ func TestKonveksiSizeMIsTheShopPattern(t *testing.T) {
 	near(t, "neck point to underarm, back", back.Landmarks["underarm"].Y, 26.7, 0.1)
 	near(t, "front shoulder drop", front.Landmarks["shoulderTip"].Y, 3.3, 0.1)
 	near(t, "back shoulder drop", back.Landmarks["shoulderTip"].Y, 2.1, 0.1)
+	// The cap is Dad's round dome (photo of his paper, October 2026): about
+	// 8.5 high finished (8-9 on his paper), and already over half its height a
+	// fifth of the way across, where a bell-shaped cap is still low.
 	cap := sleeve.Landmarks["backUnderarm"].Y
-	if cap < 6.5 || cap > 9 {
-		t.Errorf("sleeve cap height %.1f, want about 7.5 (Dad's 8 as cut)", cap)
+	if cap < 7.5 || cap > 9.5 {
+		t.Errorf("sleeve cap height %.1f, want about 8.5", cap)
+	}
+	if h := capHeightAt(t, sleeve, 0.2); h < 0.55*cap {
+		t.Errorf("a fifth of the way across the cap is %.1f high, want over half the %.1f cap (a dome, not a bell)", h, cap)
+	}
+	// Dad's hem is straight: its ends sit at most a few mm below its middle.
+	// Dad's hem is straight, its allowance the side mirrored below the hem
+	// line: the full 2.5 all along it, and the cut corners stick out past
+	// the sides in two points.
+	bw, fw := sleeve.Landmarks["backWrist"], sleeve.Landmarks["frontWrist"]
+	if bw.Y != fw.Y {
+		t.Errorf("the sleeve hem should be straight, like Dad's: ends at %.1f and %.1f", bw.Y, fw.Y)
+	}
+	sleeve = Finish(sleeve)
+	cut := flattenPath(sleeve.CutPathData)
+	lowest, left, right := -1e9, 1e9, -1e9
+	for _, q := range cut {
+		lowest = math.Max(lowest, q.y-sleeve.CutOffset.Y)
+	}
+	for _, q := range cut {
+		if q.y-sleeve.CutOffset.Y > lowest-0.05 {
+			left, right = math.Min(left, q.x-sleeve.CutOffset.X), math.Max(right, q.x-sleeve.CutOffset.X)
+		}
+	}
+	near(t, "sleeve hem allowance", lowest-bw.Y, 2.5, 0.05)
+	if left > bw.X-0.5-0.2 || right < fw.X+0.5+0.2 {
+		t.Errorf("the hem's cut corners should stick out past the sides (Dad's points): %.1f..%.1f on a %.1f..%.1f hem", left, right, bw.X, fw.X)
 	}
 
 	// The front opens: 2.5 past centre front plus a 2.5 facing, and the lidah.
@@ -133,6 +162,58 @@ func TestKonveksiEverySizeSews(t *testing.T) {
 				if p.CutPathData == "" {
 					t.Errorf("%s: %q has no cutting line", label, p.Name)
 				}
+			}
+		}
+	}
+}
+
+// A long sleeve is as wide as Dad's long-sleeve L (44 across), graded 1.5 a
+// size, not sized from the uniform's extra-wide shoulder: an S came out at
+// 44.6, wider than his L.
+func TestKonveksiLongSleeveWidth(t *testing.T) {
+	for label, want := range map[string]float64{"S": 41, "M": 42.5, "L": 44, "XL": 45.5} {
+		for _, style := range []string{"full", "three_quarter"} {
+			opts := konveksiOpts()
+			opts.SleeveStyle = style
+			m := Measurements{Bust: 86, UpperArm: 26.5, Wrist: 16.5, SleeveLength: 57}
+			for _, p := range DraftShirtSize(label, m, opts) {
+				if p.Name != "Sleeve" {
+					continue
+				}
+				got := p.Landmarks["frontUnderarm"].X - p.Landmarks["backUnderarm"].X
+				if math.Abs(got-want) > 0.3 {
+					t.Errorf("%s %s sleeve: %.1f across at the underarm, want %.1f", label, style, got, want)
+				}
+			}
+		}
+	}
+}
+
+// A sleeve that ends in a hem gets a hem allowance; one sewn to a cuff or a
+// rib only a seam allowance, on every block.
+func TestSleeveHemOrSeam(t *testing.T) {
+	for _, c := range []struct {
+		block, style, collar string
+		want                 float64
+	}{
+		{BlockKonveksi, "half", "standing", kSleeveHemAllow},
+		{BlockKonveksi, "full", "standing", kSeamAllow},
+		{"", "half", "convertible", sleeveHemAllow},
+		{"", "full", "convertible", seamAllowance},
+		{"", "three_quarter", "convertible", seamAllowance},
+		{"", "half", "polo", seamAllowance},
+	} {
+		opts := ShirtOptions{Block: c.block, Collar: true, CollarStyle: c.collar, SleeveStyle: c.style, HemStyle: "curved"}
+		for _, p := range FinishAll(DraftShirtSize("M", Measurements{}, opts)) {
+			if p.Name != "Sleeve" {
+				continue
+			}
+			// In the middle of the hem: the cut corners can sit lower (mirrored).
+			mid := p.Crown.X
+			bottom := lowestAt(flattenPath(p.CutPathData), mid+p.CutOffset.X) - p.CutOffset.Y
+			hemLow := lowestAt(flattenPath(p.PathData), mid)
+			if got := bottom - hemLow; math.Abs(got-c.want) > 0.15 {
+				t.Errorf("block %q %s sleeve, %s collar: %.1f below the hem, want %.1f", c.block, c.style, c.collar, got, c.want)
 			}
 		}
 	}
@@ -270,4 +351,36 @@ func TestEveryCollarCutWhole(t *testing.T) {
 			}
 		}
 	}
+}
+
+// capHeightAt is how high a sleeve's cap stands at a fraction of the way
+// across from the back underarm, above the line between the underarms.
+func capHeightAt(t *testing.T, sleeve Piece, frac float64) float64 {
+	t.Helper()
+	l, r := sleeve.Landmarks["backUnderarm"], sleeve.Landmarks["frontUnderarm"]
+	x := l.X + frac*(r.X-l.X)
+	pts := flattenPath(sleeve.PathData)
+	best := math.Inf(1)
+	for i := 1; i < len(pts); i++ {
+		a, b := pts[i-1], pts[i]
+		if (a.x-x)*(b.x-x) <= 0 && a.x != b.x && math.Max(a.y, b.y) <= l.Y+0.01 {
+			best = math.Min(best, a.y+(b.y-a.y)*(x-a.x)/(b.x-a.x))
+		}
+	}
+	if math.IsInf(best, 1) {
+		t.Fatalf("no cap point at %.0f%% across", frac*100)
+	}
+	return l.Y - best
+}
+
+// lowestAt is the lowest point where a closed outline crosses x.
+func lowestAt(pts []point, x float64) float64 {
+	low := math.Inf(-1)
+	for i := range pts {
+		a, b := pts[i], pts[(i+1)%len(pts)]
+		if (a.x-x)*(b.x-x) <= 0 && a.x != b.x {
+			low = math.Max(low, a.y+(b.y-a.y)*(x-a.x)/(b.x-a.x))
+		}
+	}
+	return low
 }
